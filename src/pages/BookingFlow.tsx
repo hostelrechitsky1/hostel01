@@ -82,7 +82,6 @@ export default function BookingFlow() {
                 >
                     <ChevronLeft size={20} /> Back to Dashboard
                 </button>
-                <FeedbackButton />
             </div>
         );
     }
