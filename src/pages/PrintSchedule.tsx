@@ -8,7 +8,14 @@ import { useNavigate } from 'react-router-dom';
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
-    const [weekOffset, setWeekOffset] = useState(0); // 0 = Current Week, 1 = Next Week
+    const [weekOffset, setWeekOffset] = useState(() => {
+        const now = new Date();
+        const day = now.getDay();
+        const hour = now.getHours(); // Local browser time, reasonable approximation for Admin
+        // If Sat >= 16:00 or Sunday, default to Next Week (1)
+        if ((day === 6 && hour >= 16) || day === 0) return 1;
+        return 0;
+    });
 
     // Async Data
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -27,14 +34,20 @@ export default function PrintSchedule() {
 
         const load = async () => {
             try {
-                const [ms, bs, ss] = await Promise.all([
+                const [ms, bs, ss, settings] = await Promise.all([
                     firestoreService.getMachines(),
                     firestoreService.getBookings(),
-                    firestoreService.getAllStudents()
+                    firestoreService.getAllStudents(),
+                    firestoreService.getSettings()
                 ]);
                 setMachines(ms);
                 setBookings(bs);
                 setStudents(ss);
+
+                // Smart Auto-Switch if Force Open is active
+                if (settings.forceShowNextWeek) {
+                    setWeekOffset(1);
+                }
             } catch (e) {
                 console.error("Failed to load schedule data", e);
             } finally {
@@ -61,6 +74,8 @@ export default function PrintSchedule() {
 
     if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading Schedule...</div>;
 
+
+
     return (
         <div className="print-container">
             {/* Screen-only Controls */}
@@ -81,6 +96,7 @@ export default function PrintSchedule() {
                         <h2 style={{ margin: 0, fontSize: '18px' }}>Print Schedule</h2>
                         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '12px' }}>
                             {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
+                            {weekOffset === 1 && <span style={{ marginLeft: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>(Next Week)</span>}
                         </p>
                     </div>
                 </div>
@@ -190,8 +206,12 @@ export default function PrintSchedule() {
                                                     <td key={day.toString()} style={cellStyle}>
                                                         {booking ? (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
-                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{booking.roomNumber || student?.roomNumber}</span>
-                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{booking.studentName || student?.name}</span>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                                                    {booking.roomNumber || student?.roomNumber || '???'}
+                                                                </span>
+                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                                                    {booking.studentName || student?.name || 'Unknown'}
+                                                                </span>
                                                             </div>
                                                         ) : null}
                                                     </td>
