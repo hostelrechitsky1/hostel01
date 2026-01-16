@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, Plus, Clock } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
-import { motion } from 'framer-motion';
+// motion removed
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -42,11 +42,7 @@ export default function Dashboard() {
                 });
 
                 // Find Upcoming (First one in future)
-                // Actually safer to search array for first match > now
-                const upcoming = myBookings.reverse().find(b => { // Reverse to be oldest first? No.
-                    // Let's re-sort chronological for finding upcoming
-                    return false;
-                });
+                // Logic implemented below with chronological sort
 
                 // Let's split explicitly
                 const chronological = [...myBookings].sort((a, b) =>

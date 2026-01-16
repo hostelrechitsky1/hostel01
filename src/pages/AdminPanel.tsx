@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, AlertTriangle, Printer, Trash2 } from 'lucide-react';
-import { bookingService } from '../services/bookingService'; // Kept for generic utils if any, but mostly replacing
+import { Plus, Printer, Trash2 } from 'lucide-react';
+// bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import type { Booking, Machine, Student } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -79,12 +79,6 @@ export default function AdminPanel() {
             await firestoreService.cancelBooking(id);
             refreshData();
         }
-    };
-
-    const handleSeedData = async () => {
-        // This is a shortcut for the admin to re-seed or something? 
-        // Logic already exists in LoginScreen, maybe not needed here.
-        // Leaving empty for now or removing the reset button basically.
     };
 
     if (loading && bookings.length === 0 && machines.length === 0) {
