@@ -5,7 +5,7 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
-// motion removed
+import DashboardFeedback from '../components/DashboardFeedback';
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -15,6 +15,7 @@ export default function Dashboard() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
+    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
 
     useEffect(() => {
         if (!user) {
@@ -24,13 +25,15 @@ export default function Dashboard() {
 
         const loadData = async () => {
             try {
-                const [fetchedMachines, fetchedBookings] = await Promise.all([
+                const [fetchedMachines, fetchedBookings, fetchedSettings] = await Promise.all([
                     firestoreService.getMachines(),
-                    firestoreService.getBookings()
+                    firestoreService.getBookings(),
+                    firestoreService.getSettings()
                 ]);
 
                 setMachines(fetchedMachines);
                 setAllBookings(fetchedBookings);
+                setSettings(fetchedSettings);
 
                 // Filter for My Bookings
                 const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
@@ -41,10 +44,6 @@ export default function Dashboard() {
                     return new Date(b.date + 'T' + b.startTime).getTime() - new Date(a.date + 'T' + a.startTime).getTime();
                 });
 
-                // Find Upcoming (First one in future)
-                // Logic implemented below with chronological sort
-
-                // Let's split explicitly
                 const chronological = [...myBookings].sort((a, b) =>
                     new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
                 );
@@ -70,6 +69,19 @@ export default function Dashboard() {
 
         loadData();
     }, [user, navigate]);
+
+    const isNextWeekOpen = settings.forceShowNextWeek || (() => {
+        const now = new Date();
+        const day = now.getDay();
+        const belarusHour = now.getUTCHours() + 3;
+        // Auto Open Logic: Sat 16:00 -> Mon 09:00
+        if (day === 6 && belarusHour >= 16) return true;
+        if (day === 0) return true;
+        if (day === 1 && belarusHour < 9) return true;
+        return false;
+    })();
+
+    const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
     const getMachineRealTimeStatus = (machine: Machine) => {
         const now = new Date();
@@ -137,14 +149,22 @@ export default function Dashboard() {
             >
                 <div>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>Book your slot for this week</p>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
+                        {isSystemClosed ? 'Bookings are currently closed' : 'Book your slot for next week'}
+                    </p>
                 </div>
                 <button
                     onClick={() => navigate('/book')}
                     className="primary-button"
-                    style={{ padding: '12px 24px', borderRadius: '12px' }}
+                    style={{
+                        padding: '12px 24px',
+                        borderRadius: '12px',
+                        background: isSystemClosed ? '#ef4444' : 'var(--primary)',
+                        opacity: 1,
+                        cursor: 'pointer'
+                    }}
                 >
-                    Book Now
+                    {isSystemClosed ? 'Check Status' : 'Book Now'}
                 </button>
             </div>
 
@@ -310,7 +330,7 @@ END:VCALENDAR`;
             {/* History */}
             {
                 history.length > 0 && (
-                    <div style={{ marginTop: '32px', marginBottom: '40px' }}>
+                    <div style={{ marginTop: '32px' }}>
                         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <History size={20} /> Past Bookings
                         </h3>
@@ -339,6 +359,9 @@ END:VCALENDAR`;
                     </div>
                 )
             }
-        </div >
+
+            {/* Inline Feedback Section */}
+            <DashboardFeedback />
+        </div>
     );
 }

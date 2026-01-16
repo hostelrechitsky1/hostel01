@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
@@ -16,12 +16,30 @@ export const firestoreService = {
 
     async seedStudents(rawData: string) {
         const students = parseRawStudentData(rawData);
-        // Simple loop for now since we have ~300 students.
-        // Note: Batching is recommended for larger datasets.
+        const roomPins = new Map<string, string>();
+        const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
+
         for (const student of students) {
+            if (!roomPins.has(student.roomNumber)) {
+                roomPins.set(student.roomNumber, generatePin());
+            }
+            student.pin = roomPins.get(student.roomNumber);
             await setDoc(doc(db, STUDENTS_COL, student.id), student);
         }
-        console.log(`Seeded ${students.length} students`);
+        console.log(`Seeded ${students.length} students with PINs`);
+    },
+
+    async addStudent(student: Student) {
+        await setDoc(doc(db, STUDENTS_COL, student.id), student);
+    },
+
+    async updateStudent(student: Student) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await updateDoc(doc(db, STUDENTS_COL, student.id), student as any);
+    },
+
+    async deleteStudent(id: string) {
+        await deleteDoc(doc(db, STUDENTS_COL, id));
     },
 
     // --- Machines ---
@@ -96,6 +114,42 @@ export const firestoreService = {
 
     async cancelBooking(id: string) {
         await deleteDoc(doc(db, BOOKINGS_COL, id));
+    },
+
+    // --- Settings ---
+    async getSettings(): Promise<{ forceShowNextWeek: boolean; forceCloseBookings: boolean }> {
+        const snap = await getDocs(collection(db, 'settings'));
+        if (snap.empty) return { forceShowNextWeek: false, forceCloseBookings: false };
+
+        const configDoc = snap.docs.find(d => d.id === 'config');
+        return configDoc ? (configDoc.data() as { forceShowNextWeek: boolean; forceCloseBookings: boolean }) : { forceShowNextWeek: false, forceCloseBookings: false };
+    },
+
+    async updateSettings(settings: { forceShowNextWeek?: boolean; forceCloseBookings?: boolean }) {
+        await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
+    },
+
+    async clearAllBookings() {
+        const snapshot = await getDocs(collection(db, BOOKINGS_COL));
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+    },
+
+    // --- Feedback ---
+    async addFeedback(feedback: any) {
+        await setDoc(doc(db, 'feedbacks', feedback.id), feedback);
+    },
+
+    async getFeedbacks(): Promise<any[]> {
+        const snapshot = await getDocs(collection(db, 'feedbacks'));
+        return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => b.timestamp - a.timestamp);
+    },
+
+    async deleteFeedback(id: string) {
+        await deleteDoc(doc(db, 'feedbacks', id));
     },
 
     // --- Auth Sync (Helper to keep local user state) ---

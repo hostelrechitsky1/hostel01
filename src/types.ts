@@ -2,6 +2,7 @@ export interface Student {
   id: string;
   name: string;
   roomNumber: string;
+  pin?: string;
 }
 
 export interface Machine {
@@ -18,6 +19,8 @@ export interface Booking {
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   weekId: string; // YYYY-Www
+  studentName?: string; // Snapshot for easier display/printing
+  roomNumber?: string; // Snapshot
   createdAt: number;
 }
 
@@ -30,8 +33,7 @@ export const TIME_SLOTS = [
   "16:30",
   "18:00",
   "19:30",
-  "21:00",
-  "22:30"
+  "21:00"
 ] as const;
 
 export const SLOT_DURATION_MINUTES = 90;
@@ -42,4 +44,15 @@ export interface CalendarSlot {
   isBooked: boolean;
   isYourBooking: boolean;
   booking?: Booking;
+}
+
+export interface Feedback {
+  id: string;
+  studentId?: string;
+  studentName: string;
+  roomNumber: string;
+  text: string;
+  type: 'bug' | 'feature' | 'other';
+  timestamp: number;
+  read: boolean;
 }

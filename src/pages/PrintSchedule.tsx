@@ -17,6 +17,14 @@ export default function PrintSchedule() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const isManager = sessionStorage.getItem('manager_auth');
+        const isStaff = sessionStorage.getItem('hostel_admin_auth');
+
+        if (!isManager && !isStaff) {
+            navigate('/manager');
+            return;
+        }
+
         const load = async () => {
             try {
                 const [ms, bs, ss] = await Promise.all([
@@ -34,7 +42,7 @@ export default function PrintSchedule() {
             }
         };
         load();
-    }, []);
+    }, [navigate]);
 
     // Calculate Week Range
     const today = new Date();
@@ -66,7 +74,7 @@ export default function PrintSchedule() {
                 marginBottom: '40px'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <button onClick={() => navigate('/admin')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button onClick={() => navigate('/manager')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <ChevronLeft size={16} /> Back
                     </button>
                     <div>
@@ -182,8 +190,8 @@ export default function PrintSchedule() {
                                                     <td key={day.toString()} style={cellStyle}>
                                                         {booking ? (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
-                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{student?.roomNumber}</span>
-                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{student?.name}</span>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{booking.roomNumber || student?.roomNumber}</span>
+                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{booking.studentName || student?.name}</span>
                                                             </div>
                                                         ) : null}
                                                     </td>
