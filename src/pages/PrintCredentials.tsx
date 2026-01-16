@@ -92,7 +92,7 @@ export default function PrintCredentials() {
                 </div>
 
                 <div style={{ marginTop: '40px', fontSize: '12px', color: '#666', textAlign: 'center', borderTop: '1px solid #eee', paddingTop: '16px' }}>
-                    How to Login: 1. Go to App -> 2. Enter Room Number -> 3. Enter PIN -> 4. Select Name
+                    How to Login: 1. Go to App → 2. Enter Room Number → 3. Enter PIN → 4. Select Name
                 </div>
             </div>
 
