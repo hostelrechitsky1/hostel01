@@ -8,7 +8,14 @@ import { useNavigate } from 'react-router-dom';
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
-    const [weekOffset, setWeekOffset] = useState(0); // 0 = Current Week, 1 = Next Week
+    const [weekOffset, setWeekOffset] = useState(() => {
+        const now = new Date();
+        const day = now.getDay();
+        const hour = now.getHours(); // Local browser time, reasonable approximation for Admin
+        // If Sat >= 16:00 or Sunday, default to Next Week (1)
+        if ((day === 6 && hour >= 16) || day === 0) return 1;
+        return 0;
+    });
 
     // Async Data
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -190,8 +197,12 @@ export default function PrintSchedule() {
                                                     <td key={day.toString()} style={cellStyle}>
                                                         {booking ? (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
-                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{booking.roomNumber || student?.roomNumber}</span>
-                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{booking.studentName || student?.name}</span>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                                                    {booking.roomNumber || student?.roomNumber || '???'}
+                                                                </span>
+                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                                                    {booking.studentName || student?.name || 'Unknown'}
+                                                                </span>
                                                             </div>
                                                         ) : null}
                                                     </td>
