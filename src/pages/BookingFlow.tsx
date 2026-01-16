@@ -96,6 +96,22 @@ export default function BookingFlow() {
         }
     }, [dateOptions, selectedDate]);
 
+    // Scroll Lock when modal is open
+    useEffect(() => {
+        if (showConfirmModal || showConfirmation) {
+            document.body.style.overflow = 'hidden';
+            // Also prevent touchmove to stop iOS scroll rubber-banding
+            document.body.style.touchAction = 'none';
+        } else {
+            document.body.style.overflow = '';
+            document.body.style.touchAction = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+            document.body.style.touchAction = '';
+        };
+    }, [showConfirmModal, showConfirmation]);
+
     const availability = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const dateBookings = bookings.filter(b => b.date === dateStr);
@@ -335,14 +351,15 @@ export default function BookingFlow() {
             {/* Confirm Modal */}
             {showConfirmModal && selectedSlot && selectedMachine && (
                 <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
                     zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                    <div className="glass-panel" style={{
+                }} onClick={() => setShowConfirmModal(false)}>
+                    <div className="glass-panel" onClick={e => e.stopPropagation()} style={{
                         padding: '32px', borderRadius: '24px', textAlign: 'center',
-                        animation: 'fadeIn 0.2s', boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        width: '90%', maxWidth: '380px'
+                        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        width: '95%', maxWidth: '400px'
                     }}>
                         <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
                         <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
@@ -386,13 +403,14 @@ export default function BookingFlow() {
             {/* Success Modal */}
             {showConfirmation && (
                 <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)',
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
                     zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                     <div className="glass-panel" style={{
-                        padding: '40px', borderRadius: '24px', textAlign: 'center', animation: 'fadeIn 0.2s',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid rgba(16, 185, 129, 0.2)',
-                        width: '90%', maxWidth: '380px'
+                        padding: '40px', borderRadius: '24px', textAlign: 'center',
+                        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid rgba(16, 185, 129, 0.2)',
+                        width: '95%', maxWidth: '400px'
                     }}>
                         <div style={{
                             background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
