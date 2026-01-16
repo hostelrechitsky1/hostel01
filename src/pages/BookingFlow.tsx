@@ -1,19 +1,33 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
 import { TIME_SLOTS } from '../types';
-import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter } from 'date-fns';
+import { isAfter } from 'date-fns';
 import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 import clsx from 'clsx';
+import {
+    addBelarusDays,
+    formatBelarusDate,
+    formatBelarusMonthDayLabel,
+    formatBelarusWeekdayLabel,
+    getBelarusDate,
+    getBelarusNow,
+    getBelarusWeekEnd,
+    getBelarusWeekday,
+    getBelarusWeekId,
+    isAutoBookingWindowOpen,
+    isSameBelarusDay
+} from '../utils/time';
 
 export default function BookingFlow() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
 
     // Hooks must be called unconditionally
-    const [selectedDate, setSelectedDate] = useState(startOfToday());
+    const [selectedDate, setSelectedDate] = useState(getBelarusDate());
     const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -54,42 +68,36 @@ export default function BookingFlow() {
 
     const isNextWeekOpen = useMemo(() => {
         if (settings.forceShowNextWeek) return true;
-        const now = new Date();
-        const day = now.getDay();
-        const belarusHour = now.getUTCHours() + 3;
-        if (day === 6 && belarusHour >= 16) return true;
-        if (day === 0) return true;
-        if (day === 1 && belarusHour < 9) return true;
-        return false;
-    }, [settings]);
+        return isAutoBookingWindowOpen();
+    }, [settings.forceShowNextWeek]);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     const dateOptions = useMemo(() => {
-        let start = startOfToday();
-        const currentWeekEnd = endOfWeek(start, { weekStartsOn: 1 });
+        let start = getBelarusDate();
+        const currentWeekEnd = getBelarusWeekEnd(start);
         let maxDate = currentWeekEnd;
 
         if (isNextWeekOpen) {
-            const nextMonday = addDays(currentWeekEnd, 1);
+            const nextMonday = addBelarusDays(currentWeekEnd, 1);
             if (!isAfter(start, currentWeekEnd)) {
                 start = nextMonday;
             }
-            maxDate = addDays(currentWeekEnd, 7);
+            maxDate = addBelarusDays(currentWeekEnd, 7);
         }
 
         const dates = [];
         let current = start;
         while (!isAfter(current, maxDate)) {
             dates.push(current);
-            current = addDays(current, 1);
+            current = addBelarusDays(current, 1);
         }
         return dates;
     }, [isNextWeekOpen]);
 
     useEffect(() => {
         if (dateOptions.length > 0) {
-            const isSelectedValid = dateOptions.some(d => isSameDay(d, selectedDate));
+            const isSelectedValid = dateOptions.some(d => isSameBelarusDay(d, selectedDate));
             if (!isSelectedValid) {
                 setSelectedDate(dateOptions[0]);
             }
@@ -112,13 +120,25 @@ export default function BookingFlow() {
         };
     }, [showConfirmModal, showConfirmation]);
 
+    const triggerHaptic = (pattern: number | number[]) => {
+        if ('vibrate' in navigator) {
+            navigator.vibrate(pattern);
+        }
+    };
+
+    useEffect(() => {
+        if (showConfirmation) {
+            triggerHaptic([30, 40, 30, 60, 30]);
+        }
+    }, [showConfirmation]);
+
     const availability = useMemo(() => {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const dateStr = formatBelarusDate(selectedDate);
         const dateBookings = bookings.filter(b => b.date === dateStr);
-        const now = new Date();
-        const isToday = isSameDay(selectedDate, now);
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
+        const now = getBelarusNow();
+        const isToday = isSameBelarusDay(selectedDate, getBelarusDate());
+        const currentHour = now.getUTCHours();
+        const currentMinute = now.getUTCMinutes();
 
         return TIME_SLOTS.map(time => {
             const bookedMachineIds = dateBookings
@@ -148,16 +168,17 @@ export default function BookingFlow() {
             studentId: user.id,
             studentName: user.name,
             roomNumber: user.roomNumber,
-            date: format(selectedDate, 'yyyy-MM-dd'),
+            date: formatBelarusDate(selectedDate),
             startTime: selectedSlot,
             endTime: selectedSlot,
-            weekId: `${format(selectedDate, 'yyyy')}-W${getWeek(selectedDate)}`,
+            weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now()
         };
 
         try {
             const result = await firestoreService.createBooking(bookingData);
             if (result.success) {
+                triggerHaptic([20, 40, 20, 80, 20]);
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
                 setTimeout(() => navigate('/'), 2000);
@@ -172,7 +193,7 @@ export default function BookingFlow() {
         }
     };
 
-    const isWed = selectedDate.getDay() === 3;
+    const isWed = getBelarusWeekday(selectedDate) === 3;
 
     // --- RENDER ---
     if (loading) {
@@ -213,6 +234,8 @@ export default function BookingFlow() {
         );
     }
 
+    const modalRoot = typeof document !== 'undefined' ? document.body : null;
+
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '100px' }}>
             {/* Header */}
@@ -231,8 +254,8 @@ export default function BookingFlow() {
             ) : (
                 <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '16px', marginBottom: '16px' }}>
                     {dateOptions.map(date => {
-                        const isSelected = isSameDay(date, selectedDate);
-                        const isDateWed = date.getDay() === 3;
+                        const isSelected = isSameBelarusDay(date, selectedDate);
+                        const isDateWed = getBelarusWeekday(date) === 3;
                         return (
                             <button
                                 key={date.toISOString()}
@@ -251,9 +274,9 @@ export default function BookingFlow() {
                                 }}
                             >
                                 <div style={{ fontSize: '12px', marginBottom: '4px', color: isDateWed ? '#ef4444' : 'inherit' }}>
-                                    {isDateWed ? 'Maint' : format(date, 'EEE')}
+                                    {isDateWed ? 'Maint' : formatBelarusWeekdayLabel(date).slice(0, 3)}
                                 </div>
-                                <div style={{ fontSize: '20px', fontWeight: 700 }}>{format(date, 'd')}</div>
+                                <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatBelarusMonthDayLabel(date).split(' ')[1]}</div>
                             </button>
                         );
                     })}
@@ -348,80 +371,68 @@ export default function BookingFlow() {
                 </div>
             )}
 
-            {/* Confirm Modal */}
-            {showConfirmModal && selectedSlot && selectedMachine && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-                    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }} onClick={() => setShowConfirmModal(false)}>
-                    <div className="glass-panel" onClick={e => e.stopPropagation()} style={{
-                        padding: '32px', borderRadius: '24px', textAlign: 'center',
-                        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        width: '95%', maxWidth: '400px'
-                    }}>
-                        <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
-                        <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
-                            {format(selectedDate, 'EEEE, MMM d')} at {selectedSlot}
-                        </p>
-                        <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
-                        {error && (
-                            <div style={{ color: 'var(--error)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                <AlertCircle size={16} /> {error}
+            {modalRoot && createPortal(
+                <>
+                    {/* Confirm Modal */}
+                    {showConfirmModal && selectedSlot && selectedMachine && (
+                        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+                            <div className="glass-panel modal-card" onClick={e => e.stopPropagation()}>
+                                <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                                    {formatBelarusWeekdayLabel(selectedDate)}, {formatBelarusMonthDayLabel(selectedDate)} at {selectedSlot}
+                                </p>
+                                <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
+                                {error && (
+                                    <div style={{ color: 'var(--error)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <AlertCircle size={16} /> {error}
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                                    <button
+                                        onClick={() => setShowConfirmModal(false)}
+                                        className="glass-button"
+                                        style={{ padding: '12px 24px', borderRadius: '12px' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBook}
+                                        disabled={submitting}
+                                        className="primary-button"
+                                        style={{
+                                            padding: '12px 24px',
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            opacity: submitting ? 0.7 : 1,
+                                            cursor: submitting ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {submitting ? 'Processing...' : 'Confirm'}
+                                    </button>
+                                </div>
                             </div>
-                        )}
-                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                            <button
-                                onClick={() => setShowConfirmModal(false)}
-                                className="glass-button"
-                                style={{ padding: '12px 24px', borderRadius: '12px' }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleBook}
-                                disabled={submitting}
-                                className="primary-button"
-                                style={{
-                                    padding: '12px 24px',
-                                    borderRadius: '12px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    opacity: submitting ? 0.7 : 1,
-                                    cursor: submitting ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {submitting ? 'Processing...' : 'Confirm'}
-                            </button>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Success Modal */}
-            {showConfirmation && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-                    zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                    <div className="glass-panel" style={{
-                        padding: '40px', borderRadius: '24px', textAlign: 'center',
-                        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid rgba(16, 185, 129, 0.2)',
-                        width: '95%', maxWidth: '400px'
-                    }}>
-                        <div style={{
-                            background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
-                        }}>
-                            <CheckCircle size={40} color="#10b981" />
+                    {/* Success Modal */}
+                    {showConfirmation && (
+                        <div className="modal-overlay modal-overlay--success">
+                            <div className="glass-panel modal-card modal-card--success">
+                                <div style={{
+                                    background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+                                }}>
+                                    <CheckCircle size={40} color="#10b981" />
+                                </div>
+                                <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
+                                <p style={{ color: 'var(--text-muted)' }}>See you in the laundry room.</p>
+                            </div>
                         </div>
-                        <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
-                        <p style={{ color: 'var(--text-muted)' }}>See you in the laundry room.</p>
-                    </div>
-                </div>
+                    )}
+                </>,
+                modalRoot
             )}
         </div>
     );

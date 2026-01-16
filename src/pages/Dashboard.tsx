@@ -6,6 +6,7 @@ import type { Machine, Booking } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
+import { formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekday, isAutoBookingWindowOpen } from '../utils/time';
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -70,28 +71,19 @@ export default function Dashboard() {
         loadData();
     }, [user, navigate]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || (() => {
-        const now = new Date();
-        const day = now.getDay();
-        const belarusHour = now.getUTCHours() + 3;
-        // Auto Open Logic: Sat 16:00 -> Mon 09:00
-        if (day === 6 && belarusHour >= 16) return true;
-        if (day === 0) return true;
-        if (day === 1 && belarusHour < 9) return true;
-        return false;
-    })();
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
 
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
     const getMachineRealTimeStatus = (machine: Machine) => {
-        const now = new Date();
-        const isWed = now.getDay() === 3;
+        const now = getBelarusNow();
+        const isWed = getBelarusWeekday(getBelarusDate()) === 3;
 
         if (isWed) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
         if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
 
         // Check current bookings using allBookings state
-        const today = format(now, 'yyyy-MM-dd');
+        const today = formatBelarusDate(getBelarusDate());
         const bookingsToday = allBookings.filter(b => b.date === today); // In memory filter
 
         const currentBooking = bookingsToday.find(b => {
