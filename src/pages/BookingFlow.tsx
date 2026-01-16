@@ -5,7 +5,7 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
 import { TIME_SLOTS } from '../types';
 import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter } from 'date-fns';
-import { ChevronLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
@@ -19,6 +19,7 @@ export default function BookingFlow() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
 
     // Async State
@@ -191,7 +192,9 @@ export default function BookingFlow() {
 
     const handleBook = async () => {
         if (!selectedSlot || !selectedMachine || !user) return;
-        setLoading(true); // Re-use loading or add a submitting state. Using loading is fine for modal block.
+        if (submitting) return;
+
+        setSubmitting(true);
 
         const bookingData: Booking = {
             id: Date.now().toString(),
@@ -217,11 +220,11 @@ export default function BookingFlow() {
             } else {
                 setError(result.error || 'Booking failed');
                 setTimeout(() => setError(''), 3000);
-                setLoading(false);
+                setSubmitting(false);
             }
         } catch (e) {
             setError('System error. Please try again.');
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
@@ -406,10 +409,26 @@ export default function BookingFlow() {
                             </button>
                             <button
                                 onClick={handleBook}
+                                disabled={submitting}
                                 className="primary-button"
-                                style={{ padding: '12px 24px', borderRadius: '12px' }}
+                                style={{
+                                    padding: '12px 24px',
+                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    opacity: submitting ? 0.7 : 1,
+                                    cursor: submitting ? 'not-allowed' : 'pointer'
+                                }}
                             >
-                                {loading ? '...' : 'Confirm'}
+                                {submitting ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={18} />
+                                        <span>Processing...</span>
+                                    </>
+                                ) : (
+                                    'Confirm'
+                                )}
                             </button>
                         </div>
                     </motion.div>
