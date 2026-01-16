@@ -336,13 +336,13 @@ export default function BookingFlow() {
             {showConfirmModal && selectedSlot && selectedMachine && (
                 <div style={{
                     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-                    zIndex: 100
+                    zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                     <div className="glass-panel" style={{
-                        padding: '32px', borderRadius: '24px', textAlign: 'center',
+                        padding: '32px', borderRadius: '24px', textAlign: 'center', maxWidth: '320px',
                         animation: 'fadeIn 0.2s', boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
                         border: '1px solid rgba(255,255,255,0.1)',
-                        position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '320px'
+                        width: '90%', marginBottom: '15vh'
                     }}>
                         <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
                         <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
