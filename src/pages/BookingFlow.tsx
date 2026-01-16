@@ -8,6 +8,7 @@ import { format, addDays, startOfToday, isSameDay, getWeek } from 'date-fns';
 import { ChevronLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
+import FeedbackButton from '../components/FeedbackButton';
 
 export default function BookingFlow() {
     const navigate = useNavigate();
@@ -57,7 +58,10 @@ export default function BookingFlow() {
                 height: '80vh',
                 flexDirection: 'column',
                 textAlign: 'center',
-                color: 'var(--text-main)' // Ensure text is visible
+                color: 'var(--text-main)', // Use variable
+                display: 'flex', // Redundant but safe
+                alignItems: 'center', // Redundant but safe
+                justifyContent: 'center' // Redundant but safe
             }}>
                 <div style={{
                     background: 'rgba(239, 68, 68, 0.1)',
@@ -68,17 +72,18 @@ export default function BookingFlow() {
                 }}>
                     <AlertCircle size={48} color="#ef4444" />
                 </div>
-                <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>Bookings Are Closed</h2>
+                <h2 style={{ fontSize: '24px', marginBottom: '16px', color: 'var(--text-main)' }}>Bookings Are Closed</h2>
                 <p style={{ color: 'var(--text-muted)', maxWidth: '300px', margin: '0 auto 32px', lineHeight: '1.5' }}>
                     The booking system is currently paused by the administration. Please check back later or contact the hostel manager.
                 </p>
                 <button
                     onClick={() => navigate('/')}
                     className="primary-button"
-                    style={{ padding: '12px 24px' }}
+                    style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                     <ChevronLeft size={20} /> Back to Dashboard
                 </button>
+                <FeedbackButton />
             </div>
         );
     }
@@ -395,43 +400,8 @@ export default function BookingFlow() {
 
 
             {/* Feedback FAB */}
-            <button
-                onClick={() => {
-                    const type = prompt("What kind of feedback? (Type 'bug', 'feature', or 'other')")?.toLowerCase();
-                    if (type && ['bug', 'feature', 'other'].includes(type)) {
-                        const text = prompt("Tell us more:");
-                        if (text) {
-                            const fb = {
-                                id: Date.now().toString(),
-                                studentName: user?.name || 'Anonymous',
-                                roomNumber: user?.roomNumber || '?',
-                                text,
-                                type,
-                                timestamp: Date.now(),
-                                read: false
-                            };
-                            firestoreService.addFeedback(fb).then(() => alert("Feedback Sent! Thank you."));
-                        }
-                    } else if (type) {
-                        alert("Invalid type. Please type 'bug', 'feature', or 'other'.");
-                    }
-                }}
-                className="glass-button"
-                style={{
-                    position: 'fixed',
-                    bottom: '24px',
-                    right: '24px',
-                    borderRadius: '50%',
-                    width: '56px',
-                    height: '56px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 32px rgba(31, 38, 135, 0.37)'
-                }}
-            >
-                <div style={{ fontSize: '24px' }}>💬</div>
-            </button>
+            {/* Feedback FAB */}
+            <FeedbackButton />
         </>
     );
 }

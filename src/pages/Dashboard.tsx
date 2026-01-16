@@ -5,6 +5,7 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
+import FeedbackButton from '../components/FeedbackButton';
 // motion removed
 
 export default function Dashboard() {
@@ -339,6 +340,8 @@ END:VCALENDAR`;
                     </div>
                 )
             }
-        </div >
+            {/* Feedback Button */}
+            <FeedbackButton />
+        </div>
     );
 }
