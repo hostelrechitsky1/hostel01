@@ -13,7 +13,7 @@ export default function ManagerPanel() {
     const [students, setStudents] = useState<Student[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false });
+    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -143,14 +143,33 @@ export default function ManagerPanel() {
         }
     };
 
-    const handleToggleSchedule = async () => {
-        const newValue = !settings.forceShowNextWeek;
-        const msg = newValue
-            ? "This will OPEN next week's booking immediately (overriding 2PM rule).\nAre you sure?"
-            : "This will return to standard schedule rules (Sat 2PM).";
+    const handleClearBookings = async () => {
+        if (confirm('⚠️ WARNING: This will DELETE ALL BOOKINGS.\n\nThis cannot be undone. Are you sure?')) {
+            setLoading(true);
+            try {
+                await firestoreService.clearAllBookings();
+                alert('All bookings cleared.');
+                refreshData();
+            } catch (e) {
+                alert('Error: ' + e);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
 
-        if (confirm(msg)) {
-            await firestoreService.updateSettings({ forceShowNextWeek: newValue });
+    const handleToggleSetting = async (key: 'forceShowNextWeek' | 'forceCloseBookings') => {
+        // @ts-ignore
+        const newValue = !settings[key];
+
+        const messages = {
+            forceShowNextWeek: newValue ? "This will OPEN booking immediately." : "Returning to automatic schedule.",
+            forceCloseBookings: newValue ? "This will CLOSE booking immediately (Kill Switch)." : "Booking will follow schedule rules."
+        };
+
+        // @ts-ignore
+        if (confirm(messages[key])) {
+            await firestoreService.updateSettings({ [key]: newValue });
             refreshData();
         }
     };
@@ -191,21 +210,39 @@ export default function ManagerPanel() {
                         <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Calendar size={20} className="text-primary" /> Schedule Override
+                                    <Calendar size={20} className="text-primary" /> Schedule Controls
                                 </h3>
                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                    {settings.forceShowNextWeek
-                                        ? <span style={{ color: 'var(--success)' }}>Next Week is OPEN (Forced)</span>
-                                        : <span>Following Standard Rules (Sat 2PM)</span>}
+                                    {settings.forceCloseBookings
+                                        ? <span style={{ color: 'var(--error)' }}>CLOSED (Forced)</span>
+                                        : settings.forceShowNextWeek
+                                            ? <span style={{ color: 'var(--success)' }}>OPEN (Forced)</span>
+                                            : <span>Auto: Sat 4PM - Mon 9AM</span>}
                                 </div>
                             </div>
-                            <button
-                                onClick={handleToggleSchedule}
-                                className={settings.forceShowNextWeek ? 'primary-button' : 'glass-button'}
-                                style={{ padding: '8px 16px', borderRadius: '8px' }}
-                            >
-                                {settings.forceShowNextWeek ? 'Disable Override' : 'Force Open'}
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                                <button
+                                    onClick={() => handleToggleSetting('forceCloseBookings')}
+                                    className="glass-button"
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '8px',
+                                        background: settings.forceCloseBookings ? 'rgba(239, 68, 68, 0.2)' : undefined,
+                                        color: settings.forceCloseBookings ? 'var(--error)' : undefined,
+                                        border: settings.forceCloseBookings ? '1px solid var(--error)' : undefined,
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    {settings.forceCloseBookings ? 'Unlock Booking' : 'Force Close'}
+                                </button>
+                                <button
+                                    onClick={() => handleToggleSetting('forceShowNextWeek')}
+                                    className={settings.forceShowNextWeek ? 'primary-button' : 'glass-button'}
+                                    style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '12px' }}
+                                >
+                                    {settings.forceShowNextWeek ? 'Disable Open' : 'Force Open'}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
@@ -214,22 +251,39 @@ export default function ManagerPanel() {
                                     <AlertTriangle size={20} /> Danger Zone
                                 </h3>
                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                    Reset Database & PINs
+                                    Destructive Actions
                                 </div>
                             </div>
-                            <button
-                                onClick={handleSeedDatabase}
-                                style={{
-                                    padding: '8px 16px',
-                                    borderRadius: '8px',
-                                    background: 'rgba(239, 68, 68, 0.2)',
-                                    color: 'var(--error)',
-                                    border: '1px solid var(--error)',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <Database size={16} style={{ marginRight: '8px' }} /> Reset DB
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                                <button
+                                    onClick={handleClearBookings}
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '8px',
+                                        background: 'rgba(239, 68, 68, 0.2)',
+                                        color: 'var(--error)',
+                                        border: '1px solid var(--error)',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    <Trash2 size={14} style={{ marginRight: '8px' }} /> Clear All Books
+                                </button>
+                                <button
+                                    onClick={handleSeedDatabase}
+                                    style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '8px',
+                                        background: 'rgba(239, 68, 68, 0.2)',
+                                        color: 'var(--error)',
+                                        border: '1px solid var(--error)',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    <Database size={14} style={{ marginRight: '8px' }} /> Reset DB/PINs
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </section>

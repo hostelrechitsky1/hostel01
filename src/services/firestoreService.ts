@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
@@ -117,16 +117,25 @@ export const firestoreService = {
     },
 
     // --- Settings ---
-    async getSettings(): Promise<{ forceShowNextWeek: boolean }> {
+    async getSettings(): Promise<{ forceShowNextWeek: boolean; forceCloseBookings: boolean }> {
         const snap = await getDocs(collection(db, 'settings'));
-        if (snap.empty) return { forceShowNextWeek: false };
+        if (snap.empty) return { forceShowNextWeek: false, forceCloseBookings: false };
 
         const configDoc = snap.docs.find(d => d.id === 'config');
-        return configDoc ? (configDoc.data() as { forceShowNextWeek: boolean }) : { forceShowNextWeek: false };
+        return configDoc ? (configDoc.data() as { forceShowNextWeek: boolean; forceCloseBookings: boolean }) : { forceShowNextWeek: false, forceCloseBookings: false };
     },
 
-    async updateSettings(settings: { forceShowNextWeek: boolean }) {
+    async updateSettings(settings: { forceShowNextWeek?: boolean; forceCloseBookings?: boolean }) {
         await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
+    },
+
+    async clearAllBookings() {
+        const snapshot = await getDocs(collection(db, BOOKINGS_COL));
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
     },
 
     // --- Auth Sync (Helper to keep local user state) ---

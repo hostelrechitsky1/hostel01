@@ -19,7 +19,7 @@ export default function BookingFlow() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false });
+    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
 
     // Async State
     const [machines, setMachines] = useState<Machine[]>([]);
