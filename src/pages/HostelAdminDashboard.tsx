@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Printer, Users, LogOut, FileText } from 'lucide-react';
+import { Printer, Users, LogOut } from 'lucide-react';
 import { useEffect } from 'react';
 
 export default function HostelAdminDashboard() {
