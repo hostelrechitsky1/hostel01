@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Plus, AlertTriangle, Printer, Trash2 } from 'lucide-react';
 import { bookingService } from '../services/bookingService';
 import type { Booking, Machine, Student } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 
 
 export default function AdminPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -22,6 +24,20 @@ export default function AdminPanel() {
         setMachines(bookingService.getMachines());
         setStudents(bookingService.getStudents());
     };
+
+    const filteredBookings = useMemo(() => {
+        return bookings.filter(b => {
+            const student = students.find(s => s.id === b.studentId);
+            const machine = machines.find(m => m.id === b.machineId);
+            const searchLower = searchTerm.toLowerCase();
+
+            return (
+                student?.name.toLowerCase().includes(searchLower) ||
+                student?.roomNumber.toLowerCase().includes(searchLower) ||
+                machine?.name.toLowerCase().includes(searchLower)
+            );
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [bookings, students, machines, searchTerm]);
 
     const toggleMachine = (id: string) => {
         bookingService.toggleMachineStatus(id);
@@ -123,48 +139,65 @@ export default function AdminPanel() {
 
                 {/* Recent Bookings */}
                 <section>
-                    <h3 style={{ marginBottom: '16px' }}>All Bookings ({bookings.length})</h3>
-                    <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '600px' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'left' }}>
-                                    <th style={{ padding: '16px' }}>Date</th>
-                                    <th style={{ padding: '16px' }}>Time</th>
-                                    <th style={{ padding: '16px' }}>Student</th>
-                                    <th style={{ padding: '16px' }}>Machine</th>
-                                    <th style={{ padding: '16px' }}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {bookings.map(b => {
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                        <h3 style={{ margin: 0 }}>All Bookings ({bookings.length})</h3>
+                        <input
+                            type="text"
+                            placeholder="Search Name or Room..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                                padding: '10px 16px',
+                                borderRadius: '12px',
+                                border: '1px solid var(--glass-border)',
+                                background: 'var(--glass-bg)',
+                                color: 'var(--text-main)',
+                                outline: 'none',
+                                width: '100%',
+                                maxWidth: '250px'
+                            }}
+                        />
+                    </div>
+
+                    <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', background: 'none', border: 'none', padding: 0 }}>
+                        {filteredBookings.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {filteredBookings.map(b => {
                                     const student = students.find(s => s.id === b.studentId);
                                     const machine = machines.find(m => m.id === b.machineId);
                                     return (
-                                        <tr key={b.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                            <td style={{ padding: '16px' }}>{b.date}</td>
-                                            <td style={{ padding: '16px' }}>{b.startTime}</td>
-                                            <td style={{ padding: '16px' }}>{student?.name} ({student?.roomNumber})</td>
-                                            <td style={{ padding: '16px' }}>{machine?.name}</td>
-                                            <td style={{ padding: '16px' }}>
-                                                <button
-                                                    onClick={() => cancelBooking(b.id)}
-                                                    style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '16px' }}>
+                                                    {student?.name} <span style={{ opacity: 0.7, fontSize: '14px' }}>({student?.roomNumber})</span>
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                                    {format(new Date(b.date), 'MMM d')} • {b.startTime} • {machine?.name}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => cancelBooking(b.id)}
+                                                style={{
+                                                    color: 'var(--error)',
+                                                    background: 'rgba(239, 68, 68, 0.1)',
+                                                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                    borderRadius: '8px',
+                                                    padding: '8px 12px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px'
+                                                }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
                                     );
                                 })}
-                                {bookings.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                            No bookings found.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                            </div>
+                        ) : (
+                            <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
+                                No bookings found matching "{searchTerm}"
+                            </div>
+                        )}
                     </div>
                 </section>
 
