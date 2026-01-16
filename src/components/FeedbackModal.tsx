@@ -3,7 +3,6 @@ import { firestoreService } from '../services/firestoreService';
 import { bookingService } from '../services/bookingService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check } from 'lucide-react';
-import clsx from 'clsx';
 
 interface FeedbackModalProps {
     isOpen: boolean;

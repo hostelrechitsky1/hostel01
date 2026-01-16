@@ -1,6 +1,3 @@
-```
-import { firestoreService } from '../services/firestoreService';
-import { bookingService } from '../services/bookingService';
 import { useState } from 'react';
 import FeedbackModal from './FeedbackModal';
 
@@ -32,4 +29,3 @@ export default function FeedbackButton() {
         </>
     );
 }
-```
