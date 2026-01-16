@@ -336,13 +336,13 @@ export default function BookingFlow() {
             {showConfirmModal && selectedSlot && selectedMachine && (
                 <div style={{
                     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-                    zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                     <div className="glass-panel" style={{
-                        padding: '32px', borderRadius: '24px', textAlign: 'center', maxWidth: '320px',
+                        padding: '32px', borderRadius: '24px', textAlign: 'center',
                         animation: 'fadeIn 0.2s', boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
                         border: '1px solid rgba(255,255,255,0.1)',
-                        width: '90%', transform: 'translateY(-10vh)'
+                        width: '90%', maxWidth: '380px'
                     }}>
                         <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
                         <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
@@ -387,12 +387,12 @@ export default function BookingFlow() {
             {showConfirmation && (
                 <div style={{
                     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)',
-                    zIndex: 150, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
                     <div className="glass-panel" style={{
                         padding: '40px', borderRadius: '24px', textAlign: 'center', animation: 'fadeIn 0.2s',
                         boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid rgba(16, 185, 129, 0.2)',
-                        width: '90%', maxWidth: '320px', transform: 'translateY(-10vh)'
+                        width: '90%', maxWidth: '380px'
                     }}>
                         <div style={{
                             background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
