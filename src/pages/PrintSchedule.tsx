@@ -34,14 +34,20 @@ export default function PrintSchedule() {
 
         const load = async () => {
             try {
-                const [ms, bs, ss] = await Promise.all([
+                const [ms, bs, ss, settings] = await Promise.all([
                     firestoreService.getMachines(),
                     firestoreService.getBookings(),
-                    firestoreService.getAllStudents()
+                    firestoreService.getAllStudents(),
+                    firestoreService.getSettings()
                 ]);
                 setMachines(ms);
                 setBookings(bs);
                 setStudents(ss);
+
+                // Smart Auto-Switch if Force Open is active
+                if (settings.forceShowNextWeek) {
+                    setWeekOffset(1);
+                }
             } catch (e) {
                 console.error("Failed to load schedule data", e);
             } finally {
@@ -68,13 +74,7 @@ export default function PrintSchedule() {
 
     if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading Schedule...</div>;
 
-    // Debug: Log booking data
-    console.log('PrintSchedule Debug:', {
-        bookingsLoaded: bookings.length,
-        weekStart: format(weekStart, 'yyyy-MM-dd'),
-        weekEnd: format(weekEnd, 'yyyy-MM-dd'),
-        sampleBooking: bookings[0] || 'No bookings found'
-    });
+
 
     return (
         <div className="print-container">
