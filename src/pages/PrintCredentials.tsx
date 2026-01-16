@@ -96,14 +96,6 @@ export default function PrintCredentials() {
                 </div>
             </div>
 
-            <style>{`
-                @media print {
-                    .no-print { display: none !important; }
-                    body { background: white; color: black; }
-                    .glass-panel, .glass-button { background: none; border: none; box-shadow: none; }
-                    .print-content { display: block; }
-                }
-            `}</style>
         </div>
     );
 }

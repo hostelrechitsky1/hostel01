@@ -2,6 +2,7 @@ export interface Student {
   id: string;
   name: string;
   roomNumber: string;
+  pin?: string;
 }
 
 export interface Machine {
