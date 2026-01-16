@@ -52,25 +52,22 @@ export default function BookingFlow() {
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
-    // Check if next week bookings are open (Saturday 4PM Belarus time = UTC+3)
+    // Check if bookings are open
     const isNextWeekOpen = useMemo(() => {
+        if (settings.forceCloseBookings) return false;
         if (settings.forceShowNextWeek) return true;
 
         const now = new Date();
         const day = now.getDay();
         const belarusHour = now.getUTCHours() + 3;
-        if (day === 6 && belarusHour >= 16) return true;
 
-        // Also allow Sunday (0) to Friday (5) ? 
-        // Logic: "Next Week" usually means strictly next calendar week?
-        // Wait, original logic: `if (day === 0) return true;`
-        // If today is Sunday, we are IN the "next week" kind of?
-        // Or does getWeek() handle it?
-        // Let's keep original logic + Force toggle.
-        if (day === 0) return true; // Sunday is open?
+        // Auto Open Logic: Sat 16:00 -> Mon 09:00
+        if (day === 6 && belarusHour >= 16) return true;
+        if (day === 0) return true;
+        if (day === 1 && belarusHour < 9) return true;
 
         return false;
-    }, [settings.forceShowNextWeek]);
+    }, [settings]);
 
     // Generate date options
     const dateOptions = useMemo(() => {
