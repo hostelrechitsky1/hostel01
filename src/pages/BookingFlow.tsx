@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
@@ -233,6 +234,8 @@ export default function BookingFlow() {
         );
     }
 
+    const modalRoot = typeof document !== 'undefined' ? document.body : null;
+
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '100px' }}>
             {/* Header */}
@@ -368,63 +371,68 @@ export default function BookingFlow() {
                 </div>
             )}
 
-            {/* Confirm Modal */}
-            {showConfirmModal && selectedSlot && selectedMachine && (
-                <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
-                    <div className="glass-panel modal-card" onClick={e => e.stopPropagation()}>
-                        <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
-                        <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
-                            {formatBelarusWeekdayLabel(selectedDate)}, {formatBelarusMonthDayLabel(selectedDate)} at {selectedSlot}
-                        </p>
-                        <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
-                        {error && (
-                            <div style={{ color: 'var(--error)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                <AlertCircle size={16} /> {error}
+            {modalRoot && createPortal(
+                <>
+                    {/* Confirm Modal */}
+                    {showConfirmModal && selectedSlot && selectedMachine && (
+                        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+                            <div className="glass-panel modal-card" onClick={e => e.stopPropagation()}>
+                                <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
+                                <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                                    {formatBelarusWeekdayLabel(selectedDate)}, {formatBelarusMonthDayLabel(selectedDate)} at {selectedSlot}
+                                </p>
+                                <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
+                                {error && (
+                                    <div style={{ color: 'var(--error)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        <AlertCircle size={16} /> {error}
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                                    <button
+                                        onClick={() => setShowConfirmModal(false)}
+                                        className="glass-button"
+                                        style={{ padding: '12px 24px', borderRadius: '12px' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBook}
+                                        disabled={submitting}
+                                        className="primary-button"
+                                        style={{
+                                            padding: '12px 24px',
+                                            borderRadius: '12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            opacity: submitting ? 0.7 : 1,
+                                            cursor: submitting ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {submitting ? 'Processing...' : 'Confirm'}
+                                    </button>
+                                </div>
                             </div>
-                        )}
-                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                            <button
-                                onClick={() => setShowConfirmModal(false)}
-                                className="glass-button"
-                                style={{ padding: '12px 24px', borderRadius: '12px' }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleBook}
-                                disabled={submitting}
-                                className="primary-button"
-                                style={{
-                                    padding: '12px 24px',
-                                    borderRadius: '12px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    opacity: submitting ? 0.7 : 1,
-                                    cursor: submitting ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {submitting ? 'Processing...' : 'Confirm'}
-                            </button>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Success Modal */}
-            {showConfirmation && (
-                <div className="modal-overlay modal-overlay--success">
-                    <div className="glass-panel modal-card modal-card--success">
-                        <div style={{
-                            background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
-                        }}>
-                            <CheckCircle size={40} color="#10b981" />
+                    {/* Success Modal */}
+                    {showConfirmation && (
+                        <div className="modal-overlay modal-overlay--success">
+                            <div className="glass-panel modal-card modal-card--success">
+                                <div style={{
+                                    background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+                                }}>
+                                    <CheckCircle size={40} color="#10b981" />
+                                </div>
+                                <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
+                                <p style={{ color: 'var(--text-muted)' }}>See you in the laundry room.</p>
+                            </div>
                         </div>
-                        <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
-                        <p style={{ color: 'var(--text-muted)' }}>See you in the laundry room.</p>
-                    </div>
-                </div>
+                    )}
+                </>,
+                modalRoot
             )}
         </div>
     );
