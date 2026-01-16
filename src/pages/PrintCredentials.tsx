@@ -10,6 +10,11 @@ export default function PrintCredentials() {
     const navigate = useNavigate();
 
     useEffect(() => {
+        if (!sessionStorage.getItem('manager_auth')) {
+            navigate('/manager/login');
+            return;
+        }
+
         const loadData = async () => {
             const data = await firestoreService.getAllStudents();
             setStudents(data);

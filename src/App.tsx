@@ -5,6 +5,7 @@ import BookingFlow from './pages/BookingFlow';
 import ManagerPanel from './pages/ManagerPanel';
 import ManagerLogin from './pages/ManagerLogin';
 import PrintSchedule from './pages/PrintSchedule';
+import PrintCredentials from './pages/PrintCredentials';
 import { PrivateRoute } from './components/PrivateRoute';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
         <Route path="/manager/login" element={<ManagerLogin />} />
         <Route path="/manager" element={<ManagerPanel />} />
         <Route path="/manager/print-schedule" element={<PrintSchedule />} />
+        <Route path="/manager/print-credentials" element={<PrintCredentials />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
