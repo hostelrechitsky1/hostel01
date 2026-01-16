@@ -142,22 +142,22 @@ export default function Dashboard() {
                 <div>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
-                        {settings.forceCloseBookings ? 'Bookings are currently closed' : 'Book your slot for this week'}
+                        {settings.forceCloseBookings ? 'Bookings are currently paused' : 'Book your slot for this week'}
                     </p>
                 </div>
                 <button
-                    onClick={() => !settings.forceCloseBookings && navigate('/book')}
+                    onClick={() => navigate('/book')}
                     className="primary-button"
-                    disabled={settings.forceCloseBookings}
                     style={{
                         padding: '12px 24px',
                         borderRadius: '12px',
-                        opacity: settings.forceCloseBookings ? 0.5 : 1,
-                        cursor: settings.forceCloseBookings ? 'not-allowed' : 'pointer',
-                        background: settings.forceCloseBookings ? 'var(--glass-bg)' : 'var(--primary)'
+                        // Minimal visual cue it's special, but clickable
+                        background: settings.forceCloseBookings ? '#ef4444' : 'var(--primary)',
+                        opacity: 1,
+                        cursor: 'pointer'
                     }}
                 >
-                    {settings.forceCloseBookings ? 'Closed' : 'Book Now'}
+                    {settings.forceCloseBookings ? 'Check Status' : 'Book Now'}
                 </button>
             </div>
 

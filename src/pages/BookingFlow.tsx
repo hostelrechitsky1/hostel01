@@ -108,8 +108,25 @@ export default function BookingFlow() {
 
     // Generate date options
     const dateOptions = useMemo(() => {
-        const days = isNextWeekOpen ? 14 : 7;
-        return Array.from({ length: days }, (_, i) => addDays(startOfToday(), i));
+        const today = startOfToday();
+        // Calculate the end of the current week (Sunday)
+        const currentWeekEnd = endOfWeek(today, { weekStartsOn: 1 }); // 1 = Monday start, so Sunday end
+
+        let maxDate = currentWeekEnd;
+
+        // If next week is open, extend maxDate to the end of NEXT week
+        if (isNextWeekOpen) {
+            maxDate = addDays(currentWeekEnd, 7);
+        }
+
+        // Generate dates from today up to maxDate
+        const dates = [];
+        let current = today;
+        while (!isAfter(current, maxDate)) {
+            dates.push(current);
+            current = addDays(current, 1);
+        }
+        return dates;
     }, [isNextWeekOpen]);
 
     // Calculate availability for the selected date
