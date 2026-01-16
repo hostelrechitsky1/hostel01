@@ -7,6 +7,7 @@ import { TIME_SLOTS } from '../types';
 import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter } from 'date-fns';
 import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 import clsx from 'clsx';
+import { isAutoBookingWindowOpen } from '../utils/time';
 
 export default function BookingFlow() {
     const navigate = useNavigate();
@@ -54,14 +55,8 @@ export default function BookingFlow() {
 
     const isNextWeekOpen = useMemo(() => {
         if (settings.forceShowNextWeek) return true;
-        const now = new Date();
-        const day = now.getDay();
-        const belarusHour = now.getUTCHours() + 3;
-        if (day === 6 && belarusHour >= 16) return true;
-        if (day === 0) return true;
-        if (day === 1 && belarusHour < 9) return true;
-        return false;
-    }, [settings]);
+        return isAutoBookingWindowOpen();
+    }, [settings.forceShowNextWeek]);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 

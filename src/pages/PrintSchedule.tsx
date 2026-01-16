@@ -5,16 +5,12 @@ import { Printer, ChevronLeft } from 'lucide-react';
 import type { Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { isAutoBookingWindowOpen } from '../utils/time';
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
     const [weekOffset, setWeekOffset] = useState(() => {
-        const now = new Date();
-        const day = now.getDay();
-        const hour = now.getHours(); // Local browser time, reasonable approximation for Admin
-        // If Sat >= 16:00 or Sunday, default to Next Week (1)
-        if ((day === 6 && hour >= 16) || day === 0) return 1;
-        return 0;
+        return isAutoBookingWindowOpen() ? 1 : 0;
     });
 
     // Async Data
