@@ -16,11 +16,13 @@
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
+
+  --bg-solid: #0f172a;
+  /* Default Dark Mode Solid */
 }
 
 html {
-  background-color: #0f172a;
-  /* Matches gradient start */
+  background-color: var(--bg-solid);
   min-height: 100%;
 }
 
@@ -28,10 +30,8 @@ body {
   margin: 0;
   font-family: var(--font-family);
   background: var(--bg-gradient);
-  background-color: #0f172a;
-  /* Fallback/Overscroll color */
+  background-color: var(--bg-solid);
   background-attachment: fixed;
-  /* consistency */
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -145,6 +145,9 @@ button {
 @media (prefers-color-scheme: light) {
   :root {
     --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    --bg-solid: #f8fafc;
+    /* Light Mode Solid */
+
     --glass-bg: rgba(255, 255, 255, 0.7);
     --glass-button-bg: rgba(255, 255, 255, 0.8);
     --glass-border: rgba(0, 0, 0, 0.1);
