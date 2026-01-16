@@ -6,7 +6,6 @@ import type { Machine, Booking } from '../types';
 import { TIME_SLOTS } from '../types';
 import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter } from 'date-fns';
 import { ChevronLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
 export default function BookingFlow() {
@@ -41,7 +40,6 @@ export default function BookingFlow() {
                 setMachines(ms);
                 setBookings(bs);
                 setSettings(st);
-                console.log('Booking Data Loaded:', { machines: ms.length, bookings: bs.length, settings: st });
             } catch (e) {
                 console.error("Failed to load booking data", e);
                 setError("Failed to load data. Please refresh.");
@@ -116,33 +114,23 @@ export default function BookingFlow() {
         const currentWeekEnd = endOfWeek(start, { weekStartsOn: 1 }); // 1 = Monday start, so Sunday end
         let maxDate = currentWeekEnd;
 
-        // If next week is open, logic dictates we are booking FOR next week.
-        // We should skip the remainder of this week and show Next Monday -> Next Sunday.
         if (isNextWeekOpen) {
-            // Start from Next Monday
             const nextMonday = addDays(currentWeekEnd, 1);
-
-            // If today is actually BEFORE next Monday (e.g. Sat/Sun), jump to next Monday
             if (!isAfter(start, currentWeekEnd)) {
                 start = nextMonday;
             }
-
-            // End at Next Sunday
             maxDate = addDays(currentWeekEnd, 7);
         }
 
-        // Generate dates
         const dates = [];
         let current = start;
         while (!isAfter(current, maxDate)) {
             dates.push(current);
             current = addDays(current, 1);
         }
-
         return dates;
     }, [isNextWeekOpen]);
 
-    // Update selectedDate if it falls out of the new options
     useEffect(() => {
         if (dateOptions.length > 0) {
             const isSelectedValid = dateOptions.some(d => isSameDay(d, selectedDate));
@@ -152,12 +140,9 @@ export default function BookingFlow() {
         }
     }, [dateOptions, selectedDate]);
 
-    // Calculate availability for the selected date
     const availability = useMemo(() => {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        // Filter bookings for this date from the loaded list
         const dateBookings = bookings.filter(b => b.date === dateStr);
-
         const now = new Date();
         const isToday = isSameDay(selectedDate, now);
         const currentHour = now.getHours();
@@ -169,22 +154,14 @@ export default function BookingFlow() {
                 .map(b => b.machineId);
 
             let isPassed = false;
-
             if (isToday) {
                 const [slotHour, slotMinute] = time.split(':').map(Number);
                 if (slotHour < currentHour || (slotHour === currentHour && slotMinute < currentMinute)) {
                     isPassed = true;
                 }
             }
-
             const isFull = bookedMachineIds.length >= activeMachines.length;
-
-            return {
-                time,
-                bookedMachineIds,
-                isFull,
-                isPassed
-            };
+            return { time, bookedMachineIds, isFull, isPassed };
         });
     }, [selectedDate, activeMachines, bookings]);
 
@@ -197,23 +174,21 @@ export default function BookingFlow() {
         const bookingData: Booking = {
             id: Date.now().toString(),
             machineId: selectedMachine.id,
-            studentId: user.id, // Use correct field name
-            studentName: user.name, // Snapshot
-            roomNumber: user.roomNumber, // Snapshot
+            studentId: user.id,
+            studentName: user.name,
+            roomNumber: user.roomNumber,
             date: format(selectedDate, 'yyyy-MM-dd'),
             startTime: selectedSlot,
-            endTime: selectedSlot, // Placeholder or logic for end time
+            endTime: selectedSlot,
             weekId: `${format(selectedDate, 'yyyy')}-W${getWeek(selectedDate)}`,
             createdAt: Date.now()
         };
 
         try {
             const result = await firestoreService.createBooking(bookingData);
-
             if (result.success) {
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
-                // Optimistically update local state if needed, or just navigate
                 setTimeout(() => navigate('/'), 2000);
             } else {
                 setError(result.error || 'Booking failed');
@@ -231,158 +206,147 @@ export default function BookingFlow() {
     if (loading) return <div className="flex-center" style={{ height: '100vh', color: 'var(--text-main)' }}>Loading...</div>;
 
     return (
-        <>
-            <div className="container animate-fade-in" style={{ paddingBottom: '100px' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                    <button onClick={() => navigate(-1)} className="glass-button" style={{ borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <ChevronLeft size={24} />
-                    </button>
-                    <h2 style={{ margin: 0, fontSize: '20px' }}>Select a Slot</h2>
+        <div className="container" style={{ paddingBottom: '100px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                <button onClick={() => navigate(-1)} className="glass-button" style={{ borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ChevronLeft size={24} />
+                </button>
+                <h2 style={{ margin: 0, fontSize: '20px' }}>Select a Slot</h2>
+            </div>
+
+            {/* Fallback for Empty Dates */}
+            {dateOptions.length === 0 ? (
+                <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <p>No booking dates available at this time.</p>
                 </div>
+            ) : null}
 
-                {/* Fallback for Empty Dates */}
-                {dateOptions.length === 0 ? (
-                    <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        <p>No booking dates available at this time.</p>
+            {/* Date Selector */}
+            {dateOptions.length > 0 && (
+                <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '16px', marginBottom: '16px' }}>
+                    {dateOptions.map(date => {
+                        const isSelected = isSameDay(date, selectedDate);
+                        const isDateWed = date.getDay() === 3;
+                        return (
+                            <button
+                                key={date.toISOString()}
+                                onClick={() => { setSelectedDate(date); setSelectedSlot(null); setSelectedMachine(null); }}
+                                className={clsx('glass-panel')}
+                                style={{
+                                    minWidth: '80px',
+                                    padding: '16px 12px',
+                                    borderRadius: '16px',
+                                    background: isSelected ? 'var(--primary)' : 'var(--glass-bg)',
+                                    border: isSelected ? 'none' : '1px solid var(--glass-border)',
+                                    color: isSelected ? 'white' : 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    textAlign: 'center',
+                                    opacity: isDateWed ? 0.7 : 1
+                                }}
+                            >
+                                <div style={{ fontSize: '12px', marginBottom: '4px', color: isDateWed ? '#ef4444' : 'inherit' }}>
+                                    {isDateWed ? 'Maint' : format(date, 'EEE')}
+                                </div>
+                                <div style={{ fontSize: '20px', fontWeight: 700 }}>{format(date, 'd')}</div>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {isWed ? (
+                <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', borderRadius: '24px' }}>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.2)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <AlertCircle size={32} color="#ef4444" />
                     </div>
-                ) : null}
-
-                {/* Date Selector */}
-                {dateOptions.length > 0 && (
-                    <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '16px', marginBottom: '16px' }}>
-                        {dateOptions.map(date => {
-                            const isSelected = isSameDay(date, selectedDate);
-                            const isDateWed = date.getDay() === 3; // 0=Sun, 3=Wed
-                            return (
+                    <h3>Maintenance Day</h3>
+                    <p style={{ color: 'var(--text-muted)' }}>Washing machines are closed for service on Wednesdays.</p>
+                </div>
+            ) : (
+                <>
+                    {/* Slots List */}
+                    <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Available Times</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => (
+                            <div key={time}>
                                 <button
-                                    key={date.toISOString()}
-                                    onClick={() => { setSelectedDate(date); setSelectedSlot(null); setSelectedMachine(null); }}
-                                    className={clsx('glass-panel')}
+                                    disabled={isFull || isPassed}
+                                    onClick={() => {
+                                        if (!isFull && !isPassed) {
+                                            setSelectedSlot(time);
+                                            if (selectedSlot === time) {
+                                                setSelectedSlot(null);
+                                            } else {
+                                                setSelectedSlot(time);
+                                                setSelectedMachine(null);
+                                            }
+                                        }
+                                    }}
+                                    className="glass-panel"
                                     style={{
-                                        minWidth: '80px',
-                                        padding: '16px 12px',
+                                        width: '100%',
+                                        padding: '20px',
                                         borderRadius: '16px',
-                                        background: isSelected ? 'var(--primary)' : 'var(--glass-bg)',
-                                        border: isSelected ? 'none' : '1px solid var(--glass-border)',
-                                        color: isSelected ? 'white' : 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        textAlign: 'center',
-                                        opacity: isDateWed ? 0.7 : 1
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        textAlign: 'left',
+                                        opacity: (isFull || isPassed) ? 0.5 : 1,
+                                        border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                                        cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
                                     }}
                                 >
-                                    <div style={{ fontSize: '12px', marginBottom: '4px', color: isDateWed ? '#ef4444' : 'inherit' }}>
-                                        {isDateWed ? 'Maint' : format(date, 'EEE')}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
+                                        <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
                                     </div>
-                                    <div style={{ fontSize: '20px', fontWeight: 700 }}>{format(date, 'd')}</div>
+                                    <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)' }}>
+                                        {isPassed ? 'Passed' : isFull ? 'Full' : `${activeMachines.length - bookedMachineIds.length} Free`}
+                                    </div>
                                 </button>
-                            );
-                        })}
-                    </div>
-                )}
 
-                {isWed ? (
-                    <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', borderRadius: '24px' }}>
-                        <div style={{ background: 'rgba(239, 68, 68, 0.2)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                            <AlertCircle size={32} color="#ef4444" />
-                        </div>
-                        <h3>Maintenance Day</h3>
-                        <p style={{ color: 'var(--text-muted)' }}>Washing machines are closed for service on Wednesdays.</p>
+                                {/* Machine Selection (Accordion) */}
+                                {selectedSlot === time && (
+                                    <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
+                                        {activeMachines.map(m => {
+                                            const isBooked = bookedMachineIds.includes(m.id);
+                                            return (
+                                                <button
+                                                    key={m.id}
+                                                    disabled={isBooked}
+                                                    onClick={() => {
+                                                        if (!isBooked) {
+                                                            setSelectedMachine(m);
+                                                            setShowConfirmModal(true);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        minWidth: '100px',
+                                                        padding: '12px',
+                                                        borderRadius: '12px',
+                                                        background: isBooked
+                                                            ? 'var(--glass-bg)'
+                                                            : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
+                                                        border: isBooked ? '1px solid var(--glass-border)' : 'none',
+                                                        color: isBooked ? 'var(--text-muted)' : 'var(--text-main)',
+                                                        cursor: isBooked ? 'not-allowed' : 'pointer',
+                                                        opacity: isBooked ? 0.6 : 1,
+                                                        position: 'relative'
+                                                    }}
+                                                >
+                                                    {m.name}
+                                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>(Booked)</div>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                ) : (
-                    <>
-                        {/* Slots List */}
-                        <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Available Times</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => (
-                                <div key={time}>
-                                    <button
-                                        disabled={isFull || isPassed}
-                                        onClick={() => {
-                                            if (!isFull && !isPassed) {
-                                                setSelectedSlot(time);
-                                                if (selectedSlot === time) {
-                                                    setSelectedSlot(null);
-                                                } else {
-                                                    setSelectedSlot(time);
-                                                    setSelectedMachine(null);
-                                                }
-                                            }
-                                        }}
-                                        className="glass-panel"
-                                        style={{
-                                            width: '100%',
-                                            padding: '20px',
-                                            borderRadius: '16px',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            textAlign: 'left',
-                                            opacity: (isFull || isPassed) ? 0.5 : 1,
-                                            border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                                            cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
-                                            <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
-                                        </div>
-                                        <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)' }}>
-                                            {isPassed ? 'Passed' : isFull ? 'Full' : `${activeMachines.length - bookedMachineIds.length} Free`}
-                                        </div>
-                                    </button>
-
-                                    {/* Machine Selection (Accordion) */}
-                                    <AnimatePresence>
-                                        {selectedSlot === time && (
-                                            <motion.div
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: 'auto', opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                style={{ overflow: 'hidden' }}
-                                            >
-                                                <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto' }}>
-                                                    {activeMachines.map(m => {
-                                                        const isBooked = bookedMachineIds.includes(m.id);
-                                                        return (
-                                                            <button
-                                                                key={m.id}
-                                                                disabled={isBooked}
-                                                                onClick={() => {
-                                                                    if (!isBooked) {
-                                                                        setSelectedMachine(m);
-                                                                        setShowConfirmModal(true);
-                                                                    }
-                                                                }}
-                                                                style={{
-                                                                    minWidth: '100px',
-                                                                    padding: '12px',
-                                                                    borderRadius: '12px',
-                                                                    background: isBooked
-                                                                        ? 'var(--glass-bg)'
-                                                                        : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
-                                                                    border: isBooked ? '1px solid var(--glass-border)' : 'none',
-                                                                    color: isBooked ? 'var(--text-muted)' : 'var(--text-main)',
-                                                                    cursor: isBooked ? 'not-allowed' : 'pointer',
-                                                                    opacity: isBooked ? 0.6 : 1,
-                                                                    position: 'relative'
-                                                                }}
-                                                            >
-                                                                {m.name}
-                                                                {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>(Booked)</div>}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            ))}
-                        </div>
-                    </>
-                )}
-            </div>
+                </>
+            )}
 
             {/* Confirmation Modal */}
             {showConfirmModal && selectedSlot && selectedMachine && !isWed && (
@@ -390,11 +354,9 @@ export default function BookingFlow() {
                     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100
                 }}>
-                    <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
+                    <div
                         className="glass-panel"
-                        style={{ padding: '32px', borderRadius: '24px', textAlign: 'center', maxWidth: '320px' }}
+                        style={{ padding: '32px', borderRadius: '24px', textAlign: 'center', maxWidth: '320px', animation: 'fadeIn 0.2s' }}
                     >
                         <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
                         <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
@@ -431,7 +393,7 @@ export default function BookingFlow() {
                                 {submitting ? 'Processing...' : 'Confirm'}
                             </button>
                         </div>
-                    </motion.div>
+                    </div>
                 </div>
             )}
 
@@ -441,11 +403,9 @@ export default function BookingFlow() {
                     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 150
                 }}>
-                    <motion.div
-                        initial={{ scale: 0.5 }}
-                        animate={{ scale: 1 }}
+                    <div
                         className="glass-panel"
-                        style={{ padding: '40px', borderRadius: '24px', textAlign: 'center' }}
+                        style={{ padding: '40px', borderRadius: '24px', textAlign: 'center', animation: 'fadeIn 0.2s' }}
                     >
                         <div style={{
                             background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
@@ -455,9 +415,9 @@ export default function BookingFlow() {
                         </div>
                         <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
                         <p style={{ color: 'var(--text-muted)' }}>See you in the laundry room.</p>
-                    </motion.div>
+                    </div>
                 </div>
             )}
-        </>
+        </div>
     );
 }
