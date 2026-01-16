@@ -125,10 +125,12 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                                         padding: '16px',
                                         color: 'white',
                                         marginBottom: '24px',
-                                        fontSize: '16px',
+                                        fontSize: '17px',
                                         resize: 'none',
                                         boxSizing: 'border-box',
-                                        outline: 'none'
+                                        outline: 'none',
+                                        appearance: 'none',
+                                        WebkitAppearance: 'none'
                                     }}
                                 />
 
