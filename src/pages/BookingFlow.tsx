@@ -342,7 +342,7 @@ export default function BookingFlow() {
                         padding: '32px', borderRadius: '24px', textAlign: 'center', maxWidth: '320px',
                         animation: 'fadeIn 0.2s', boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
                         border: '1px solid rgba(255,255,255,0.1)',
-                        width: '90%', marginBottom: '15vh'
+                        width: '90%', transform: 'translateY(-10vh)'
                     }}>
                         <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
                         <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
@@ -392,7 +392,7 @@ export default function BookingFlow() {
                     <div className="glass-panel" style={{
                         padding: '40px', borderRadius: '24px', textAlign: 'center', animation: 'fadeIn 0.2s',
                         boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid rgba(16, 185, 129, 0.2)',
-                        width: '90%', maxWidth: '320px', marginBottom: '15vh'
+                        width: '90%', maxWidth: '320px', transform: 'translateY(-10vh)'
                     }}>
                         <div style={{
                             background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',

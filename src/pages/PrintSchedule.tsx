@@ -68,6 +68,14 @@ export default function PrintSchedule() {
 
     if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading Schedule...</div>;
 
+    // Debug: Log booking data
+    console.log('PrintSchedule Debug:', {
+        bookingsLoaded: bookings.length,
+        weekStart: format(weekStart, 'yyyy-MM-dd'),
+        weekEnd: format(weekEnd, 'yyyy-MM-dd'),
+        sampleBooking: bookings[0] || 'No bookings found'
+    });
+
     return (
         <div className="print-container">
             {/* Screen-only Controls */}
