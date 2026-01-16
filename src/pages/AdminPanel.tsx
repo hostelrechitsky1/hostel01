@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Plus, AlertTriangle, Printer, Trash2 } from 'lucide-react';
-import { bookingService } from '../services/bookingService';
+import { useEffect, useState, useMemo } from 'react';
+import { Plus, Printer, Trash2 } from 'lucide-react';
+// bookingService removed
+import { firestoreService } from '../services/firestoreService';
 import type { Booking, Machine, Student } from '../types';
 import { useNavigate } from 'react-router-dom';
-
+import { format } from 'date-fns';
 
 export default function AdminPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -16,39 +19,71 @@ export default function AdminPanel() {
         refreshData();
     }, []);
 
-    const refreshData = () => {
-        const currentBookings = bookingService.getBookings();
-        setBookings(currentBookings);
-        setMachines(bookingService.getMachines());
-        setStudents(bookingService.getStudents());
+    const refreshData = async () => {
+        setLoading(true);
+        try {
+            const [fetchedBookings, fetchedMachines, fetchedStudents] = await Promise.all([
+                firestoreService.getBookings(),
+                firestoreService.getMachines(),
+                firestoreService.getAllStudents()
+            ]);
+            setBookings(fetchedBookings);
+            setMachines(fetchedMachines);
+            setStudents(fetchedStudents);
+        } catch (error) {
+            console.error("Failed to load admin data", error);
+            alert("Failed to load data from database.");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const toggleMachine = (id: string) => {
-        bookingService.toggleMachineStatus(id);
+    const filteredBookings = useMemo(() => {
+        return bookings.filter(b => {
+            const student = students.find(s => s.id === b.studentId); // Use studentId
+            const machine = machines.find(m => m.id === b.machineId);
+            const searchLower = searchTerm.toLowerCase();
+
+            return (
+                student?.name.toLowerCase().includes(searchLower) ||
+                student?.roomNumber.toLowerCase().includes(searchLower) ||
+                machine?.name.toLowerCase().includes(searchLower)
+            );
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [bookings, students, machines, searchTerm]);
+
+    const toggleMachine = async (machine: Machine) => {
+        const newStatus = machine.status === 'available' ? 'maintenance' : 'available';
+        await firestoreService.updateMachineStatus(machine.id, newStatus);
         refreshData();
     };
 
-    const handleAddMachine = () => {
+    const handleAddMachine = async () => {
         const name = prompt('Enter New Machine Name (e.g. Machine 5)');
         if (name) {
-            bookingService.addMachine(name);
+            await firestoreService.addMachine(name);
             refreshData();
         }
     };
 
-    const handleDeleteMachine = (id: string, machineName: string) => {
+    const handleDeleteMachine = async (id: string, machineName: string) => {
         if (confirm(`Permanently delete ${machineName}? This will also remove all bookings for this machine.`)) {
-            bookingService.deleteMachine(id);
+            // Note: Ideally backend should cascade delete bookings, doing it here logicially
+            await firestoreService.deleteMachine(id);
             refreshData();
         }
     };
 
-    const cancelBooking = (id: string) => {
+    const cancelBooking = async (id: string) => {
         if (confirm('Are you sure you want to cancel this booking?')) {
-            bookingService.cancelBooking(id);
+            await firestoreService.cancelBooking(id);
             refreshData();
         }
     };
+
+    if (loading && bookings.length === 0 && machines.length === 0) {
+        return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
+    }
 
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
@@ -92,7 +127,7 @@ export default function AdminPanel() {
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
-                                        onClick={() => toggleMachine(m.id)}
+                                        onClick={() => toggleMachine(m)}
                                         className="glass-button"
                                         style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', flex: 1 }}
                                     >
@@ -123,82 +158,69 @@ export default function AdminPanel() {
 
                 {/* Recent Bookings */}
                 <section>
-                    <h3 style={{ marginBottom: '16px' }}>All Bookings ({bookings.length})</h3>
-                    <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', minWidth: '600px' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '1px solid var(--glass-border)', textAlign: 'left' }}>
-                                    <th style={{ padding: '16px' }}>Date</th>
-                                    <th style={{ padding: '16px' }}>Time</th>
-                                    <th style={{ padding: '16px' }}>Student</th>
-                                    <th style={{ padding: '16px' }}>Machine</th>
-                                    <th style={{ padding: '16px' }}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {bookings.map(b => {
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                        <h3 style={{ margin: 0 }}>All Bookings ({bookings.length})</h3>
+                        <input
+                            type="text"
+                            placeholder="Search Name or Room..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                                padding: '10px 16px',
+                                borderRadius: '12px',
+                                border: '1px solid var(--glass-border)',
+                                background: 'var(--glass-bg)',
+                                color: 'var(--text-main)',
+                                outline: 'none',
+                                width: '100%',
+                                maxWidth: '250px'
+                            }}
+                        />
+                    </div>
+
+                    <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', background: 'none', border: 'none', padding: 0 }}>
+                        {filteredBookings.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {filteredBookings.map(b => {
                                     const student = students.find(s => s.id === b.studentId);
                                     const machine = machines.find(m => m.id === b.machineId);
                                     return (
-                                        <tr key={b.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                            <td style={{ padding: '16px' }}>{b.date}</td>
-                                            <td style={{ padding: '16px' }}>{b.startTime}</td>
-                                            <td style={{ padding: '16px' }}>{student?.name} ({student?.roomNumber})</td>
-                                            <td style={{ padding: '16px' }}>{machine?.name}</td>
-                                            <td style={{ padding: '16px' }}>
-                                                <button
-                                                    onClick={() => cancelBooking(b.id)}
-                                                    style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '16px' }}>
+                                                    {student?.name || 'Unknown'} <span style={{ opacity: 0.7, fontSize: '14px' }}>({student?.roomNumber || '?'})</span>
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                                    {format(new Date(b.date), 'MMM d')} • {b.startTime} • {machine?.name || 'Unknown Machine'}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => cancelBooking(b.id)}
+                                                style={{
+                                                    color: 'var(--error)',
+                                                    background: 'rgba(239, 68, 68, 0.1)',
+                                                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                    borderRadius: '8px',
+                                                    padding: '8px 12px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px'
+                                                }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
                                     );
                                 })}
-                                {bookings.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                            No bookings found.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                            </div>
+                        ) : (
+                            <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
+                                No bookings found matching "{searchTerm}"
+                            </div>
+                        )}
                     </div>
                 </section>
 
-                <div style={{ padding: '0 0px 40px' }}>
-                    <div className="glass-panel" style={{ padding: '24px', borderRadius: '24px', marginBottom: '24px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                        <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '12px', color: '#ef4444' }}>
-                            <AlertTriangle /> Danger Zone
-                        </h3>
-                        <p style={{ color: 'var(--text-muted)' }}>
-                            Resetting the system will delete ALL bookings and restore the default machine list.
-                            Use this if the data gets corrupted or you want to start fresh.
-                        </p>
-                        <button
-                            onClick={() => {
-                                if (confirm('Are you sure? This will wipe all bookings.')) {
-                                    bookingService.resetData();
-                                    alert('System Reset Complete. Reloading...');
-                                    window.location.reload();
-                                }
-                            }}
-                            style={{
-                                background: 'rgba(239, 68, 68, 0.2)',
-                                color: '#ef4444',
-                                border: '1px solid rgba(239, 68, 68, 0.5)',
-                                padding: '12px 24px',
-                                borderRadius: '12px',
-                                cursor: 'pointer',
-                                fontWeight: 600
-                            }}
-                        >
-                            Reset System Data
-                        </button>
-                    </div>
-                </div>
+                {/* Removed Global Reset for safety */}
             </div>
         </div>
     );

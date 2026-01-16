@@ -1,0 +1,105 @@
+import { db } from '../firebase';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import type { Student, Machine, Booking } from '../types';
+import { parseRawStudentData } from '../utils/studentParser';
+
+const STUDENTS_COL = 'students';
+const MACHINES_COL = 'machines';
+const BOOKINGS_COL = 'bookings';
+
+export const firestoreService = {
+    // --- Students ---
+    async getAllStudents(): Promise<Student[]> {
+        const snapshot = await getDocs(collection(db, STUDENTS_COL));
+        return snapshot.docs.map(doc => doc.data() as Student);
+    },
+
+    async seedStudents(rawData: string) {
+        const students = parseRawStudentData(rawData);
+        // Simple loop for now since we have ~300 students.
+        // Note: Batching is recommended for larger datasets.
+        for (const student of students) {
+            await setDoc(doc(db, STUDENTS_COL, student.id), student);
+        }
+        console.log(`Seeded ${students.length} students`);
+    },
+
+    // --- Machines ---
+    async getMachines(): Promise<Machine[]> {
+        const snapshot = await getDocs(collection(db, MACHINES_COL));
+        let machines = snapshot.docs.map(doc => doc.data() as Machine);
+
+        // If empty, seed default machines
+        if (machines.length === 0) {
+            const defaults: Machine[] = [
+                { id: '1', name: 'Machine 1', status: 'available' },
+                { id: '2', name: 'Machine 2', status: 'available' },
+                { id: '3', name: 'Machine 3', status: 'available' },
+                { id: '4', name: 'Machine 4', status: 'available' }
+            ];
+            for (const m of defaults) {
+                await setDoc(doc(db, MACHINES_COL, m.id), m);
+            }
+            machines = defaults;
+        }
+        return machines.sort((a, b) => a.id.localeCompare(b.id)); // Ensure order
+    },
+
+    async updateMachineStatus(id: string, status: 'available' | 'maintenance') {
+        await updateDoc(doc(db, MACHINES_COL, id), { status });
+    },
+
+    async addMachine(name: string) {
+        const id = Date.now().toString();
+        const newMachine: Machine = { id, name, status: 'available' };
+        await setDoc(doc(db, MACHINES_COL, id), newMachine);
+    },
+
+    async deleteMachine(id: string) {
+        await deleteDoc(doc(db, MACHINES_COL, id));
+    },
+
+    // --- Bookings ---
+    async getBookings(): Promise<Booking[]> {
+        const snapshot = await getDocs(collection(db, BOOKINGS_COL));
+        return snapshot.docs.map(doc => doc.data() as Booking);
+    },
+
+    async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
+        // Double check availability (Race condition protection would go here with transactions)
+        // For simple app, straight write is okay for now, but better to check
+        const q = query(
+            collection(db, BOOKINGS_COL),
+            where('date', '==', booking.date),
+            where('machineId', '==', booking.machineId),
+            where('startTime', '==', booking.startTime)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            return { success: false, error: 'Slot already taken by someone else.' };
+        }
+
+        // Weekly Limit Check
+        const weekQ = query(
+            collection(db, BOOKINGS_COL),
+            where('studentId', '==', booking.studentId),
+            where('weekId', '==', booking.weekId)
+        );
+        const weekSnapshot = await getDocs(weekQ);
+        if (!weekSnapshot.empty) {
+            return { success: false, error: 'You have already booked a slot for this week.' };
+        }
+
+        await setDoc(doc(db, BOOKINGS_COL, booking.id), booking);
+        return { success: true };
+    },
+
+    async cancelBooking(id: string) {
+        await deleteDoc(doc(db, BOOKINGS_COL, id));
+    },
+
+    // --- Auth Sync (Helper to keep local user state) ---
+    // In a real app with Firebase Auth, we'd use onAuthStateChanged.
+    // Here we are "simulating" login with just a student ID, so we keep using localStorage for session
+    // but validate against Firestore.
+};
