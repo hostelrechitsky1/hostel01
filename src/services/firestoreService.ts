@@ -34,7 +34,8 @@ export const firestoreService = {
     },
 
     async updateStudent(student: Student) {
-        await updateDoc(doc(db, STUDENTS_COL, student.id), student);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await updateDoc(doc(db, STUDENTS_COL, student.id), student as any);
     },
 
     async deleteStudent(id: string) {
