@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, Printer, Trash2 } from 'lucide-react';
+import { Plus, Printer, Trash2, ShieldCheck } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import type { Booking, Machine, Student } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
-export default function AdminPanel() {
+export default function ManagerPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
@@ -15,7 +15,9 @@ export default function AdminPanel() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        // In real app, check admin auth here. For now, open.
+        if (!sessionStorage.getItem('manager_auth')) {
+            navigate('/manager/login');
+        }
         refreshData();
     }, []);
 
@@ -81,6 +83,47 @@ export default function AdminPanel() {
         }
     };
 
+    // --- Resident Management ---
+    const handleAddStudent = async () => {
+        const name = prompt('Enter Student Name:');
+        if (!name) return;
+        const room = prompt('Enter Room Number (e.g. 101):');
+        if (!room) return;
+
+        // Auto-generate PIN if exists for room, else new
+        const existingStudent = students.find(s => s.roomNumber === room);
+        const pin = existingStudent?.pin || Math.floor(100 + Math.random() * 900).toString();
+
+        const newStudent: Student = {
+            id: `${room}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+            name,
+            roomNumber: room,
+            pin
+        };
+
+        // We need a proper addStudent method in service, but setDoc works
+        // Using direct firestoreService internals isn't ideal but we can add method to service or just use setDoc here?
+        // Better to add method to service.
+        await firestoreService.addStudent(newStudent);
+        refreshData();
+    };
+
+    const handleDeleteStudent = async (student: Student) => {
+        if (confirm(`Remove ${student.name} from Room ${student.roomNumber}?`)) {
+            await firestoreService.deleteStudent(student.id);
+            refreshData();
+        }
+    };
+
+    const handleEditStudent = async (student: Student) => {
+        const newName = prompt('Edit Name:', student.name);
+        if (newName && newName !== student.name) {
+            const updated = { ...student, name: newName };
+            await firestoreService.updateStudent(updated);
+            refreshData();
+        }
+    };
+
     if (loading && bookings.length === 0 && machines.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
@@ -88,10 +131,17 @@ export default function AdminPanel() {
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <h2>Admin Panel</h2>
+                <h2>Manager Panel</h2>
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
-                        onClick={() => navigate('/admin/print-schedule')}
+                        onClick={() => navigate('/manager/print-credentials')}
+                        className="glass-button"
+                        style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <ShieldCheck size={16} /> Print Codes
+                    </button>
+                    <button
+                        onClick={() => navigate('/manager/print-schedule')}
                         className="glass-button"
                         style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
@@ -153,6 +203,52 @@ export default function AdminPanel() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </section>
+
+                {/* Resident Management */}
+                <section>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ margin: 0 }}>Residents</h3>
+                        <button
+                            onClick={handleAddStudent}
+                            className="primary-button"
+                            style={{ padding: '10px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                        >
+                            <Plus size={18} /> Add Resident
+                        </button>
+                    </div>
+
+                    <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0, borderRadius: '16px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                            <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
+                                <tr>
+                                    <th style={{ padding: '12px', textAlign: 'left' }}>Room</th>
+                                    <th style={{ padding: '12px', textAlign: 'left' }}>Name</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {students
+                                    .filter(s =>
+                                        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                        s.roomNumber.toLowerCase().includes(searchTerm.toLowerCase())
+                                    )
+                                    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
+                                    .slice(0, 50) // Limit display for perf
+                                    .map(s => (
+                                        <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                                            <td style={{ padding: '12px', fontWeight: 600 }}>{s.roomNumber}</td>
+                                            <td style={{ padding: '12px' }}>{s.name}</td>
+                                            <td style={{ padding: '12px', textAlign: 'right' }}>
+                                                <button onClick={() => handleEditStudent(s)} style={{ marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)' }}>Edit</button>
+                                                <button onClick={() => handleDeleteStudent(s)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--error)' }}>Delete</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                            </tbody>
+                        </table>
+                        {students.length === 0 && <div className="p-4 text-center">No students found. Seed DB?</div>}
                     </div>
                 </section>
 

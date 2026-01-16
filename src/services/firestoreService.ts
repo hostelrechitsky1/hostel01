@@ -16,12 +16,29 @@ export const firestoreService = {
 
     async seedStudents(rawData: string) {
         const students = parseRawStudentData(rawData);
-        // Simple loop for now since we have ~300 students.
-        // Note: Batching is recommended for larger datasets.
+        const roomPins = new Map<string, string>();
+        const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
+
         for (const student of students) {
+            if (!roomPins.has(student.roomNumber)) {
+                roomPins.set(student.roomNumber, generatePin());
+            }
+            student.pin = roomPins.get(student.roomNumber);
             await setDoc(doc(db, STUDENTS_COL, student.id), student);
         }
-        console.log(`Seeded ${students.length} students`);
+        console.log(`Seeded ${students.length} students with PINs`);
+    },
+
+    async addStudent(student: Student) {
+        await setDoc(doc(db, STUDENTS_COL, student.id), student);
+    },
+
+    async updateStudent(student: Student) {
+        await updateDoc(doc(db, STUDENTS_COL, student.id), student);
+    },
+
+    async deleteStudent(id: string) {
+        await deleteDoc(doc(db, STUDENTS_COL, id));
     },
 
     // --- Machines ---

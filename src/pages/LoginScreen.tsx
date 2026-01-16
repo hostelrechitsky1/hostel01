@@ -8,8 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Student } from '../types';
 
 export default function LoginScreen() {
-    const [step, setStep] = useState<1 | 2>(1);
+    const [step, setStep] = useState<1 | 1.5 | 2>(1);
     const [room, setRoom] = useState('');
+    const [pin, setPin] = useState('');
     const [roommates, setRoommates] = useState<Student[]>([]);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -26,15 +27,31 @@ export default function LoginScreen() {
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
-                setStep(2);
+                // Check if Room has PIN protection
+                const roomPin = roomStudents[0].pin;
+                if (roomPin) {
+                    setStep(1.5); // Go to PIN step
+                } else {
+                    setStep(2); // Legacy/Unprotected flow
+                }
             } else {
-                setError('Room not found. If this is a new setup, click the DB icon below.');
+                setError('Room not found. Please check the number (e.g. 101, 52-2).');
             }
         } catch (err) {
             console.error(err);
             setError('Failed to connect to database.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handlePinSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const correctPin = roommates[0]?.pin;
+        if (pin === correctPin) {
+            setStep(2);
+        } else {
+            setError('Incorrect Room PIN.');
         }
     };
 
@@ -100,7 +117,7 @@ export default function LoginScreen() {
                                     type="text"
                                     value={room}
                                     onChange={(e) => setRoom(e.target.value)}
-                                    placeholder="e.g. 101"
+                                    placeholder="e.g. 101, 52-2"
                                     autoFocus
                                     style={{
                                         width: '100%',
@@ -134,6 +151,55 @@ export default function LoginScreen() {
                                 }}
                             >
                                 {loading ? 'Checking...' : 'Find Room'} <ArrowRight size={18} />
+                            </button>
+                        </motion.form>
+                    ) : step === 1.5 ? (
+                        <motion.form
+                            key="step1.5"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            onSubmit={handlePinSubmit}
+                        >
+                            <p style={{ textAlign: 'center', marginBottom: '16px' }}>Enter Room PIN</p>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
+                                <input
+                                    type="text" // Using text to avoid scrolling
+                                    inputMode="numeric"
+                                    maxLength={3}
+                                    value={pin}
+                                    onChange={(e) => setPin(e.target.value)}
+                                    placeholder="000"
+                                    autoFocus
+                                    style={{
+                                        width: '120px',
+                                        padding: '16px',
+                                        fontSize: '24px',
+                                        textAlign: 'center',
+                                        letterSpacing: '8px',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--glass-border)',
+                                        background: 'var(--glass-bg)',
+                                        color: 'var(--text-main)',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+                            {error && <p style={{ color: 'var(--error)', fontSize: '14px', textAlign: 'center', marginBottom: '16px' }}>{error}</p>}
+
+                            <button
+                                type="submit"
+                                className="primary-button"
+                                style={{ width: '100%', padding: '16px', borderRadius: '12px' }}
+                            >
+                                Verify PIN
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setStep(1)}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', width: '100%', marginTop: '20px', cursor: 'pointer' }}
+                            >
+                                Back
                             </button>
                         </motion.form>
                     ) : (
@@ -190,6 +256,6 @@ export default function LoginScreen() {
             >
                 <Database size={20} color="white" />
             </button>
-        </div>
+        </div >
     );
 }
