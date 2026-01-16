@@ -50,11 +50,28 @@ export default function BookingFlow() {
         load();
     }, [user, navigate]);
 
+    // Force Close Check
+    if (settings.forceCloseBookings) {
+        return (
+            <div className="container flex-center" style={{ height: '80vh', flexDirection: 'column', textAlign: 'center' }}>
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '24px', borderRadius: '50%', marginBottom: '24px' }}>
+                    <AlertCircle size={48} color="#ef4444" />
+                </div>
+                <h2>Bookings Closed</h2>
+                <p style={{ color: 'var(--text-muted)', maxWidth: '300px', margin: '8px auto 24px' }}>
+                    The booking system is currently paused by the administration.
+                </p>
+                <button onClick={() => navigate('/')} className="primary-button">
+                    <ChevronLeft size={20} /> Back to Dashboard
+                </button>
+            </div>
+        );
+    }
+
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     // Check if bookings are open
     const isNextWeekOpen = useMemo(() => {
-        if (settings.forceCloseBookings) return false;
         if (settings.forceShowNextWeek) return true;
 
         const now = new Date();
@@ -81,17 +98,32 @@ export default function BookingFlow() {
         // Filter bookings for this date from the loaded list
         const dateBookings = bookings.filter(b => b.date === dateStr);
 
+        const now = new Date();
+        const isToday = isSameDay(selectedDate, now);
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+
         return TIME_SLOTS.map(time => {
             const bookedMachineIds = dateBookings
                 .filter(b => b.startTime === time)
                 .map(b => b.machineId);
+
+            let isPassed = false;
+
+            if (isToday) {
+                const [slotHour, slotMinute] = time.split(':').map(Number);
+                if (slotHour < currentHour || (slotHour === currentHour && slotMinute < currentMinute)) {
+                    isPassed = true;
+                }
+            }
 
             const isFull = bookedMachineIds.length >= activeMachines.length;
 
             return {
                 time,
                 bookedMachineIds,
-                isFull
+                isFull,
+                isPassed
             };
         });
     }, [selectedDate, activeMachines, bookings]);
@@ -189,12 +221,12 @@ export default function BookingFlow() {
                         {/* Slots List */}
                         <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Available Times</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {availability.map(({ time, bookedMachineIds, isFull }) => (
+                            {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => (
                                 <div key={time}>
                                     <button
-                                        disabled={isFull}
+                                        disabled={isFull || isPassed}
                                         onClick={() => {
-                                            if (!isFull) {
+                                            if (!isFull && !isPassed) {
                                                 setSelectedSlot(time);
                                                 if (selectedSlot === time) {
                                                     setSelectedSlot(null);
@@ -213,17 +245,17 @@ export default function BookingFlow() {
                                             justifyContent: 'space-between',
                                             alignItems: 'center',
                                             textAlign: 'left',
-                                            opacity: isFull ? 0.5 : 1,
+                                            opacity: (isFull || isPassed) ? 0.5 : 1,
                                             border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                                            cursor: isFull ? 'not-allowed' : 'pointer'
+                                            cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
-                                            <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)' }}>{time}</span>
+                                            <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
                                         </div>
                                         <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)' }}>
-                                            {isFull ? 'Full' : `${activeMachines.length - bookedMachineIds.length} Free`}
+                                            {isPassed ? 'Passed' : isFull ? 'Full' : `${activeMachines.length - bookedMachineIds.length} Free`}
                                         </div>
                                     </button>
 
