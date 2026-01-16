@@ -31,8 +31,7 @@ export const TIME_SLOTS = [
   "16:30",
   "18:00",
   "19:30",
-  "21:00",
-  "22:30"
+  "21:00"
 ] as const;
 
 export const SLOT_DURATION_MINUTES = 90;

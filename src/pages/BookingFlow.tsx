@@ -53,15 +53,30 @@ export default function BookingFlow() {
     // Force Close Check
     if (settings.forceCloseBookings) {
         return (
-            <div className="container flex-center" style={{ height: '80vh', flexDirection: 'column', textAlign: 'center' }}>
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '24px', borderRadius: '50%', marginBottom: '24px' }}>
+            <div className="container flex-center" style={{
+                height: '80vh',
+                flexDirection: 'column',
+                textAlign: 'center',
+                color: 'var(--text-main)' // Ensure text is visible
+            }}>
+                <div style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    padding: '32px',
+                    borderRadius: '50%',
+                    marginBottom: '24px',
+                    border: '1px solid rgba(239, 68, 68, 0.2)'
+                }}>
                     <AlertCircle size={48} color="#ef4444" />
                 </div>
-                <h2>Bookings Closed</h2>
-                <p style={{ color: 'var(--text-muted)', maxWidth: '300px', margin: '8px auto 24px' }}>
-                    The booking system is currently paused by the administration.
+                <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>Bookings Are Closed</h2>
+                <p style={{ color: 'var(--text-muted)', maxWidth: '300px', margin: '0 auto 32px', lineHeight: '1.5' }}>
+                    The booking system is currently paused by the administration. Please check back later or contact the hostel manager.
                 </p>
-                <button onClick={() => navigate('/')} className="primary-button">
+                <button
+                    onClick={() => navigate('/')}
+                    className="primary-button"
+                    style={{ padding: '12px 24px' }}
+                >
                     <ChevronLeft size={20} /> Back to Dashboard
                 </button>
             </div>
