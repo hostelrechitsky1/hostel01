@@ -8,7 +8,6 @@ import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter }
 import { ChevronLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-import FeedbackButton from '../components/FeedbackButton';
 
 export default function BookingFlow() {
     const navigate = useNavigate();
@@ -416,9 +415,7 @@ export default function BookingFlow() {
             )}
 
 
-            {/* Feedback FAB */}
-            {/* Feedback FAB */}
-            <FeedbackButton />
+            {/* Feedback FAB removed */}
         </>
     );
 }
