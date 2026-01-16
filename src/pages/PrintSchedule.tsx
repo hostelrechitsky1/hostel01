@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
-import { bookingService } from '../services/bookingService';
+import { useState, useMemo, useEffect } from 'react';
+import { firestoreService } from '../services/firestoreService';
 import { format, startOfWeek, endOfWeek, addWeeks, addDays } from 'date-fns';
 import { Printer, ChevronLeft } from 'lucide-react';
-
+import type { Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,9 +10,31 @@ export default function PrintSchedule() {
     const navigate = useNavigate();
     const [weekOffset, setWeekOffset] = useState(0); // 0 = Current Week, 1 = Next Week
 
-    const machines = bookingService.getMachines();
-    const bookings = bookingService.getBookings();
-    const students = bookingService.getStudents();
+    // Async Data
+    const [machines, setMachines] = useState<Machine[]>([]);
+    const [bookings, setBookings] = useState<Booking[]>([]);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const [ms, bs, ss] = await Promise.all([
+                    firestoreService.getMachines(),
+                    firestoreService.getBookings(),
+                    firestoreService.getAllStudents()
+                ]);
+                setMachines(ms);
+                setBookings(bs);
+                setStudents(ss);
+            } catch (e) {
+                console.error("Failed to load schedule data", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
 
     // Calculate Week Range
     const today = new Date();
@@ -28,6 +50,8 @@ export default function PrintSchedule() {
     const handlePrint = () => {
         window.print();
     };
+
+    if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading Schedule...</div>;
 
     return (
         <div className="print-container">

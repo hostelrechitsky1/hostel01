@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { WashingMachine, ArrowRight, User } from 'lucide-react';
+import { firestoreService } from '../services/firestoreService';
+import { studentsRawData } from '../data/studentsRaw';
+import { WashingMachine, ArrowRight, User, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Student } from '../types';
 
@@ -10,27 +12,53 @@ export default function LoginScreen() {
     const [room, setRoom] = useState('');
     const [roommates, setRoommates] = useState<Student[]>([]);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    const handleRoomSubmit = (e: React.FormEvent) => {
+    const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const students = bookingService.login(room);
-        if (students.length > 0) {
-            setRoommates(students);
-            setStep(2);
-            setError('');
-        } else {
-            setError('Room not found. Try 101, 102, 205.');
+        setLoading(true);
+        setError('');
+
+        try {
+            const allStudents = await firestoreService.getAllStudents();
+            const roomStudents = allStudents.filter(s => s.roomNumber === room);
+
+            if (roomStudents.length > 0) {
+                setRoommates(roomStudents);
+                setStep(2);
+            } else {
+                setError('Room not found. If this is a new setup, click the DB icon below.');
+            }
+        } catch (err) {
+            console.error(err);
+            setError('Failed to connect to database.');
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleStudentSelect = (student: Student) => {
+        // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
         navigate('/');
     };
 
+    const handleSeed = async () => {
+        if (!confirm('Initialize database with student data?')) return;
+        setLoading(true);
+        try {
+            await firestoreService.seedStudents(studentsRawData);
+            alert('Database populated! Try searching for a room now.');
+        } catch (e) {
+            alert('Error: ' + e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
-        <div className="flex-center" style={{ minHeight: '100vh', padding: '20px' }}>
+        <div className="flex-center" style={{ minHeight: '100vh', padding: '20px', position: 'relative' }}>
             <motion.div
                 layout
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -91,6 +119,7 @@ export default function LoginScreen() {
 
                             <button
                                 type="submit"
+                                disabled={loading}
                                 className="primary-button"
                                 style={{
                                     width: '100%',
@@ -100,10 +129,11 @@ export default function LoginScreen() {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '8px'
+                                    gap: '8px',
+                                    opacity: loading ? 0.7 : 1
                                 }}
                             >
-                                Find Room <ArrowRight size={18} />
+                                {loading ? 'Checking...' : 'Find Room'} <ArrowRight size={18} />
                             </button>
                         </motion.form>
                     ) : (
@@ -151,6 +181,15 @@ export default function LoginScreen() {
                     Strictly for Hostel Residents Only
                 </p>
             </motion.div>
+
+            {/* Hidden Admin Seed Button */}
+            <button
+                onClick={handleSeed}
+                style={{ position: 'absolute', bottom: '20px', right: '20px', opacity: 0.2, background: 'none', border: 'none', cursor: 'pointer' }}
+                title="Seed Database"
+            >
+                <Database size={20} color="white" />
+            </button>
         </div>
     );
 }

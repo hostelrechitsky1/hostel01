@@ -1,42 +1,65 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import type { Machine } from '../types';
+import { firestoreService } from '../services/firestoreService';
+import type { Machine, Booking } from '../types';
 import { TIME_SLOTS } from '../types';
-import { format, addDays, startOfToday, isSameDay } from 'date-fns';
+import { format, addDays, startOfToday, isSameDay, getWeek } from 'date-fns';
 import { ChevronLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
 export default function BookingFlow() {
     const navigate = useNavigate();
+    const user = bookingService.getCurrentUser();
     const [selectedDate, setSelectedDate] = useState(startOfToday());
     const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(true);
 
+    // Async State
+    const [machines, setMachines] = useState<Machine[]>([]);
+    const [bookings, setBookings] = useState<Booking[]>([]);
 
-    const machines = bookingService.getMachines();
-    const activeMachines = machines.filter(m => m.status === 'available');
+    useEffect(() => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        const load = async () => {
+            try {
+                const [ms, bs] = await Promise.all([
+                    firestoreService.getMachines(),
+                    firestoreService.getBookings()
+                ]);
+                setMachines(ms);
+                setBookings(bs);
+            } catch (e) {
+                console.error("Failed to load booking data", e);
+                setError("Failed to load data. Please refresh.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, [user, navigate]);
+
+    const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     // Check if next week bookings are open (Saturday 2PM Belarus time = UTC+3)
     const isNextWeekOpen = useMemo(() => {
         const now = new Date();
-        // Get current day (0=Sun, 6=Sat)
         const day = now.getDay();
-        // Get current hour in Belarus (UTC+3)
         const belarusHour = now.getUTCHours() + 3;
-
-        // Saturday (day=6) and 2PM (14:00) or later
         if (day === 6 && belarusHour >= 14) return true;
-        // Sunday (day=0) is after Saturday 2PM
         if (day === 0) return true;
         return false;
     }, []);
 
-    // Generate date options: current week (7 days) + next week (7 days) if open
+    // Generate date options
     const dateOptions = useMemo(() => {
         const days = isNextWeekOpen ? 14 : 7;
         return Array.from({ length: days }, (_, i) => addDays(startOfToday(), i));
@@ -44,11 +67,12 @@ export default function BookingFlow() {
 
     // Calculate availability for the selected date
     const availability = useMemo(() => {
-        const bookings = bookingService.getBookingsForDate(format(selectedDate, 'yyyy-MM-dd'));
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        // Filter bookings for this date from the loaded list
+        const dateBookings = bookings.filter(b => b.date === dateStr);
 
         return TIME_SLOTS.map(time => {
-            // Find machines booked at this time
-            const bookedMachineIds = bookings
+            const bookedMachineIds = dateBookings
                 .filter(b => b.startTime === time)
                 .map(b => b.machineId);
 
@@ -60,28 +84,45 @@ export default function BookingFlow() {
                 isFull
             };
         });
-    }, [selectedDate, activeMachines]);
+    }, [selectedDate, activeMachines, bookings]);
 
-    const handleBook = () => {
-        if (!selectedSlot || !selectedMachine) return;
+    const handleBook = async () => {
+        if (!selectedSlot || !selectedMachine || !user) return;
+        setLoading(true); // Re-use loading or add a submitting state. Using loading is fine for modal block.
 
-        const result = bookingService.createBooking(
-            selectedMachine.id,
-            format(selectedDate, 'yyyy-MM-dd'),
-            selectedSlot
-        );
+        const bookingData: Booking = {
+            id: Date.now().toString(),
+            machineId: selectedMachine.id,
+            studentId: user.id, // Use correct field name
+            date: format(selectedDate, 'yyyy-MM-dd'),
+            startTime: selectedSlot,
+            endTime: selectedSlot, // Placeholder or logic for end time
+            weekId: `${format(selectedDate, 'yyyy')}-W${getWeek(selectedDate)}`,
+            createdAt: Date.now()
+        };
 
-        if (result.success) {
-            setShowConfirmModal(false);
-            setShowConfirmation(true);
-            setTimeout(() => navigate('/'), 2000);
-        } else {
-            setError(result.error || 'Booking failed');
-            setTimeout(() => setError(''), 3000);
+        try {
+            const result = await firestoreService.createBooking(bookingData);
+
+            if (result.success) {
+                setShowConfirmModal(false);
+                setShowConfirmation(true);
+                // Optimistically update local state if needed, or just navigate
+                setTimeout(() => navigate('/'), 2000);
+            } else {
+                setError(result.error || 'Booking failed');
+                setTimeout(() => setError(''), 3000);
+                setLoading(false);
+            }
+        } catch (e) {
+            setError('System error. Please try again.');
+            setLoading(false);
         }
     };
 
     const isWed = selectedDate.getDay() === 3;
+
+    if (loading && !machines.length) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
 
     return (
         <>
@@ -263,7 +304,7 @@ export default function BookingFlow() {
                                 className="primary-button"
                                 style={{ padding: '12px 24px', borderRadius: '12px' }}
                             >
-                                Confirm
+                                {loading ? '...' : 'Confirm'}
                             </button>
                         </div>
                     </motion.div>

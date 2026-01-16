@@ -1,30 +1,79 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import type { Student, Machine, Booking } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
-import { format, addMinutes, parse, isAfter, isBefore } from 'date-fns';
+import { firestoreService } from '../services/firestoreService';
+import type { Machine, Booking } from '../types';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, Plus, Clock } from 'lucide-react';
+import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
+import { motion } from 'framer-motion';
 
 export default function Dashboard() {
-    const [user, setUser] = useState<Student | null>(null);
-    const [machines, setMachines] = useState<Machine[]>([]);
+    const navigate = useNavigate();
+    const user = bookingService.getCurrentUser();
     const [upcomingBooking, setUpcomingBooking] = useState<Booking | null>(null);
     const [history, setHistory] = useState<Booking[]>([]);
-    const navigate = useNavigate();
+    const [machines, setMachines] = useState<Machine[]>([]);
+    const [allBookings, setAllBookings] = useState<Booking[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const currentUser = bookingService.getCurrentUser();
-        if (!currentUser) {
+        if (!user) {
             navigate('/login');
             return;
         }
-        setUser(currentUser);
-        setMachines(bookingService.getMachines());
 
-        const nextBooking = bookingService.getUpcomingBooking();
-        setUpcomingBooking(nextBooking || null);
-        setHistory(bookingService.getHistory());
-    }, [navigate]);
+        const loadData = async () => {
+            try {
+                const [fetchedMachines, fetchedBookings] = await Promise.all([
+                    firestoreService.getMachines(),
+                    firestoreService.getBookings()
+                ]);
+
+                setMachines(fetchedMachines);
+                setAllBookings(fetchedBookings);
+
+                // Filter for My Bookings
+                const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
+                const now = new Date();
+
+                // Sort: Newest first for sorting array handling
+                myBookings.sort((a, b) => {
+                    return new Date(b.date + 'T' + b.startTime).getTime() - new Date(a.date + 'T' + a.startTime).getTime();
+                });
+
+                // Find Upcoming (First one in future)
+                // Actually safer to search array for first match > now
+                const upcoming = myBookings.reverse().find(b => { // Reverse to be oldest first? No.
+                    // Let's re-sort chronological for finding upcoming
+                    return false;
+                });
+
+                // Let's split explicitly
+                const chronological = [...myBookings].sort((a, b) =>
+                    new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
+                );
+
+                const nextBooking = chronological.find(b => {
+                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
+                    return end > now;
+                });
+
+                const pastBookings = chronological.filter(b => {
+                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
+                    return end <= now;
+                }).reverse(); // Most recent finished first
+
+                setUpcomingBooking(nextBooking || null);
+                setHistory(pastBookings);
+            } catch (err) {
+                console.error("Failed to load dashboard data", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, [user, navigate]);
 
     const getMachineRealTimeStatus = (machine: Machine) => {
         const now = new Date();
@@ -33,9 +82,9 @@ export default function Dashboard() {
         if (isWed) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
         if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
 
-        // Check current bookings
+        // Check current bookings using allBookings state
         const today = format(now, 'yyyy-MM-dd');
-        const bookingsToday = bookingService.getBookingsForDate(today);
+        const bookingsToday = allBookings.filter(b => b.date === today); // In memory filter
 
         const currentBooking = bookingsToday.find(b => {
             if (b.machineId !== machine.id) return false;
@@ -57,13 +106,16 @@ export default function Dashboard() {
         navigate('/login');
     };
 
+    if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
+    if (!user) return null;
+
     return (
         <div className="container animate-fade-in">
             {/* Header */}
             <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingTop: '16px' }}>
                 <div>
-                    <h2 style={{ margin: 0, fontSize: '24px' }}>Hello, {user?.name.split(' ')[0]} 👋</h2>
-                    <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>Room {user?.roomNumber}</p>
+                    <h2 style={{ margin: 0, fontSize: '24px' }}>Hello, {user.name.split(' ')[0]} 👋</h2>
+                    <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>Room {user.roomNumber}</p>
                 </div>
                 <button
                     onClick={handleLogout}
