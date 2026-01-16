@@ -219,6 +219,25 @@ export default function ManagerPanel() {
                         </button>
                     </div>
 
+                    <div style={{ marginBottom: '16px' }}>
+                        <input
+                            type="text"
+                            placeholder="Search residents by Name or Room..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '12px',
+                                borderRadius: '12px',
+                                background: 'var(--glass-bg)',
+                                border: '1px solid var(--glass-border)',
+                                color: 'var(--text-main)',
+                                fontSize: '16px',
+                                outline: 'none'
+                            }}
+                        />
+                    </div>
+
                     <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0, borderRadius: '16px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                             <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>

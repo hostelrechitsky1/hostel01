@@ -63,32 +63,25 @@ export default function PrintCredentials() {
                     <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#666' }}>Confidential - Application Login Codes</p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                    {/* Split list into two columns for paper efficiency */}
-                    {[0, 1].map(colIndex => (
-                        <div key={colIndex}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                <thead>
-                                    <tr style={{ background: '#f3f4f6' }}>
-                                        <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Room</th>
-                                        <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>PIN Code</th>
-                                        <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>Residents</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sortedRooms
-                                        .filter((_, i) => i % 2 === colIndex)
-                                        .map(([room, data]) => (
-                                            <tr key={room}>
-                                                <td style={{ padding: '8px', border: '1px solid #ddd', fontWeight: 'bold' }}>{room}</td>
-                                                <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center', fontFamily: 'monospace', fontSize: '16px' }}>{data.pin}</td>
-                                                <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center', color: '#666' }}>{data.count}</td>
-                                            </tr>
-                                        ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    ))}
+                <div style={{ columnCount: 2, columnGap: '24px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', breakInside: 'auto' }}>
+                        <thead>
+                            <tr style={{ background: '#f3f4f6' }}>
+                                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Room</th>
+                                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>PIN Code</th>
+                                <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>Residents</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedRooms.map(([room, data]) => (
+                                <tr key={room} style={{ breakInside: 'avoid' }}>
+                                    <td style={{ padding: '8px', border: '1px solid #ddd', fontWeight: 'bold' }}>{room}</td>
+                                    <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center', fontFamily: 'monospace', fontSize: '16px' }}>{data.pin}</td>
+                                    <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center', color: '#666' }}>{data.count}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
 
                 <div style={{ marginTop: '40px', fontSize: '12px', color: '#666', textAlign: 'center', borderTop: '1px solid #eee', paddingTop: '16px' }}>
