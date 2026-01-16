@@ -244,8 +244,8 @@ export default function BookingFlow() {
             ) : (
                 <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '16px', marginBottom: '16px' }}>
                     {dateOptions.map(date => {
-                        const isSelected = isSameDay(date, selectedDate);
-                        const isDateWed = date.getDay() === 3;
+                        const isSelected = isSameBelarusDay(date, selectedDate);
+                        const isDateWed = getBelarusWeekday(date) === 3;
                         return (
                             <button
                                 key={date.toISOString()}
@@ -264,9 +264,9 @@ export default function BookingFlow() {
                                 }}
                             >
                                 <div style={{ fontSize: '12px', marginBottom: '4px', color: isDateWed ? '#ef4444' : 'inherit' }}>
-                                    {isDateWed ? 'Maint' : format(date, 'EEE')}
+                                    {isDateWed ? 'Maint' : formatBelarusWeekdayLabel(date).slice(0, 3)}
                                 </div>
-                                <div style={{ fontSize: '20px', fontWeight: 700 }}>{format(date, 'd')}</div>
+                                <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatBelarusMonthDayLabel(date).split(' ')[1]}</div>
                             </button>
                         );
                     })}
