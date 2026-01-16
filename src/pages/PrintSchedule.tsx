@@ -96,6 +96,7 @@ export default function PrintSchedule() {
                         <h2 style={{ margin: 0, fontSize: '18px' }}>Print Schedule</h2>
                         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '12px' }}>
                             {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
+                            {weekOffset === 1 && <span style={{ marginLeft: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>(Next Week)</span>}
                         </p>
                     </div>
                 </div>
