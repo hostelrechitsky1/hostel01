@@ -10,6 +10,8 @@ import clsx from 'clsx';
 import {
     addBelarusDays,
     formatBelarusDate,
+    formatBelarusMonthDayLabel,
+    formatBelarusWeekdayLabel,
     getBelarusDate,
     getBelarusNow,
     getBelarusWeekEnd,
@@ -116,6 +118,12 @@ export default function BookingFlow() {
             document.body.style.touchAction = '';
         };
     }, [showConfirmModal, showConfirmation]);
+
+    useEffect(() => {
+        if (showConfirmation && 'vibrate' in navigator) {
+            navigator.vibrate([40, 60, 40]);
+        }
+    }, [showConfirmation]);
 
     const availability = useMemo(() => {
         const dateStr = formatBelarusDate(selectedDate);
@@ -355,20 +363,11 @@ export default function BookingFlow() {
 
             {/* Confirm Modal */}
             {showConfirmModal && selectedSlot && selectedMachine && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-                    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }} onClick={() => setShowConfirmModal(false)}>
-                    <div className="glass-panel" onClick={e => e.stopPropagation()} style={{
-                        padding: '32px', borderRadius: '24px', textAlign: 'center',
-                        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        width: '95%', maxWidth: '400px'
-                    }}>
+                <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+                    <div className="glass-panel modal-card" onClick={e => e.stopPropagation()}>
                         <h3 style={{ margin: '0 0 16px' }}>Confirm Booking?</h3>
                         <p style={{ color: 'var(--text-muted)', margin: '0 0 8px' }}>
-                            {format(selectedDate, 'EEEE, MMM d')} at {selectedSlot}
+                            {formatBelarusWeekdayLabel(selectedDate)}, {formatBelarusMonthDayLabel(selectedDate)} at {selectedSlot}
                         </p>
                         <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
                         {error && (
@@ -407,16 +406,8 @@ export default function BookingFlow() {
 
             {/* Success Modal */}
             {showConfirmation && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-                    zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                    <div className="glass-panel" style={{
-                        padding: '40px', borderRadius: '24px', textAlign: 'center',
-                        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid rgba(16, 185, 129, 0.2)',
-                        width: '95%', maxWidth: '400px'
-                    }}>
+                <div className="modal-overlay modal-overlay--success">
+                    <div className="glass-panel modal-card modal-card--success">
                         <div style={{
                             background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'

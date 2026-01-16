@@ -71,6 +71,82 @@ button {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+@keyframes modalOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalSuccessGlow {
+  0%,
+  100% {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  50% {
+    box-shadow: 0 25px 60px rgba(16, 185, 129, 0.35);
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.12) 0 2px, transparent 3px),
+    radial-gradient(circle at 82% 22%, rgba(255, 255, 255, 0.1) 0 2px, transparent 3px),
+    radial-gradient(circle at 30% 70%, rgba(255, 255, 255, 0.08) 0 2px, transparent 3px),
+    rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: modalOverlayIn 0.2s ease-out;
+}
+
+.modal-overlay--success {
+  z-index: 1050;
+  background:
+    radial-gradient(circle at 20% 22%, rgba(16, 185, 129, 0.18) 0 2px, transparent 3px),
+    radial-gradient(circle at 80% 18%, rgba(255, 255, 255, 0.12) 0 2px, transparent 3px),
+    radial-gradient(circle at 40% 78%, rgba(16, 185, 129, 0.12) 0 2px, transparent 3px),
+    rgba(15, 23, 42, 0.65);
+}
+
+.modal-card {
+  width: min(95%, 420px);
+  padding: 32px;
+  border-radius: 24px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  animation: modalCardIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-card--success {
+  padding: 40px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  animation: modalCardIn 0.25s cubic-bezier(0.16, 1, 0.3, 1), modalSuccessGlow 1.6s ease-in-out infinite;
+}
+
 /* Glassmorphism Utilities */
 .glass-panel {
   background: var(--glass-bg);
