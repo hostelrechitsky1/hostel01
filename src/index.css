@@ -18,10 +18,20 @@
   --radius-sm: 8px;
 }
 
+html {
+  background-color: #0f172a;
+  /* Matches gradient start */
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   font-family: var(--font-family);
   background: var(--bg-gradient);
+  background-color: #0f172a;
+  /* Fallback/Overscroll color */
+  background-attachment: fixed;
+  /* consistency */
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
