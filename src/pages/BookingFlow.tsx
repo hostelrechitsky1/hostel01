@@ -106,26 +106,46 @@ export default function BookingFlow() {
 
     // Generate date options
     const dateOptions = useMemo(() => {
-        const today = startOfToday();
-        // Calculate the end of the current week (Sunday)
-        const currentWeekEnd = endOfWeek(today, { weekStartsOn: 1 }); // 1 = Monday start, so Sunday end
-
+        let start = startOfToday();
+        const currentWeekEnd = endOfWeek(start, { weekStartsOn: 1 }); // 1 = Monday start, so Sunday end
         let maxDate = currentWeekEnd;
 
-        // If next week is open, extend maxDate to the end of NEXT week
+        // If next week is open, logic dictates we are booking FOR next week.
+        // We should skip the remainder of this week and show Next Monday -> Next Sunday.
         if (isNextWeekOpen) {
+            // Start from Next Monday
+            const nextMonday = addDays(currentWeekEnd, 1);
+
+            // If today is actually BEFORE next Monday (e.g. Sat/Sun), jump to next Monday
+            if (!isAfter(start, currentWeekEnd)) {
+                start = nextMonday;
+            }
+
+            // End at Next Sunday
             maxDate = addDays(currentWeekEnd, 7);
         }
 
-        // Generate dates from today up to maxDate
+        // Generate dates
         const dates = [];
-        let current = today;
+        let current = start;
         while (!isAfter(current, maxDate)) {
             dates.push(current);
             current = addDays(current, 1);
         }
+
+        // Safety: If no dates (e.g., transition edge case), show at least something sane or empty
         return dates;
     }, [isNextWeekOpen]);
+
+    // Update selectedDate if it falls out of the new options
+    useEffect(() => {
+        if (dateOptions.length > 0) {
+            const isSelectedValid = dateOptions.some(d => isSameDay(d, selectedDate));
+            if (!isSelectedValid) {
+                setSelectedDate(dateOptions[0]);
+            }
+        }
+    }, [dateOptions, selectedDate]);
 
     // Calculate availability for the selected date
     const availability = useMemo(() => {
