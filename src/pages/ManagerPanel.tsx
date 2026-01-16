@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Plus, Printer, Trash2, ShieldCheck } from 'lucide-react';
+import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Calendar } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
+import { studentsRawData } from '../data/studentsRaw';
 import type { Booking, Machine, Student } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -12,6 +13,7 @@ export default function ManagerPanel() {
     const [students, setStudents] = useState<Student[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+    const [settings, setSettings] = useState({ forceShowNextWeek: false });
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -24,14 +26,16 @@ export default function ManagerPanel() {
     const refreshData = async () => {
         setLoading(true);
         try {
-            const [fetchedBookings, fetchedMachines, fetchedStudents] = await Promise.all([
+            const [fetchedBookings, fetchedMachines, fetchedStudents, fetchedSettings] = await Promise.all([
                 firestoreService.getBookings(),
                 firestoreService.getMachines(),
-                firestoreService.getAllStudents()
+                firestoreService.getAllStudents(),
+                firestoreService.getSettings()
             ]);
             setBookings(fetchedBookings);
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
+            setSettings(fetchedSettings);
         } catch (error) {
             console.error("Failed to load admin data", error);
             alert("Failed to load data from database.");
@@ -124,6 +128,33 @@ export default function ManagerPanel() {
         }
     };
 
+    const handleSeedDatabase = async () => {
+        if (confirm('⚠️ WARNING: This will RESET all Room PINs and re-seed the student list.\n\nAll existing PINs will stop working.\nAre you sure?')) {
+            setLoading(true);
+            try {
+                await firestoreService.seedStudents(studentsRawData);
+                alert('Database reset complete. New PINs generated.');
+                refreshData();
+            } catch (e) {
+                alert('Error: ' + e);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    const handleToggleSchedule = async () => {
+        const newValue = !settings.forceShowNextWeek;
+        const msg = newValue
+            ? "This will OPEN next week's booking immediately (overriding 2PM rule).\nAre you sure?"
+            : "This will return to standard schedule rules (Sat 2PM).";
+
+        if (confirm(msg)) {
+            await firestoreService.updateSettings({ forceShowNextWeek: newValue });
+            refreshData();
+        }
+    };
+
     if (loading && bookings.length === 0 && machines.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
@@ -154,6 +185,55 @@ export default function ManagerPanel() {
             </div>
 
             <div style={{ display: 'grid', gap: '32px' }}>
+                {/* Global Settings */}
+                <section>
+                    <div className="grid-cols-2">
+                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Calendar size={20} className="text-primary" /> Schedule Override
+                                </h3>
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                                    {settings.forceShowNextWeek
+                                        ? <span style={{ color: 'var(--success)' }}>Next Week is OPEN (Forced)</span>
+                                        : <span>Following Standard Rules (Sat 2PM)</span>}
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleToggleSchedule}
+                                className={settings.forceShowNextWeek ? 'primary-button' : 'glass-button'}
+                                style={{ padding: '8px 16px', borderRadius: '8px' }}
+                            >
+                                {settings.forceShowNextWeek ? 'Disable Override' : 'Force Open'}
+                            </button>
+                        </div>
+
+                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                            <div>
+                                <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--error)' }}>
+                                    <AlertTriangle size={20} /> Danger Zone
+                                </h3>
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                                    Reset Database & PINs
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleSeedDatabase}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(239, 68, 68, 0.2)',
+                                    color: 'var(--error)',
+                                    border: '1px solid var(--error)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <Database size={16} style={{ marginRight: '8px' }} /> Reset DB
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
                 {/* Machine Management */}
                 <section>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>

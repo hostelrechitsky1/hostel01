@@ -116,6 +116,19 @@ export const firestoreService = {
         await deleteDoc(doc(db, BOOKINGS_COL, id));
     },
 
+    // --- Settings ---
+    async getSettings(): Promise<{ forceShowNextWeek: boolean }> {
+        const snap = await getDocs(collection(db, 'settings'));
+        if (snap.empty) return { forceShowNextWeek: false };
+
+        const configDoc = snap.docs.find(d => d.id === 'config');
+        return configDoc ? (configDoc.data() as { forceShowNextWeek: boolean }) : { forceShowNextWeek: false };
+    },
+
+    async updateSettings(settings: { forceShowNextWeek: boolean }) {
+        await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
+    },
+
     // --- Auth Sync (Helper to keep local user state) ---
     // In a real app with Firebase Auth, we'd use onAuthStateChanged.
     // Here we are "simulating" login with just a student ID, so we keep using localStorage for session

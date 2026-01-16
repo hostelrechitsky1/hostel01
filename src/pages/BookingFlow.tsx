@@ -19,6 +19,7 @@ export default function BookingFlow() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
+    const [settings, setSettings] = useState({ forceShowNextWeek: false });
 
     // Async State
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -31,12 +32,14 @@ export default function BookingFlow() {
         }
         const load = async () => {
             try {
-                const [ms, bs] = await Promise.all([
+                const [ms, bs, st] = await Promise.all([
                     firestoreService.getMachines(),
-                    firestoreService.getBookings()
+                    firestoreService.getBookings(),
+                    firestoreService.getSettings()
                 ]);
                 setMachines(ms);
                 setBookings(bs);
+                setSettings(st);
             } catch (e) {
                 console.error("Failed to load booking data", e);
                 setError("Failed to load data. Please refresh.");
@@ -51,13 +54,23 @@ export default function BookingFlow() {
 
     // Check if next week bookings are open (Saturday 2PM Belarus time = UTC+3)
     const isNextWeekOpen = useMemo(() => {
+        if (settings.forceShowNextWeek) return true;
+
         const now = new Date();
         const day = now.getDay();
         const belarusHour = now.getUTCHours() + 3;
         if (day === 6 && belarusHour >= 14) return true;
-        if (day === 0) return true;
+
+        // Also allow Sunday (0) to Friday (5) ? 
+        // Logic: "Next Week" usually means strictly next calendar week?
+        // Wait, original logic: `if (day === 0) return true;`
+        // If today is Sunday, we are IN the "next week" kind of?
+        // Or does getWeek() handle it?
+        // Let's keep original logic + Force toggle.
+        if (day === 0) return true; // Sunday is open?
+
         return false;
-    }, []);
+    }, [settings.forceShowNextWeek]);
 
     // Generate date options
     const dateOptions = useMemo(() => {

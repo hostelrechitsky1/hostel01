@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import { studentsRawData } from '../data/studentsRaw';
-import { WashingMachine, ArrowRight, User, Database } from 'lucide-react';
+import { WashingMachine, ArrowRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Student } from '../types';
 
@@ -61,18 +60,7 @@ export default function LoginScreen() {
         navigate('/');
     };
 
-    const handleSeed = async () => {
-        if (!confirm('Initialize database with student data?')) return;
-        setLoading(true);
-        try {
-            await firestoreService.seedStudents(studentsRawData);
-            alert('Database populated! Try searching for a room now.');
-        } catch (e) {
-            alert('Error: ' + e);
-        } finally {
-            setLoading(false);
-        }
-    };
+
 
     return (
         <div className="flex-center" style={{ minHeight: '100vh', padding: '20px', position: 'relative' }}>
@@ -248,14 +236,6 @@ export default function LoginScreen() {
                 </p>
             </motion.div>
 
-            {/* Hidden Admin Seed Button */}
-            <button
-                onClick={handleSeed}
-                style={{ position: 'absolute', bottom: '20px', right: '20px', opacity: 0.2, background: 'none', border: 'none', cursor: 'pointer' }}
-                title="Seed Database"
-            >
-                <Database size={20} color="white" />
-            </button>
         </div >
     );
 }
