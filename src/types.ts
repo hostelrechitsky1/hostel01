@@ -44,3 +44,14 @@ export interface CalendarSlot {
   isYourBooking: boolean;
   booking?: Booking;
 }
+
+export interface Feedback {
+  id: string;
+  studentId?: string;
+  studentName: string;
+  roomNumber: string;
+  text: string;
+  type: 'bug' | 'feature' | 'other';
+  timestamp: number;
+  read: boolean;
+}

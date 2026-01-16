@@ -10,7 +10,10 @@ export default function PrintCredentials() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (!sessionStorage.getItem('manager_auth')) {
+        const isManager = sessionStorage.getItem('manager_auth');
+        const isStaff = sessionStorage.getItem('hostel_admin_auth');
+
+        if (!isManager && !isStaff) {
             navigate('/manager/login');
             return;
         }

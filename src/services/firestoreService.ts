@@ -138,6 +138,20 @@ export const firestoreService = {
         await batch.commit();
     },
 
+    // --- Feedback ---
+    async addFeedback(feedback: any) {
+        await setDoc(doc(db, 'feedbacks', feedback.id), feedback);
+    },
+
+    async getFeedbacks(): Promise<any[]> {
+        const snapshot = await getDocs(collection(db, 'feedbacks'));
+        return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => b.timestamp - a.timestamp);
+    },
+
+    async deleteFeedback(id: string) {
+        await deleteDoc(doc(db, 'feedbacks', id));
+    },
+
     // --- Auth Sync (Helper to keep local user state) ---
     // In a real app with Firebase Auth, we'd use onAuthStateChanged.
     // Here we are "simulating" login with just a student ID, so we keep using localStorage for session

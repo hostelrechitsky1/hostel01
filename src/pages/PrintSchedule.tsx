@@ -17,6 +17,14 @@ export default function PrintSchedule() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const isManager = sessionStorage.getItem('manager_auth');
+        const isStaff = sessionStorage.getItem('hostel_admin_auth');
+
+        if (!isManager && !isStaff) {
+            navigate('/manager');
+            return;
+        }
+
         const load = async () => {
             try {
                 const [ms, bs, ss] = await Promise.all([
@@ -34,7 +42,7 @@ export default function PrintSchedule() {
             }
         };
         load();
-    }, []);
+    }, [navigate]);
 
     // Calculate Week Range
     const today = new Date();
@@ -66,7 +74,7 @@ export default function PrintSchedule() {
                 marginBottom: '40px'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <button onClick={() => navigate('/admin')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button onClick={() => navigate('/manager')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <ChevronLeft size={16} /> Back
                     </button>
                     <div>

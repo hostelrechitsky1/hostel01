@@ -3,7 +3,7 @@ import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Calendar }
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
-import type { Booking, Machine, Student } from '../types';
+import type { Booking, Machine, Student, Feedback } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -11,6 +11,7 @@ export default function ManagerPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
@@ -26,16 +27,18 @@ export default function ManagerPanel() {
     const refreshData = async () => {
         setLoading(true);
         try {
-            const [fetchedBookings, fetchedMachines, fetchedStudents, fetchedSettings] = await Promise.all([
+            const [fetchedBookings, fetchedMachines, fetchedStudents, fetchedSettings, fetchedFeedbacks] = await Promise.all([
                 firestoreService.getBookings(),
                 firestoreService.getMachines(),
                 firestoreService.getAllStudents(),
-                firestoreService.getSettings()
+                firestoreService.getSettings(),
+                firestoreService.getFeedbacks()
             ]);
             setBookings(fetchedBookings);
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
             setSettings(fetchedSettings);
+            setFeedbacks(fetchedFeedbacks);
         } catch (error) {
             console.error("Failed to load admin data", error);
             alert("Failed to load data from database.");
@@ -469,7 +472,64 @@ export default function ManagerPanel() {
                     </div>
                 </section>
 
-                {/* Removed Global Reset for safety */}
+                {/* Feedback Section */}
+                <section>
+                    <h3 style={{ marginBottom: '16px' }}>Student Feedback ({feedbacks.length})</h3>
+                    <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+                        {feedbacks.length > 0 ? (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
+                                    <tr>
+                                        <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
+                                        <th style={{ padding: '12px', textAlign: 'left' }}>From</th>
+                                        <th style={{ padding: '12px', textAlign: 'left' }}>Message</th>
+                                        <th style={{ padding: '12px', textAlign: 'right' }}>Time</th>
+                                        <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {feedbacks.map(f => (
+                                        <tr key={f.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                                            <td style={{ padding: '12px' }}>
+                                                <span style={{
+                                                    padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
+                                                    background: f.type === 'bug' ? 'rgba(239, 68, 68, 0.2)' : f.type === 'feature' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(107, 114, 128, 0.2)',
+                                                    color: f.type === 'bug' ? '#ef4444' : f.type === 'feature' ? '#3b82f6' : '#9ca3af'
+                                                }}>
+                                                    {f.type.toUpperCase()}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px' }}>
+                                                <div style={{ fontWeight: 600 }}>{f.studentName}</div>
+                                                <div style={{ fontSize: '12px', opacity: 0.7 }}>Room {f.roomNumber}</div>
+                                            </td>
+                                            <td style={{ padding: '12px' }}>{f.text}</td>
+                                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                {format(f.timestamp, 'MMM d, H:mm')}
+                                            </td>
+                                            <td style={{ padding: '12px', textAlign: 'right' }}>
+                                                <button
+                                                    onClick={async () => {
+                                                        if (confirm('Delete feedback?')) {
+                                                            await firestoreService.deleteFeedback(f.id);
+                                                            const [fb] = await Promise.all([firestoreService.getFeedbacks()]);
+                                                            setFeedbacks(fb);
+                                                        }
+                                                    }}
+                                                    style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No feedback yet.</div>
+                        )}
+                    </div>
+                </section>
             </div>
         </div>
     );

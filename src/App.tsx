@@ -6,6 +6,8 @@ import ManagerPanel from './pages/ManagerPanel';
 import ManagerLogin from './pages/ManagerLogin';
 import PrintSchedule from './pages/PrintSchedule';
 import PrintCredentials from './pages/PrintCredentials';
+import HostelAdminLogin from './pages/HostelAdminLogin';
+import HostelAdminDashboard from './pages/HostelAdminDashboard';
 import { PrivateRoute } from './components/PrivateRoute';
 
 function App() {
@@ -30,6 +32,9 @@ function App() {
         <Route path="/manager" element={<ManagerPanel />} />
         <Route path="/manager/print-schedule" element={<PrintSchedule />} />
         <Route path="/manager/print-credentials" element={<PrintCredentials />} />
+
+        <Route path="/hostel-admin" element={<HostelAdminLogin />} />
+        <Route path="/hostel-admin/dashboard" element={<HostelAdminDashboard />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
