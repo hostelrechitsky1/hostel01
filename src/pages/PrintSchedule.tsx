@@ -235,16 +235,17 @@ export default function PrintSchedule() {
             <style>{`
                 @media print {
                     @page { 
-                        size: landscape;
+                        size: A4 landscape;
                         margin: 1cm;
                     }
                     .no-print { display: none !important; }
                     .printable-area { display: block !important; }
                     body { background: white !important; color: black !important; }
-                    .page-break { break-after: page; page-break-after: always; height: auto; }
+                    .page-break { break-after: page; page-break-after: always; break-inside: avoid; width: 297mm; height: 210mm; }
+                    .page-break:last-child { break-after: auto; page-break-after: auto; }
                 }
                 .printable-area {
-                    max-width: 297mm; /* A4 Landscape */
+                    width: 297mm; /* A4 Landscape */
                     margin: 0 auto;
                     background: white;
                     padding: 10px;
