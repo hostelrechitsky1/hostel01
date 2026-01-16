@@ -4,17 +4,27 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
 import { TIME_SLOTS } from '../types';
-import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter } from 'date-fns';
+import { isAfter } from 'date-fns';
 import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { isAutoBookingWindowOpen } from '../utils/time';
+import {
+    addBelarusDays,
+    formatBelarusDate,
+    getBelarusDate,
+    getBelarusNow,
+    getBelarusWeekEnd,
+    getBelarusWeekday,
+    getBelarusWeekId,
+    isAutoBookingWindowOpen,
+    isSameBelarusDay
+} from '../utils/time';
 
 export default function BookingFlow() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
 
     // Hooks must be called unconditionally
-    const [selectedDate, setSelectedDate] = useState(startOfToday());
+    const [selectedDate, setSelectedDate] = useState(getBelarusDate());
     const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -61,30 +71,30 @@ export default function BookingFlow() {
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     const dateOptions = useMemo(() => {
-        let start = startOfToday();
-        const currentWeekEnd = endOfWeek(start, { weekStartsOn: 1 });
+        let start = getBelarusDate();
+        const currentWeekEnd = getBelarusWeekEnd(start);
         let maxDate = currentWeekEnd;
 
         if (isNextWeekOpen) {
-            const nextMonday = addDays(currentWeekEnd, 1);
+            const nextMonday = addBelarusDays(currentWeekEnd, 1);
             if (!isAfter(start, currentWeekEnd)) {
                 start = nextMonday;
             }
-            maxDate = addDays(currentWeekEnd, 7);
+            maxDate = addBelarusDays(currentWeekEnd, 7);
         }
 
         const dates = [];
         let current = start;
         while (!isAfter(current, maxDate)) {
             dates.push(current);
-            current = addDays(current, 1);
+            current = addBelarusDays(current, 1);
         }
         return dates;
     }, [isNextWeekOpen]);
 
     useEffect(() => {
         if (dateOptions.length > 0) {
-            const isSelectedValid = dateOptions.some(d => isSameDay(d, selectedDate));
+            const isSelectedValid = dateOptions.some(d => isSameBelarusDay(d, selectedDate));
             if (!isSelectedValid) {
                 setSelectedDate(dateOptions[0]);
             }
@@ -108,12 +118,12 @@ export default function BookingFlow() {
     }, [showConfirmModal, showConfirmation]);
 
     const availability = useMemo(() => {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const dateStr = formatBelarusDate(selectedDate);
         const dateBookings = bookings.filter(b => b.date === dateStr);
-        const now = new Date();
-        const isToday = isSameDay(selectedDate, now);
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
+        const now = getBelarusNow();
+        const isToday = isSameBelarusDay(selectedDate, getBelarusDate());
+        const currentHour = now.getUTCHours();
+        const currentMinute = now.getUTCMinutes();
 
         return TIME_SLOTS.map(time => {
             const bookedMachineIds = dateBookings
@@ -143,10 +153,10 @@ export default function BookingFlow() {
             studentId: user.id,
             studentName: user.name,
             roomNumber: user.roomNumber,
-            date: format(selectedDate, 'yyyy-MM-dd'),
+            date: formatBelarusDate(selectedDate),
             startTime: selectedSlot,
             endTime: selectedSlot,
-            weekId: `${format(selectedDate, 'yyyy')}-W${getWeek(selectedDate)}`,
+            weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now()
         };
 
@@ -167,7 +177,7 @@ export default function BookingFlow() {
         }
     };
 
-    const isWed = selectedDate.getDay() === 3;
+    const isWed = getBelarusWeekday(selectedDate) === 3;
 
     // --- RENDER ---
     if (loading) {

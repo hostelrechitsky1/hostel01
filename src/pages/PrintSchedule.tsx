@@ -1,11 +1,21 @@
 import { useState, useMemo, useEffect } from 'react';
 import { firestoreService } from '../services/firestoreService';
-import { format, startOfWeek, endOfWeek, addWeeks, addDays } from 'date-fns';
 import { Printer, ChevronLeft } from 'lucide-react';
 import type { Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { isAutoBookingWindowOpen } from '../utils/time';
+import {
+    addBelarusDays,
+    formatBelarusDate,
+    formatBelarusMonthDayLabel,
+    formatBelarusMonthDayYearLabel,
+    formatBelarusWeekdayLabel,
+    getBelarusDate,
+    getBelarusWeekEnd,
+    getBelarusWeekStart,
+    getBelarusWeekday,
+    isAutoBookingWindowOpen
+} from '../utils/time';
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
@@ -54,14 +64,14 @@ export default function PrintSchedule() {
     }, [navigate]);
 
     // Calculate Week Range
-    const today = new Date();
-    const targetDate = addWeeks(today, weekOffset);
-    const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 }); // Monday start
-    const weekEnd = endOfWeek(targetDate, { weekStartsOn: 1 });
+    const today = getBelarusDate();
+    const targetDate = addBelarusDays(today, weekOffset * 7);
+    const weekStart = getBelarusWeekStart(targetDate); // Monday start (Belarus)
+    const weekEnd = getBelarusWeekEnd(targetDate);
 
     // Generate Array of 7 days
     const weekDays = useMemo(() => {
-        return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+        return Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
     }, [weekStart]);
 
     const handlePrint = () => {
@@ -91,7 +101,7 @@ export default function PrintSchedule() {
                     <div>
                         <h2 style={{ margin: 0, fontSize: '18px' }}>Print Schedule</h2>
                         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '12px' }}>
-                            {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
+                            {formatBelarusMonthDayLabel(weekStart)} - {formatBelarusMonthDayYearLabel(weekEnd)}
                             {weekOffset === 1 && <span style={{ marginLeft: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>(Next Week)</span>}
                         </p>
                     </div>
@@ -154,7 +164,7 @@ export default function PrintSchedule() {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#000' }}>
-                                    {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d')}
+                                    {formatBelarusMonthDayLabel(weekStart)} - {formatBelarusMonthDayLabel(weekEnd)}
                                 </div>
                             </div>
                         </div>
@@ -167,8 +177,8 @@ export default function PrintSchedule() {
                                         <th style={{ ...headerStyle, width: '60px' }}>Time</th>
                                         {weekDays.map(day => (
                                             <th key={day.toString()} style={headerStyle}>
-                                                {format(day, 'EEEE')}<br />
-                                                <span style={{ fontWeight: 'normal' }}>{format(day, 'MMM d')}</span>
+                                                {formatBelarusWeekdayLabel(day)}<br />
+                                                <span style={{ fontWeight: 'normal' }}>{formatBelarusMonthDayLabel(day)}</span>
                                             </th>
                                         ))}
                                     </tr>
@@ -180,7 +190,7 @@ export default function PrintSchedule() {
                                                 {time}
                                             </td>
                                             {weekDays.map(day => {
-                                                const isWed = day.getDay() === 3;
+                                                const isWed = getBelarusWeekday(day) === 3;
 
                                                 if (isWed) {
                                                     return (
@@ -194,7 +204,7 @@ export default function PrintSchedule() {
                                                 const booking = bookings.find(b =>
                                                     b.machineId === machine.id &&
                                                     b.startTime === time &&
-                                                    b.date === format(day, 'yyyy-MM-dd')
+                                                    b.date === formatBelarusDate(day)
                                                 );
                                                 const student = booking ? students.find(s => s.id === booking.studentId) : null;
 
