@@ -70,6 +70,19 @@ export default function Dashboard() {
         loadData();
     }, [user, navigate]);
 
+    const isNextWeekOpen = settings.forceShowNextWeek || (() => {
+        const now = new Date();
+        const day = now.getDay();
+        const belarusHour = now.getUTCHours() + 3;
+        // Auto Open Logic: Sat 16:00 -> Mon 09:00
+        if (day === 6 && belarusHour >= 16) return true;
+        if (day === 0) return true;
+        if (day === 1 && belarusHour < 9) return true;
+        return false;
+    })();
+
+    const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
+
     const getMachineRealTimeStatus = (machine: Machine) => {
         const now = new Date();
         const isWed = now.getDay() === 3;
@@ -137,7 +150,7 @@ export default function Dashboard() {
                 <div>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
-                        {settings.forceCloseBookings ? 'Bookings are currently paused' : 'Book your slot for this week'}
+                        {isSystemClosed ? 'Bookings are currently closed' : 'Book your slot for next week'}
                     </p>
                 </div>
                 <button
@@ -146,12 +159,12 @@ export default function Dashboard() {
                     style={{
                         padding: '12px 24px',
                         borderRadius: '12px',
-                        background: settings.forceCloseBookings ? '#ef4444' : 'var(--primary)',
+                        background: isSystemClosed ? '#ef4444' : 'var(--primary)',
                         opacity: 1,
                         cursor: 'pointer'
                     }}
                 >
-                    {settings.forceCloseBookings ? 'Check Status' : 'Book Now'}
+                    {isSystemClosed ? 'Check Status' : 'Book Now'}
                 </button>
             </div>
 

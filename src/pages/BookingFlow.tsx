@@ -50,8 +50,24 @@ export default function BookingFlow() {
         load();
     }, [user, navigate]);
 
-    // Force Close Check
-    if (settings.forceCloseBookings) {
+    // Check if bookings are open
+    const isNextWeekOpen = useMemo(() => {
+        if (settings.forceShowNextWeek) return true;
+
+        const now = new Date();
+        const day = now.getDay();
+        const belarusHour = now.getUTCHours() + 3;
+
+        // Auto Open Logic: Sat 16:00 -> Mon 09:00
+        if (day === 6 && belarusHour >= 16) return true;
+        if (day === 0) return true;
+        if (day === 1 && belarusHour < 9) return true;
+
+        return false;
+    }, [settings]);
+
+    // Force Close or Auto Close
+    if (settings.forceCloseBookings || !isNextWeekOpen) {
         return (
             <div className="container flex-center" style={{
                 height: '80vh',
@@ -71,9 +87,13 @@ export default function BookingFlow() {
                 }}>
                     <AlertCircle size={48} color="#ef4444" />
                 </div>
-                <h2 style={{ fontSize: '24px', marginBottom: '16px', color: 'var(--text-main)' }}>Bookings Are Closed</h2>
+                <h2 style={{ fontSize: '24px', marginBottom: '16px', color: 'var(--text-main)' }}>
+                    {settings.forceCloseBookings ? 'Bookings Are Closed' : 'Bookings Are Currently Closed'}
+                </h2>
                 <p style={{ color: 'var(--text-muted)', maxWidth: '300px', margin: '0 auto 32px', lineHeight: '1.5' }}>
-                    The booking system is currently paused by the administration. Please check back later or contact the hostel manager.
+                    {settings.forceCloseBookings
+                        ? 'The booking system is paused by the administration.'
+                        : 'Bookings open automatically on Saturday at 4:00 PM for the upcoming week.'}
                 </p>
                 <button
                     onClick={() => navigate('/')}
@@ -88,21 +108,7 @@ export default function BookingFlow() {
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
-    // Check if bookings are open
-    const isNextWeekOpen = useMemo(() => {
-        if (settings.forceShowNextWeek) return true;
 
-        const now = new Date();
-        const day = now.getDay();
-        const belarusHour = now.getUTCHours() + 3;
-
-        // Auto Open Logic: Sat 16:00 -> Mon 09:00
-        if (day === 6 && belarusHour >= 16) return true;
-        if (day === 0) return true;
-        if (day === 1 && belarusHour < 9) return true;
-
-        return false;
-    }, [settings]);
 
     // Generate date options
     const dateOptions = useMemo(() => {
@@ -191,6 +197,8 @@ export default function BookingFlow() {
             id: Date.now().toString(),
             machineId: selectedMachine.id,
             studentId: user.id, // Use correct field name
+            studentName: user.name, // Snapshot
+            roomNumber: user.roomNumber, // Snapshot
             date: format(selectedDate, 'yyyy-MM-dd'),
             startTime: selectedSlot,
             endTime: selectedSlot, // Placeholder or logic for end time

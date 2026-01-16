@@ -19,6 +19,8 @@ export interface Booking {
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   weekId: string; // YYYY-Www
+  studentName?: string; // Snapshot for easier display/printing
+  roomNumber?: string; // Snapshot
   createdAt: number;
 }
 

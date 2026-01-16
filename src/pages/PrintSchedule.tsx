@@ -190,8 +190,8 @@ export default function PrintSchedule() {
                                                     <td key={day.toString()} style={cellStyle}>
                                                         {booking ? (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
-                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{student?.roomNumber}</span>
-                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{student?.name}</span>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{booking.roomNumber || student?.roomNumber}</span>
+                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{booking.studentName || student?.name}</span>
                                                             </div>
                                                         ) : null}
                                                     </td>
