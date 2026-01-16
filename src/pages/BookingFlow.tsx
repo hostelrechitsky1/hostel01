@@ -119,9 +119,15 @@ export default function BookingFlow() {
         };
     }, [showConfirmModal, showConfirmation]);
 
+    const triggerHaptic = (pattern: number | number[]) => {
+        if ('vibrate' in navigator) {
+            navigator.vibrate(pattern);
+        }
+    };
+
     useEffect(() => {
-        if (showConfirmation && 'vibrate' in navigator) {
-            navigator.vibrate([40, 60, 40]);
+        if (showConfirmation) {
+            triggerHaptic([30, 40, 30, 60, 30]);
         }
     }, [showConfirmation]);
 
@@ -171,6 +177,7 @@ export default function BookingFlow() {
         try {
             const result = await firestoreService.createBooking(bookingData);
             if (result.success) {
+                triggerHaptic([20, 40, 20, 80, 20]);
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
                 setTimeout(() => navigate('/'), 2000);
