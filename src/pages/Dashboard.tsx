@@ -16,6 +16,7 @@ export default function Dashboard() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
+    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
 
     useEffect(() => {
         if (!user) {
@@ -25,13 +26,15 @@ export default function Dashboard() {
 
         const loadData = async () => {
             try {
-                const [fetchedMachines, fetchedBookings] = await Promise.all([
+                const [fetchedMachines, fetchedBookings, fetchedSettings] = await Promise.all([
                     firestoreService.getMachines(),
-                    firestoreService.getBookings()
+                    firestoreService.getBookings(),
+                    firestoreService.getSettings()
                 ]);
 
                 setMachines(fetchedMachines);
                 setAllBookings(fetchedBookings);
+                setSettings(fetchedSettings);
 
                 // Filter for My Bookings
                 const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
@@ -138,14 +141,23 @@ export default function Dashboard() {
             >
                 <div>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>Book your slot for this week</p>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
+                        {settings.forceCloseBookings ? 'Bookings are currently closed' : 'Book your slot for this week'}
+                    </p>
                 </div>
                 <button
-                    onClick={() => navigate('/book')}
+                    onClick={() => !settings.forceCloseBookings && navigate('/book')}
                     className="primary-button"
-                    style={{ padding: '12px 24px', borderRadius: '12px' }}
+                    disabled={settings.forceCloseBookings}
+                    style={{
+                        padding: '12px 24px',
+                        borderRadius: '12px',
+                        opacity: settings.forceCloseBookings ? 0.5 : 1,
+                        cursor: settings.forceCloseBookings ? 'not-allowed' : 'pointer',
+                        background: settings.forceCloseBookings ? 'var(--glass-bg)' : 'var(--primary)'
+                    }}
                 >
-                    Book Now
+                    {settings.forceCloseBookings ? 'Closed' : 'Book Now'}
                 </button>
             </div>
 
