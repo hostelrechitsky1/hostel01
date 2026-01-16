@@ -4,7 +4,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking } from '../types';
 import { TIME_SLOTS } from '../types';
-import { format, addDays, startOfToday, isSameDay, getWeek } from 'date-fns';
+import { format, addDays, startOfToday, isSameDay, getWeek, endOfWeek, isAfter } from 'date-fns';
 import { ChevronLeft, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
