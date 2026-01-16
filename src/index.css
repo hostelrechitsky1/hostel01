@@ -27,6 +27,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Prevent iOS Zoom on inputs */
+input,
+textarea,
+select,
+button {
+  font-size: 16px !important;
+  /* Ensure minimum readable size to prevent auto-zoom */
+}
+
 #root {
   max-width: 100%;
   margin: 0 auto;
