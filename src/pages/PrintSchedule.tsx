@@ -104,6 +104,9 @@ export default function PrintSchedule() {
                             {formatBelarusMonthDayLabel(weekStart)} - {formatBelarusMonthDayYearLabel(weekEnd)}
                             {weekOffset === 1 && <span style={{ marginLeft: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>(Next Week)</span>}
                         </p>
+                        <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '12px' }}>
+                            Tip: If the print preview is portrait, switch Orientation to Landscape in your print options.
+                        </p>
                     </div>
                 </div>
 
