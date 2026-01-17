@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch, runTransaction } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
@@ -84,32 +84,30 @@ export const firestoreService = {
     },
 
     async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
-        // Double check availability (Race condition protection would go here with transactions)
-        // For simple app, straight write is okay for now, but better to check
-        const q = query(
-            collection(db, BOOKINGS_COL),
-            where('date', '==', booking.date),
-            where('machineId', '==', booking.machineId),
-            where('startTime', '==', booking.startTime)
-        );
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-            return { success: false, error: 'Slot already taken by someone else.' };
-        }
+        const slotId = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '-')}`;
+        const slotRef = doc(db, BOOKINGS_COL, slotId);
+        const bookingRecord = { ...booking, id: slotId };
 
-        // Weekly Limit Check
-        const weekQ = query(
-            collection(db, BOOKINGS_COL),
-            where('studentId', '==', booking.studentId),
-            where('weekId', '==', booking.weekId)
-        );
-        const weekSnapshot = await getDocs(weekQ);
-        if (!weekSnapshot.empty) {
-            return { success: false, error: 'You have already booked a slot for this week.' };
-        }
+        return runTransaction(db, async (transaction) => {
+            const slotSnapshot = await transaction.get(slotRef);
+            if (slotSnapshot.exists()) {
+                return { success: false, error: 'Slot already booked by another student. Please try a different time.' };
+            }
 
-        await setDoc(doc(db, BOOKINGS_COL, booking.id), booking);
-        return { success: true };
+            // Weekly Limit Check
+            const weekQ = query(
+                collection(db, BOOKINGS_COL),
+                where('studentId', '==', booking.studentId),
+                where('weekId', '==', booking.weekId)
+            );
+            const weekSnapshot = await transaction.get(weekQ);
+            if (!weekSnapshot.empty) {
+                return { success: false, error: 'You have already booked a slot for this week.' };
+            }
+
+            transaction.set(slotRef, bookingRecord);
+            return { success: true };
+        });
     },
 
     async cancelBooking(id: string) {
