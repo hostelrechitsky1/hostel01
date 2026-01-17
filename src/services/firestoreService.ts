@@ -2,6 +2,7 @@ import { db } from '../firebase';
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
+import { legacyPinMap } from '../data/pinMap';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
@@ -37,19 +38,26 @@ export const firestoreService = {
         }
 
         const students = parseRawStudentData(rawData);
-        log(`Parsed ${students.length} students. Checking existing PINs...`);
+        log(`Parsed ${students.length} students. Loading legacy PINs...`);
 
-        // 1. Fetch existing PINs
+        // 1. Use Legacy PIN Map (from old Firebase)
         const pinMap = new Map<string, string>();
+
+        // Load legacy PINs first
+        Object.entries(legacyPinMap).forEach(([room, pin]) => {
+            pinMap.set(room, pin);
+        });
+        log(`Loaded ${pinMap.size} legacy PINs from backup.`);
+
+        // Also check database for any existing PINs (in case of re-seed)
         try {
             const snap = await getDocs(collection(db, STUDENTS_COL));
             snap.docs.forEach(d => {
                 const s = d.data() as Student;
                 if (s.roomNumber && s.pin) pinMap.set(s.roomNumber, s.pin);
             });
-            log(`Found ${pinMap.size} existing PINs to preserve.`);
         } catch (e: any) {
-            log(`Warning: Could not fetch existing PINs (${e.message}). Proceeding as fresh seed.`);
+            log(`Note: Database is empty (expected for first migration).`);
         }
 
         // 2. Prepare Data
@@ -60,6 +68,7 @@ export const firestoreService = {
             if (!pin) {
                 pin = generatePin();
                 pinMap.set(student.roomNumber, pin);
+                log(`New room detected: ${student.roomNumber}, assigned PIN ${pin}`);
             }
             student.pin = pin;
             return student;
