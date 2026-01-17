@@ -177,8 +177,24 @@ export default function ManagerPanel() {
         }
     };
 
+    // Safety Timeout: If loading takes too long (e.g. DB connection fail), force show content
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (loading) {
+                console.warn("Force releasing loading state due to timeout");
+                setLoading(false);
+            }
+        }, 5000); // 5 seconds max load time
+        return () => clearTimeout(timer);
+    }, [loading]);
+
     if (loading && bookings.length === 0 && machines.length === 0) {
-        return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
+        return (
+            <div className="flex-center" style={{ height: '100vh', flexDirection: 'column', gap: '16px' }}>
+                <div>Loading Admin Panel...</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Connecting to Firebase...</div>
+            </div>
+        );
     }
 
     return (
