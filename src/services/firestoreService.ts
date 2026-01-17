@@ -1,11 +1,12 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
+const BOOKING_LIMITS_COL = 'bookingLimits';
 
 export const firestoreService = {
     // --- Students ---
@@ -84,36 +85,38 @@ export const firestoreService = {
     },
 
     async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
-        // Double check availability (Race condition protection would go here with transactions)
-        // For simple app, straight write is okay for now, but better to check
-        const q = query(
-            collection(db, BOOKINGS_COL),
-            where('date', '==', booking.date),
-            where('machineId', '==', booking.machineId),
-            where('startTime', '==', booking.startTime)
-        );
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-            return { success: false, error: 'Slot already taken by someone else.' };
-        }
+        const slotId = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '-')}`;
+        const slotRef = doc(db, BOOKINGS_COL, slotId);
+        const limitId = `${booking.studentId}_${booking.weekId}`;
+        const limitRef = doc(db, BOOKING_LIMITS_COL, limitId);
+        const bookingRecord = { ...booking, id: slotId };
 
-        // Weekly Limit Check
-        const weekQ = query(
-            collection(db, BOOKINGS_COL),
-            where('studentId', '==', booking.studentId),
-            where('weekId', '==', booking.weekId)
-        );
-        const weekSnapshot = await getDocs(weekQ);
-        if (!weekSnapshot.empty) {
-            return { success: false, error: 'You have already booked a slot for this week.' };
-        }
+        return runTransaction(db, async (transaction) => {
+            const slotSnapshot = await transaction.get(slotRef);
+            if (slotSnapshot.exists()) {
+                return { success: false, error: 'Slot already booked by another student. Please try a different time.' };
+            }
 
-        await setDoc(doc(db, BOOKINGS_COL, booking.id), booking);
-        return { success: true };
+            const limitSnapshot = await transaction.get(limitRef);
+            if (limitSnapshot.exists()) {
+                return { success: false, error: 'You have already booked a slot for this week.' };
+            }
+
+            transaction.set(slotRef, bookingRecord);
+            transaction.set(limitRef, { studentId: booking.studentId, weekId: booking.weekId, bookingId: slotId });
+            return { success: true };
+        });
     },
 
     async cancelBooking(id: string) {
-        await deleteDoc(doc(db, BOOKINGS_COL, id));
+        const bookingRef = doc(db, BOOKINGS_COL, id);
+        const bookingSnapshot = await getDoc(bookingRef);
+        if (bookingSnapshot.exists()) {
+            const booking = bookingSnapshot.data() as Booking;
+            const limitId = `${booking.studentId}_${booking.weekId}`;
+            await deleteDoc(doc(db, BOOKING_LIMITS_COL, limitId));
+        }
+        await deleteDoc(bookingRef);
     },
 
     // --- Settings ---
@@ -133,6 +136,10 @@ export const firestoreService = {
         const snapshot = await getDocs(collection(db, BOOKINGS_COL));
         const batch = writeBatch(db);
         snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        const limitsSnapshot = await getDocs(collection(db, BOOKING_LIMITS_COL));
+        limitsSnapshot.docs.forEach((doc) => {
             batch.delete(doc.ref);
         });
         await batch.commit();

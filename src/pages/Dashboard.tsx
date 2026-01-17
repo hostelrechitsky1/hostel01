@@ -19,6 +19,10 @@ export default function Dashboard() {
     const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
 
     useEffect(() => {
+        window.scrollTo(0, 0);
+    }, []);
+
+    useEffect(() => {
         if (!user) {
             navigate('/login');
             return;
