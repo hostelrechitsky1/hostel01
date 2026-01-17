@@ -33,6 +33,7 @@ export default function BookingFlow() {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [error, setError] = useState('');
+    const [conflictMessage, setConflictMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
@@ -186,6 +187,9 @@ export default function BookingFlow() {
                 setError(result.error || 'Booking failed');
                 setTimeout(() => setError(''), 3000);
                 if (result.error?.includes('Slot already taken')) {
+                    setConflictMessage('This slot was just booked by someone else. Please choose another time.');
+                    setTimeout(() => setConflictMessage(''), 3000);
+                    setShowConfirmModal(false);
                     try {
                         const latestBookings = await firestoreService.getBookings();
                         setBookings(latestBookings);
@@ -255,6 +259,11 @@ export default function BookingFlow() {
                 </button>
                 <h2 style={{ margin: 0, fontSize: '20px' }}>Select a Slot</h2>
             </div>
+            {conflictMessage && (
+                <div className="glass-panel" style={{ padding: '12px 16px', marginBottom: '16px', borderRadius: '12px', color: 'var(--error)' }}>
+                    {conflictMessage}
+                </div>
+            )}
 
             {/* Date Selector */}
             {dateOptions.length === 0 ? (
