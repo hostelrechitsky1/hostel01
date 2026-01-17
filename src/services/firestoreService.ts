@@ -15,18 +15,43 @@ export const firestoreService = {
     },
 
     async seedStudents(rawData: string) {
+        console.log("Starting Safe Seed...");
         const students = parseRawStudentData(rawData);
-        const roomPins = new Map<string, string>();
+
+        // 1. Fetch existing PINs to preserve them
+        const existingDocs = await getDocs(collection(db, STUDENTS_COL));
+        const pinMap = new Map<string, string>(); // Room -> PIN
+
+        existingDocs.docs.forEach(d => {
+            const data = d.data() as Student;
+            if (data.roomNumber && data.pin) {
+                pinMap.set(data.roomNumber, data.pin);
+            }
+        });
+
+        console.log(`Found ${pinMap.size} existing rooms with PINs. Preserving...`);
+
+        // 2. Generator Helper
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
+        // 3. Update/Create Students
         for (const student of students) {
-            if (!roomPins.has(student.roomNumber)) {
-                roomPins.set(student.roomNumber, generatePin());
+            // Check if this room already has a PIN from DB
+            let pin = pinMap.get(student.roomNumber);
+
+            if (!pin) {
+                // If not in DB, generate new and save to map (so roommates get same new pin)
+                pin = generatePin();
+                pinMap.set(student.roomNumber, pin);
             }
-            student.pin = roomPins.get(student.roomNumber);
-            await setDoc(doc(db, STUDENTS_COL, student.id), student);
+
+            // Assign the preserved (or new) pin
+            student.pin = pin;
+
+            // Use setDoc with merge: true to update name/id but KEEP other potential fields
+            await setDoc(doc(db, STUDENTS_COL, student.id), student, { merge: true });
         }
-        console.log(`Seeded ${students.length} students with PINs`);
+        console.log(`Safe Seed Complete. Processed ${students.length} students.`);
     },
 
     async addStudent(student: Student) {

@@ -132,11 +132,11 @@ export default function ManagerPanel() {
     };
 
     const handleSeedDatabase = async () => {
-        if (confirm('⚠️ WARNING: This will RESET all Room PINs and re-seed the student list.\n\nAll existing PINs will stop working.\nAre you sure?')) {
+        if (confirm('✅ SAFE SYNC: This will update student lists but PRESERVE existing PINs for known rooms.\n\nOnly new rooms will get new PINs.\nProceed?')) {
             setLoading(true);
             try {
                 await firestoreService.seedStudents(studentsRawData);
-                alert('Database reset complete. New PINs generated.');
+                alert('Database synced successfully. Existing PINs preserved.');
                 refreshData();
             } catch (e) {
                 alert('Error: ' + e);
@@ -300,7 +300,7 @@ export default function ManagerPanel() {
                                         fontSize: '12px'
                                     }}
                                 >
-                                    <Database size={14} style={{ marginRight: '8px' }} /> Reset DB/PINs
+                                    <Database size={14} style={{ marginRight: '8px' }} /> Repair / Sync Data
                                 </button>
                             </div>
                         </div>
