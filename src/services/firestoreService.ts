@@ -1,11 +1,12 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch, runTransaction } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
+const BOOKING_LIMITS_COL = 'bookingLimits';
 
 export const firestoreService = {
     // --- Students ---
@@ -86,6 +87,8 @@ export const firestoreService = {
     async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
         const slotId = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '-')}`;
         const slotRef = doc(db, BOOKINGS_COL, slotId);
+        const limitId = `${booking.studentId}_${booking.weekId}`;
+        const limitRef = doc(db, BOOKING_LIMITS_COL, limitId);
         const bookingRecord = { ...booking, id: slotId };
 
         return runTransaction(db, async (transaction) => {
@@ -94,24 +97,26 @@ export const firestoreService = {
                 return { success: false, error: 'Slot already booked by another student. Please try a different time.' };
             }
 
-            // Weekly Limit Check
-            const weekQ = query(
-                collection(db, BOOKINGS_COL),
-                where('studentId', '==', booking.studentId),
-                where('weekId', '==', booking.weekId)
-            );
-            const weekSnapshot = await transaction.get(weekQ);
-            if (!weekSnapshot.empty) {
+            const limitSnapshot = await transaction.get(limitRef);
+            if (limitSnapshot.exists()) {
                 return { success: false, error: 'You have already booked a slot for this week.' };
             }
 
             transaction.set(slotRef, bookingRecord);
+            transaction.set(limitRef, { studentId: booking.studentId, weekId: booking.weekId, bookingId: slotId });
             return { success: true };
         });
     },
 
     async cancelBooking(id: string) {
-        await deleteDoc(doc(db, BOOKINGS_COL, id));
+        const bookingRef = doc(db, BOOKINGS_COL, id);
+        const bookingSnapshot = await getDoc(bookingRef);
+        if (bookingSnapshot.exists()) {
+            const booking = bookingSnapshot.data() as Booking;
+            const limitId = `${booking.studentId}_${booking.weekId}`;
+            await deleteDoc(doc(db, BOOKING_LIMITS_COL, limitId));
+        }
+        await deleteDoc(bookingRef);
     },
 
     // --- Settings ---
@@ -131,6 +136,10 @@ export const firestoreService = {
         const snapshot = await getDocs(collection(db, BOOKINGS_COL));
         const batch = writeBatch(db);
         snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        const limitsSnapshot = await getDocs(collection(db, BOOKING_LIMITS_COL));
+        limitsSnapshot.docs.forEach((doc) => {
             batch.delete(doc.ref);
         });
         await batch.commit();
