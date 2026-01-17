@@ -11,7 +11,16 @@ const STORAGE_KEYS = {
 class BookingService {
     private get<T>(key: string, defaultValue: T): T {
         const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : defaultValue;
+        if (!data) {
+            return defaultValue;
+        }
+        try {
+            return JSON.parse(data) as T;
+        } catch (error) {
+            console.warn(`Failed to parse stored value for ${key}. Clearing.`, error);
+            localStorage.removeItem(key);
+            return defaultValue;
+        }
     }
 
     private set(key: string, value: any) {
@@ -24,7 +33,16 @@ class BookingService {
     }
 
     getCurrentUser(): Student | null {
-        return this.get(STORAGE_KEYS.CURRENT_USER, null);
+        const user = this.get<Student | null>(STORAGE_KEYS.CURRENT_USER, null);
+        if (!user) {
+            return null;
+        }
+        if (typeof user.id !== 'string' || typeof user.name !== 'string' || typeof user.roomNumber !== 'string') {
+            console.warn('Invalid stored user session. Clearing.');
+            localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+            return null;
+        }
+        return user;
     }
 
     logout() {
