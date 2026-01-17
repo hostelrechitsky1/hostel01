@@ -2,6 +2,7 @@ import { db } from '../firebase';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
+import { legacyPinMap } from '../data/pinMap';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
@@ -18,16 +19,26 @@ export const firestoreService = {
     async seedStudents(rawData: string) {
         const students = parseRawStudentData(rawData);
         const roomPins = new Map<string, string>();
+
+        // Load legacy PINs from old Firebase backup
+        Object.entries(legacyPinMap).forEach(([room, pin]) => {
+            roomPins.set(room, pin);
+        });
+        console.log(`Loaded ${roomPins.size} legacy PINs from backup.`);
+
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
         for (const student of students) {
+            // Use legacy PIN if exists, otherwise generate new one
             if (!roomPins.has(student.roomNumber)) {
-                roomPins.set(student.roomNumber, generatePin());
+                const newPin = generatePin();
+                roomPins.set(student.roomNumber, newPin);
+                console.log(`New room ${student.roomNumber}, assigned PIN ${newPin}`);
             }
             student.pin = roomPins.get(student.roomNumber);
             await setDoc(doc(db, STUDENTS_COL, student.id), student);
         }
-        console.log(`Seeded ${students.length} students with PINs`);
+        console.log(`Seeded ${students.length} students with preserved PINs`);
     },
 
     async addStudent(student: Student) {
