@@ -131,18 +131,41 @@ export default function ManagerPanel() {
         }
     };
 
+    const [debugLog, setDebugLog] = useState<string[]>([]);
+
+    const addLog = (msg: string) => setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+
     const handleSeedDatabase = async () => {
-        if (confirm('✅ SAFE SYNC: This will update student lists but PRESERVE existing PINs for known rooms.\n\nOnly new rooms will get new PINs.\nProceed?')) {
-            setLoading(true);
+        if (!confirm('✅ SAFE SYNC: Proceed with Repair?')) return;
+
+        setLoading(true);
+        setDebugLog([]); // Clear previous logs
+        addLog("Starting Repair Process...");
+
+        try {
+            // 1. Test Connection
+            addLog("Step 1: Checking connection...");
             try {
-                await firestoreService.seedStudents(studentsRawData);
-                alert('Database synced successfully. Existing PINs preserved.');
-                refreshData();
-            } catch (e) {
-                alert('Error: ' + e);
-            } finally {
-                setLoading(false);
+                await firestoreService.getSettings();
+                addLog("✅ Connection OK");
+            } catch (e: any) {
+                addLog(`❌ Connection Failed: ${e.code || e.message}`);
+                if (e.code === 'permission-denied') {
+                    throw new Error("FIREBASE LOCKED: Security Rules Expired. You MUST login to Firebase Console to fix this.");
+                }
             }
+
+            // 2. Run Seed
+            addLog("Step 2: Running Safe Seed...");
+            await firestoreService.seedStudents(studentsRawData);
+            addLog("✅ Seed Complete!");
+            alert('Success! Database verified.');
+            refreshData();
+        } catch (e: any) {
+            addLog(`❌ ERROR: ${e.message}`);
+            alert(`Failed: ${e.message}`);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -221,6 +244,14 @@ export default function ManagerPanel() {
                     </button>
                 </div>
             </div>
+
+            {/* Debug Monitor */}
+            {debugLog.length > 0 && (
+                <div style={{ background: '#000', color: '#0f0', padding: '10px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', marginBottom: '20px' }}>
+                    <strong>DIAGNOSTIC LOG:</strong>
+                    {debugLog.map((l, i) => <div key={i}>{l}</div>)}
+                </div>
+            )}
 
             <div style={{ display: 'grid', gap: '32px' }}>
                 {/* Global Settings */}
