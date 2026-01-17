@@ -58,7 +58,8 @@ export const firestoreService = {
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
         // 3. Batch Writes
-        const batchSize = 400;
+        // Reduced from 400 to 50 to handle extremely poor connections (timeout protection)
+        const batchSize = 50;
         let batch = writeBatch(db);
         let count = 0;
         let batchCount = 0;
