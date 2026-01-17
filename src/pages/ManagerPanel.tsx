@@ -131,18 +131,41 @@ export default function ManagerPanel() {
         }
     };
 
+    const [debugLog, setDebugLog] = useState<string[]>([]);
+
+    const addLog = (msg: string) => setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+
     const handleSeedDatabase = async () => {
-        if (confirm('⚠️ WARNING: This will RESET all Room PINs and re-seed the student list.\n\nAll existing PINs will stop working.\nAre you sure?')) {
-            setLoading(true);
+        if (!confirm('✅ SAFE SYNC: Proceed with Repair?')) return;
+
+        setLoading(true);
+        setDebugLog([]); // Clear previous logs
+        addLog("Starting Repair Process...");
+
+        try {
+            // 1. Test Connection
+            addLog("Step 1: Checking connection...");
             try {
-                await firestoreService.seedStudents(studentsRawData);
-                alert('Database reset complete. New PINs generated.');
-                refreshData();
-            } catch (e) {
-                alert('Error: ' + e);
-            } finally {
-                setLoading(false);
+                await firestoreService.getSettings();
+                addLog("✅ Connection OK");
+            } catch (e: any) {
+                addLog(`❌ Connection Failed: ${e.code || e.message}`);
+                if (e.code === 'permission-denied') {
+                    throw new Error("FIREBASE LOCKED: Security Rules Expired. You MUST login to Firebase Console to fix this.");
+                }
             }
+
+            // 2. Run Seed
+            // Pass log callback
+            await firestoreService.seedStudents(studentsRawData, (msg) => addLog(msg));
+
+            alert('Success! Database verified and synced.');
+            refreshData();
+        } catch (e: any) {
+            addLog(`❌ ERROR: ${e.message}`);
+            alert(`Failed: ${e.message}`);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -177,8 +200,24 @@ export default function ManagerPanel() {
         }
     };
 
+    // Safety Timeout: If loading takes too long (e.g. DB connection fail), force show content
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (loading) {
+                console.warn("Force releasing loading state due to timeout");
+                setLoading(false);
+            }
+        }, 5000); // 5 seconds max load time
+        return () => clearTimeout(timer);
+    }, [loading]);
+
     if (loading && bookings.length === 0 && machines.length === 0) {
-        return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
+        return (
+            <div className="flex-center" style={{ height: '100vh', flexDirection: 'column', gap: '16px' }}>
+                <div>Loading Admin Panel...</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Connecting to Firebase...</div>
+            </div>
+        );
     }
 
     return (
@@ -205,6 +244,14 @@ export default function ManagerPanel() {
                     </button>
                 </div>
             </div>
+
+            {/* Debug Monitor */}
+            {debugLog.length > 0 && (
+                <div style={{ background: '#000', color: '#0f0', padding: '10px', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', marginBottom: '20px' }}>
+                    <strong>DIAGNOSTIC LOG:</strong>
+                    {debugLog.map((l, i) => <div key={i}>{l}</div>)}
+                </div>
+            )}
 
             <div style={{ display: 'grid', gap: '32px' }}>
                 {/* Global Settings */}
@@ -284,7 +331,7 @@ export default function ManagerPanel() {
                                         fontSize: '12px'
                                     }}
                                 >
-                                    <Database size={14} style={{ marginRight: '8px' }} /> Reset DB/PINs
+                                    <Database size={14} style={{ marginRight: '8px' }} /> Repair / Sync Data
                                 </button>
                             </div>
                         </div>

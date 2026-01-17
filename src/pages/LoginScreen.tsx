@@ -22,7 +22,16 @@ export default function LoginScreen() {
 
         try {
             const allStudents = await firestoreService.getAllStudents();
-            const roomStudents = allStudents.filter(s => s.roomNumber === room);
+            console.log('Login Debug: Loaded students:', allStudents.length);
+
+            if (allStudents.length > 0) {
+                console.log('Sample student room:', allStudents[0].roomNumber);
+            }
+
+            // Robust comparison: trim and ignore case
+            const roomStudents = allStudents.filter(s =>
+                s.roomNumber.toString().trim().toLowerCase() === room.trim().toLowerCase()
+            );
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);

@@ -14,19 +14,81 @@ export const firestoreService = {
         return snapshot.docs.map(doc => doc.data() as Student);
     },
 
-    async seedStudents(rawData: string) {
+    async seedStudents(rawData: string, onProgress?: (msg: string) => void) {
+        const log = (msg: string) => {
+            console.log(msg);
+            if (onProgress) onProgress(msg);
+        };
+
+        log("Starting Engine V3 (Parallel Writes)...");
+
+        // 0. Pre-flight Write Test
+        log("Test: Verifying Write Permissions...");
+        try {
+            const testRef = doc(db, 'system', 'connectivity_check');
+            const testTimeout = new Promise((_, r) => setTimeout(() => r(new Error("Write Timeout")), 5000));
+            await Promise.race([
+                setDoc(testRef, { lastCheck: new Date(), status: 'testing' }),
+                testTimeout
+            ]);
+            log("✅ Write Permission Granted.");
+        } catch (e: any) {
+            throw new Error(`WRITE BLOCKED: ${e.message}. Check Firebase Rules.`);
+        }
+
         const students = parseRawStudentData(rawData);
-        const roomPins = new Map<string, string>();
+        log(`Parsed ${students.length} students. Checking existing PINs...`);
+
+        // 1. Fetch existing PINs
+        const pinMap = new Map<string, string>();
+        try {
+            const snap = await getDocs(collection(db, STUDENTS_COL));
+            snap.docs.forEach(d => {
+                const s = d.data() as Student;
+                if (s.roomNumber && s.pin) pinMap.set(s.roomNumber, s.pin);
+            });
+            log(`Found ${pinMap.size} existing PINs to preserve.`);
+        } catch (e: any) {
+            log(`Warning: Could not fetch existing PINs (${e.message}). Proceeding as fresh seed.`);
+        }
+
+        // 2. Prepare Data
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
-        for (const student of students) {
-            if (!roomPins.has(student.roomNumber)) {
-                roomPins.set(student.roomNumber, generatePin());
+        const studentsPrepare = students.map(student => {
+            let pin = pinMap.get(student.roomNumber);
+            if (!pin) {
+                pin = generatePin();
+                pinMap.set(student.roomNumber, pin);
             }
-            student.pin = roomPins.get(student.roomNumber);
-            await setDoc(doc(db, STUDENTS_COL, student.id), student);
+            student.pin = pin;
+            return student;
+        });
+
+        // 3. Parallel Chunk Execution (Size 20)
+        const CHUNK_SIZE = 20;
+        const total = studentsPrepare.length;
+        let processed = 0;
+
+        for (let i = 0; i < total; i += CHUNK_SIZE) {
+            const chunk = studentsPrepare.slice(i, i + CHUNK_SIZE);
+
+            // Create array of promises
+            const promises = chunk.map(student =>
+                setDoc(doc(db, STUDENTS_COL, student.id), student, { merge: true })
+            );
+
+            try {
+                // Execute chunk
+                await Promise.all(promises);
+                processed += chunk.length;
+                log(`Saved ${processed}/${total} students...`);
+            } catch (e: any) {
+                throw new Error(`Write Chunk Failed at ${processed}: ${e.message}`);
+            }
         }
-        console.log(`Seeded ${students.length} students with PINs`);
+
+        log(`✅ Seed Complete! All ${total} records synced.`);
     },
 
     async addStudent(student: Student) {
