@@ -185,6 +185,16 @@ export default function BookingFlow() {
             } else {
                 setError(result.error || 'Booking failed');
                 setTimeout(() => setError(''), 3000);
+                if (result.error?.includes('Slot already taken')) {
+                    try {
+                        const latestBookings = await firestoreService.getBookings();
+                        setBookings(latestBookings);
+                        setSelectedSlot(null);
+                        setSelectedMachine(null);
+                    } catch (refreshError) {
+                        console.error('Failed to refresh bookings after conflict', refreshError);
+                    }
+                }
                 setSubmitting(false); // Only reset on error
             }
         } catch (e) {

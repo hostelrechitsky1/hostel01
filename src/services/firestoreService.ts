@@ -1,11 +1,13 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch, runTransaction } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
+const BOOKING_SLOTS_COL = 'bookingSlots';
+const WEEKLY_LIMITS_COL = 'weeklyBookingLimits';
 
 export const firestoreService = {
     // --- Students ---
@@ -84,32 +86,71 @@ export const firestoreService = {
     },
 
     async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
-        // Double check availability (Race condition protection would go here with transactions)
-        // For simple app, straight write is okay for now, but better to check
-        const q = query(
-            collection(db, BOOKINGS_COL),
-            where('date', '==', booking.date),
-            where('machineId', '==', booking.machineId),
-            where('startTime', '==', booking.startTime)
-        );
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-            return { success: false, error: 'Slot already taken by someone else.' };
-        }
+        try {
+            const slotQuery = query(
+                collection(db, BOOKINGS_COL),
+                where('date', '==', booking.date),
+                where('machineId', '==', booking.machineId),
+                where('startTime', '==', booking.startTime)
+            );
+            const slotSnapshot = await getDocs(slotQuery);
+            if (!slotSnapshot.empty) {
+                return { success: false, error: 'Slot already taken by someone else.' };
+            }
 
-        // Weekly Limit Check
-        const weekQ = query(
-            collection(db, BOOKINGS_COL),
-            where('studentId', '==', booking.studentId),
-            where('weekId', '==', booking.weekId)
-        );
-        const weekSnapshot = await getDocs(weekQ);
-        if (!weekSnapshot.empty) {
-            return { success: false, error: 'You have already booked a slot for this week.' };
-        }
+            const weekQuery = query(
+                collection(db, BOOKINGS_COL),
+                where('studentId', '==', booking.studentId),
+                where('weekId', '==', booking.weekId)
+            );
+            const weekSnapshot = await getDocs(weekQuery);
+            if (!weekSnapshot.empty) {
+                return { success: false, error: 'You have already booked a slot for this week.' };
+            }
 
-        await setDoc(doc(db, BOOKINGS_COL, booking.id), booking);
-        return { success: true };
+            const slotKey = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '')}`;
+            const weekKey = `${booking.weekId}_${booking.studentId}`;
+
+            await runTransaction(db, async (transaction) => {
+                const slotLockRef = doc(db, BOOKING_SLOTS_COL, slotKey);
+                const slotLockSnapshot = await transaction.get(slotLockRef);
+                if (slotLockSnapshot.exists()) {
+                    throw new Error('slot_taken');
+                }
+
+                const weekLockRef = doc(db, WEEKLY_LIMITS_COL, weekKey);
+                const weekLockSnapshot = await transaction.get(weekLockRef);
+                if (weekLockSnapshot.exists()) {
+                    throw new Error('weekly_limit');
+                }
+
+                transaction.set(doc(db, BOOKINGS_COL, booking.id), booking);
+                transaction.set(slotLockRef, {
+                    bookingId: booking.id,
+                    date: booking.date,
+                    machineId: booking.machineId,
+                    startTime: booking.startTime
+                });
+                transaction.set(weekLockRef, {
+                    bookingId: booking.id,
+                    studentId: booking.studentId,
+                    weekId: booking.weekId
+                });
+            });
+
+            return { success: true };
+        } catch (error) {
+            if (error instanceof Error) {
+                if (error.message === 'slot_taken') {
+                    return { success: false, error: 'Slot already taken by someone else.' };
+                }
+                if (error.message === 'weekly_limit') {
+                    return { success: false, error: 'You have already booked a slot for this week.' };
+                }
+            }
+            console.error('Failed to create booking', error);
+            return { success: false, error: 'Booking failed. Please try again.' };
+        }
     },
 
     async cancelBooking(id: string) {
