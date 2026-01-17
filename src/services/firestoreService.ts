@@ -6,6 +6,8 @@ import { parseRawStudentData } from '../utils/studentParser';
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
+const BOOKING_SLOTS_COL = 'bookingSlots';
+const WEEKLY_LIMITS_COL = 'weeklyBookingLimits';
 
 export const firestoreService = {
     // --- Students ---
@@ -85,29 +87,55 @@ export const firestoreService = {
 
     async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
         try {
+            const slotQuery = query(
+                collection(db, BOOKINGS_COL),
+                where('date', '==', booking.date),
+                where('machineId', '==', booking.machineId),
+                where('startTime', '==', booking.startTime)
+            );
+            const slotSnapshot = await getDocs(slotQuery);
+            if (!slotSnapshot.empty) {
+                return { success: false, error: 'Slot already taken by someone else.' };
+            }
+
+            const weekQuery = query(
+                collection(db, BOOKINGS_COL),
+                where('studentId', '==', booking.studentId),
+                where('weekId', '==', booking.weekId)
+            );
+            const weekSnapshot = await getDocs(weekQuery);
+            if (!weekSnapshot.empty) {
+                return { success: false, error: 'You have already booked a slot for this week.' };
+            }
+
+            const slotKey = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '')}`;
+            const weekKey = `${booking.weekId}_${booking.studentId}`;
+
             await runTransaction(db, async (transaction) => {
-                const slotQuery = query(
-                    collection(db, BOOKINGS_COL),
-                    where('date', '==', booking.date),
-                    where('machineId', '==', booking.machineId),
-                    where('startTime', '==', booking.startTime)
-                );
-                const slotSnapshot = await transaction.get(slotQuery);
-                if (!slotSnapshot.empty) {
+                const slotLockRef = doc(db, BOOKING_SLOTS_COL, slotKey);
+                const slotLockSnapshot = await transaction.get(slotLockRef);
+                if (slotLockSnapshot.exists()) {
                     throw new Error('slot_taken');
                 }
 
-                const weekQuery = query(
-                    collection(db, BOOKINGS_COL),
-                    where('studentId', '==', booking.studentId),
-                    where('weekId', '==', booking.weekId)
-                );
-                const weekSnapshot = await transaction.get(weekQuery);
-                if (!weekSnapshot.empty) {
+                const weekLockRef = doc(db, WEEKLY_LIMITS_COL, weekKey);
+                const weekLockSnapshot = await transaction.get(weekLockRef);
+                if (weekLockSnapshot.exists()) {
                     throw new Error('weekly_limit');
                 }
 
                 transaction.set(doc(db, BOOKINGS_COL, booking.id), booking);
+                transaction.set(slotLockRef, {
+                    bookingId: booking.id,
+                    date: booking.date,
+                    machineId: booking.machineId,
+                    startTime: booking.startTime
+                });
+                transaction.set(weekLockRef, {
+                    bookingId: booking.id,
+                    studentId: booking.studentId,
+                    weekId: booking.weekId
+                });
             });
 
             return { success: true };
