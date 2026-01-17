@@ -1,5 +1,6 @@
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromServer, doc, setDoc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
+import type { Query } from 'firebase/firestore';
 import type { Student, Machine, Booking } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 
@@ -7,24 +8,43 @@ const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
 
+const getDocsWithFallback = async <T>(ref: Query<T>, label: string) => {
+    try {
+        return await getDocsFromServer(ref);
+    } catch (error) {
+        console.warn(`Failed to fetch ${label} from server. Falling back to cache.`, error);
+        return await getDocs(ref);
+    }
+};
+
 export const firestoreService = {
     // --- Students ---
     async getAllStudents(): Promise<Student[]> {
-        const snapshot = await getDocs(collection(db, STUDENTS_COL));
+        const snapshot = await getDocsWithFallback(collection(db, STUDENTS_COL), 'students');
         return snapshot.docs.map(doc => doc.data() as Student);
     },
 
     async seedStudents(rawData: string) {
+        const existingSnapshot = await getDocsWithFallback(collection(db, STUDENTS_COL), 'students');
+        const existingStudents = existingSnapshot.docs.map(doc => doc.data() as Student);
+        const existingPinsByRoom = new Map<string, string>();
+        existingStudents.forEach((student) => {
+            if (student.pin) {
+                existingPinsByRoom.set(student.roomNumber, student.pin);
+            }
+        });
+
         const students = parseRawStudentData(rawData);
         const roomPins = new Map<string, string>();
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
         for (const student of students) {
             if (!roomPins.has(student.roomNumber)) {
-                roomPins.set(student.roomNumber, generatePin());
+                const existingPin = existingPinsByRoom.get(student.roomNumber);
+                roomPins.set(student.roomNumber, existingPin ?? generatePin());
             }
             student.pin = roomPins.get(student.roomNumber);
-            await setDoc(doc(db, STUDENTS_COL, student.id), student);
+            await setDoc(doc(db, STUDENTS_COL, student.id), student, { merge: true });
         }
         console.log(`Seeded ${students.length} students with PINs`);
     },
@@ -44,7 +64,7 @@ export const firestoreService = {
 
     // --- Machines ---
     async getMachines(): Promise<Machine[]> {
-        const snapshot = await getDocs(collection(db, MACHINES_COL));
+        const snapshot = await getDocsWithFallback(collection(db, MACHINES_COL), 'machines');
         let machines = snapshot.docs.map(doc => doc.data() as Machine);
 
         // If empty, seed default machines
@@ -79,7 +99,7 @@ export const firestoreService = {
 
     // --- Bookings ---
     async getBookings(): Promise<Booking[]> {
-        const snapshot = await getDocs(collection(db, BOOKINGS_COL));
+        const snapshot = await getDocsWithFallback(collection(db, BOOKINGS_COL), 'bookings');
         return snapshot.docs.map(doc => doc.data() as Booking);
     },
 
@@ -92,7 +112,7 @@ export const firestoreService = {
             where('machineId', '==', booking.machineId),
             where('startTime', '==', booking.startTime)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await getDocsWithFallback(q, 'bookings');
         if (!snapshot.empty) {
             return { success: false, error: 'Slot already taken by someone else.' };
         }
@@ -103,7 +123,7 @@ export const firestoreService = {
             where('studentId', '==', booking.studentId),
             where('weekId', '==', booking.weekId)
         );
-        const weekSnapshot = await getDocs(weekQ);
+        const weekSnapshot = await getDocsWithFallback(weekQ, 'bookings');
         if (!weekSnapshot.empty) {
             return { success: false, error: 'You have already booked a slot for this week.' };
         }
@@ -118,7 +138,7 @@ export const firestoreService = {
 
     // --- Settings ---
     async getSettings(): Promise<{ forceShowNextWeek: boolean; forceCloseBookings: boolean }> {
-        const snap = await getDocs(collection(db, 'settings'));
+        const snap = await getDocsWithFallback(collection(db, 'settings'), 'settings');
         if (snap.empty) return { forceShowNextWeek: false, forceCloseBookings: false };
 
         const configDoc = snap.docs.find(d => d.id === 'config');
@@ -130,7 +150,7 @@ export const firestoreService = {
     },
 
     async clearAllBookings() {
-        const snapshot = await getDocs(collection(db, BOOKINGS_COL));
+        const snapshot = await getDocsWithFallback(collection(db, BOOKINGS_COL), 'bookings');
         const batch = writeBatch(db);
         snapshot.docs.forEach((doc) => {
             batch.delete(doc.ref);
@@ -144,7 +164,7 @@ export const firestoreService = {
     },
 
     async getFeedbacks(): Promise<any[]> {
-        const snapshot = await getDocs(collection(db, 'feedbacks'));
+        const snapshot = await getDocsWithFallback(collection(db, 'feedbacks'), 'feedbacks');
         return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => b.timestamp - a.timestamp);
     },
 

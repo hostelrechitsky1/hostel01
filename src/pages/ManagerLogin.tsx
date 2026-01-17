@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, ArrowRight } from 'lucide-react';
+import { firestoreService } from '../services/firestoreService';
+import { studentsRawData } from '../data/studentsRaw';
 
 export default function ManagerLogin() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [seeding, setSeeding] = useState(false);
     const navigate = useNavigate();
 
     const handleLogin = (e: React.FormEvent) => {
@@ -17,6 +20,22 @@ export default function ManagerLogin() {
             navigate('/manager');
         } else {
             setError('Incorrect Password');
+        }
+    };
+
+    const handleSeedDatabase = async () => {
+        if (seeding) return;
+        const confirmed = confirm('This will add/update students while preserving existing room PINs. Continue?');
+        if (!confirmed) return;
+        setSeeding(true);
+        try {
+            await firestoreService.seedStudents(studentsRawData);
+            alert('Student list seeded. Existing room PINs were preserved.');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to seed students. Please check database access.');
+        } finally {
+            setSeeding(false);
         }
     };
 
@@ -78,6 +97,24 @@ export default function ManagerLogin() {
                         }}
                     >
                         Access Panel <ArrowRight size={18} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSeedDatabase}
+                        disabled={seeding}
+                        style={{
+                            width: '100%',
+                            marginTop: '12px',
+                            padding: '12px',
+                            borderRadius: '12px',
+                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            color: 'var(--text-main)',
+                            cursor: seeding ? 'not-allowed' : 'pointer',
+                            opacity: seeding ? 0.7 : 1
+                        }}
+                    >
+                        {seeding ? 'Seeding...' : 'Seed Student List (Preserve PINs)'}
                     </button>
 
                     <button

@@ -22,6 +22,10 @@ export default function LoginScreen() {
 
         try {
             const allStudents = await firestoreService.getAllStudents();
+            if (allStudents.length === 0) {
+                setError('No rooms found. The database may need to be seeded by an admin.');
+                return;
+            }
             const roomStudents = allStudents.filter(s => s.roomNumber === room);
 
             if (roomStudents.length > 0) {
