@@ -187,8 +187,10 @@ export default function BookingFlow() {
                 setTimeout(() => setError(''), 3000);
                 setSubmitting(false); // Only reset on error
             }
-        } catch (e) {
-            setError('System error. Please try again.');
+        } catch (e: any) {
+            console.error('Booking transaction failed:', e);
+            console.error('Error details:', e.message, e.code);
+            setError(`System error: ${e.message || 'Please try again.'}`);
             setSubmitting(false);
         }
     };
