@@ -20,86 +20,75 @@ export const firestoreService = {
             if (onProgress) onProgress(msg);
         };
 
-        log("Starting Safe Seed Engine...");
-        const students = parseRawStudentData(rawData);
-        log(`Parsed ${students.length} students from source file.`);
+        log("Starting Engine V3 (Parallel Writes)...");
 
-        // 1. Fetch existing PINs (With Timeout)
-        log("Phase 1: Downloading existing database (verify PINs)...");
-
-        // Create a timeout promise to detect network hangs
-        const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Network Timeout: Download took too long (>15s). Internet too slow?")), 15000)
-        );
-
-        let existingDocs;
+        // 0. Pre-flight Write Test
+        log("Test: Verifying Write Permissions...");
         try {
-            existingDocs = await Promise.race([
-                getDocs(collection(db, STUDENTS_COL)),
-                timeout
+            const testRef = doc(db, 'system', 'connectivity_check');
+            const testTimeout = new Promise((_, r) => setTimeout(() => r(new Error("Write Timeout")), 5000));
+            await Promise.race([
+                setDoc(testRef, { lastCheck: new Date(), status: 'testing' }),
+                testTimeout
             ]);
+            log("✅ Write Permission Granted.");
         } catch (e: any) {
-            // Provide specific actionable error messages
-            if (e.message?.includes("Network Timeout")) throw e;
-            throw new Error(`Download Failed: ${e.message}`);
+            throw new Error(`WRITE BLOCKED: ${e.message}. Check Firebase Rules.`);
         }
 
-        const pinMap = new Map<string, string>(); // Room -> PIN
-        existingDocs.docs.forEach(d => {
-            const data = d.data() as Student;
-            if (data.roomNumber && data.pin) {
-                pinMap.set(data.roomNumber, data.pin);
-            }
-        });
+        const students = parseRawStudentData(rawData);
+        log(`Parsed ${students.length} students. Checking existing PINs...`);
 
-        log(`Phase 1 Complete. Found ${pinMap.size} existing PINs.`);
+        // 1. Fetch existing PINs
+        const pinMap = new Map<string, string>();
+        try {
+            const snap = await getDocs(collection(db, STUDENTS_COL));
+            snap.docs.forEach(d => {
+                const s = d.data() as Student;
+                if (s.roomNumber && s.pin) pinMap.set(s.roomNumber, s.pin);
+            });
+            log(`Found ${pinMap.size} existing PINs to preserve.`);
+        } catch (e: any) {
+            log(`Warning: Could not fetch existing PINs (${e.message}). Proceeding as fresh seed.`);
+        }
 
-        // 2. Generator Helper
+        // 2. Prepare Data
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
-        // 3. Batch Writes
-        // Reduced from 400 to 50 to handle extremely poor connections (timeout protection)
-        const batchSize = 50;
-        let batch = writeBatch(db);
-        let count = 0;
-        let batchCount = 0;
-        const totalBatches = Math.ceil(students.length / batchSize);
-
-        log(`Phase 2: Starting Upload (${totalBatches} batches)...`);
-
-        for (const student of students) {
-            // Check if this room already has a PIN from DB
+        const studentsPrepare = students.map(student => {
             let pin = pinMap.get(student.roomNumber);
-
             if (!pin) {
                 pin = generatePin();
                 pinMap.set(student.roomNumber, pin);
             }
-
             student.pin = pin;
+            return student;
+        });
 
-            // Add to batch
-            const ref = doc(db, STUDENTS_COL, student.id);
-            batch.set(ref, student, { merge: true });
-            count++;
+        // 3. Parallel Chunk Execution (Size 20)
+        const CHUNK_SIZE = 20;
+        const total = studentsPrepare.length;
+        let processed = 0;
 
-            // Commit if full
-            if (count >= batchSize) {
-                batchCount++;
-                log(`Uploading Batch ${batchCount}/${totalBatches}...`);
-                await batch.commit();
-                batch = writeBatch(db);
-                count = 0;
+        for (let i = 0; i < total; i += CHUNK_SIZE) {
+            const chunk = studentsPrepare.slice(i, i + CHUNK_SIZE);
+
+            // Create array of promises
+            const promises = chunk.map(student =>
+                setDoc(doc(db, STUDENTS_COL, student.id), student, { merge: true })
+            );
+
+            try {
+                // Execute chunk
+                await Promise.all(promises);
+                processed += chunk.length;
+                log(`Saved ${processed}/${total} students...`);
+            } catch (e: any) {
+                throw new Error(`Write Chunk Failed at ${processed}: ${e.message}`);
             }
         }
 
-        // Commit final lingering batch
-        if (count > 0) {
-            log(`Uploading Final Batch...`);
-            await batch.commit();
-        }
-
-        log(`✅ Success! Processed ${students.length} students.`);
+        log(`✅ Seed Complete! All ${total} records synced.`);
     },
 
     async addStudent(student: Student) {
