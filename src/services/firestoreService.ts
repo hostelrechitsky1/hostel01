@@ -25,16 +25,26 @@ export const firestoreService = {
     },
 
     async seedStudents(rawData: string) {
+        const existingSnapshot = await getDocsWithFallback(collection(db, STUDENTS_COL), 'students');
+        const existingStudents = existingSnapshot.docs.map(doc => doc.data() as Student);
+        const existingPinsByRoom = new Map<string, string>();
+        existingStudents.forEach((student) => {
+            if (student.pin) {
+                existingPinsByRoom.set(student.roomNumber, student.pin);
+            }
+        });
+
         const students = parseRawStudentData(rawData);
         const roomPins = new Map<string, string>();
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
         for (const student of students) {
             if (!roomPins.has(student.roomNumber)) {
-                roomPins.set(student.roomNumber, generatePin());
+                const existingPin = existingPinsByRoom.get(student.roomNumber);
+                roomPins.set(student.roomNumber, existingPin ?? generatePin());
             }
             student.pin = roomPins.get(student.roomNumber);
-            await setDoc(doc(db, STUDENTS_COL, student.id), student);
+            await setDoc(doc(db, STUDENTS_COL, student.id), student, { merge: true });
         }
         console.log(`Seeded ${students.length} students with PINs`);
     },

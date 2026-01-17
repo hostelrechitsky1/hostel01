@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Calendar } from 'lucide-react';
+import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Calendar } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
-import { studentsRawData } from '../data/studentsRaw';
 import type { Booking, Machine, Student, Feedback } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -128,21 +127,6 @@ export default function ManagerPanel() {
             const updated = { ...student, name: newName };
             await firestoreService.updateStudent(updated);
             refreshData();
-        }
-    };
-
-    const handleSeedDatabase = async () => {
-        if (confirm('⚠️ WARNING: This will RESET all Room PINs and re-seed the student list.\n\nAll existing PINs will stop working.\nAre you sure?')) {
-            setLoading(true);
-            try {
-                await firestoreService.seedStudents(studentsRawData);
-                alert('Database reset complete. New PINs generated.');
-                refreshData();
-            } catch (e) {
-                alert('Error: ' + e);
-            } finally {
-                setLoading(false);
-            }
         }
     };
 
@@ -272,20 +256,9 @@ export default function ManagerPanel() {
                                 >
                                     <Trash2 size={14} style={{ marginRight: '8px' }} /> Clear All Books
                                 </button>
-                                <button
-                                    onClick={handleSeedDatabase}
-                                    style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '8px',
-                                        background: 'rgba(239, 68, 68, 0.2)',
-                                        color: 'var(--error)',
-                                        border: '1px solid var(--error)',
-                                        cursor: 'pointer',
-                                        fontSize: '12px'
-                                    }}
-                                >
-                                    <Database size={14} style={{ marginRight: '8px' }} /> Reset DB/PINs
-                                </button>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                    Student seeding is now available on the manager login screen.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -404,7 +377,7 @@ export default function ManagerPanel() {
                                     ))}
                             </tbody>
                         </table>
-                        {students.length === 0 && <div className="p-4 text-center">No students found. Seed DB?</div>}
+                        {students.length === 0 && <div className="p-4 text-center">No students found. Seed the DB from the manager login page.</div>}
                     </div>
                 </section>
 
