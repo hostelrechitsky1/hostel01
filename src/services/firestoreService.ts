@@ -14,15 +14,37 @@ export const firestoreService = {
         return snapshot.docs.map(doc => doc.data() as Student);
     },
 
-    async seedStudents(rawData: string) {
-        console.log("Starting Safe Seed...");
+    async seedStudents(rawData: string, onProgress?: (msg: string) => void) {
+        const log = (msg: string) => {
+            console.log(msg);
+            if (onProgress) onProgress(msg);
+        };
+
+        log("Starting Safe Seed Engine...");
         const students = parseRawStudentData(rawData);
-        console.log(`Parsed ${students.length} students from raw data.`);
+        log(`Parsed ${students.length} students from source file.`);
 
-        // 1. Fetch existing PINs to preserve them
-        const existingDocs = await getDocs(collection(db, STUDENTS_COL));
+        // 1. Fetch existing PINs (With Timeout)
+        log("Phase 1: Downloading existing database (verify PINs)...");
+
+        // Create a timeout promise to detect network hangs
+        const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Network Timeout: Download took too long (>15s). Internet too slow?")), 15000)
+        );
+
+        let existingDocs;
+        try {
+            existingDocs = await Promise.race([
+                getDocs(collection(db, STUDENTS_COL)),
+                timeout
+            ]);
+        } catch (e: any) {
+            // Provide specific actionable error messages
+            if (e.message?.includes("Network Timeout")) throw e;
+            throw new Error(`Download Failed: ${e.message}`);
+        }
+
         const pinMap = new Map<string, string>(); // Room -> PIN
-
         existingDocs.docs.forEach(d => {
             const data = d.data() as Student;
             if (data.roomNumber && data.pin) {
@@ -30,16 +52,19 @@ export const firestoreService = {
             }
         });
 
-        console.log(`Found ${pinMap.size} existing rooms with PINs. Preserving...`);
+        log(`Phase 1 Complete. Found ${pinMap.size} existing PINs.`);
 
         // 2. Generator Helper
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
-        // 3. Batch Writes (Max 500 operations per batch)
-        const batchSize = 400; // Safe limit
+        // 3. Batch Writes
+        const batchSize = 400;
         let batch = writeBatch(db);
         let count = 0;
         let batchCount = 0;
+        const totalBatches = Math.ceil(students.length / batchSize);
+
+        log(`Phase 2: Starting Upload (${totalBatches} batches)...`);
 
         for (const student of students) {
             // Check if this room already has a PIN from DB
@@ -60,20 +85,20 @@ export const firestoreService = {
             // Commit if full
             if (count >= batchSize) {
                 batchCount++;
-                console.log(`Committing batch ${batchCount}...`);
+                log(`Uploading Batch ${batchCount}/${totalBatches}...`);
                 await batch.commit();
-                batch = writeBatch(db); // Reset
+                batch = writeBatch(db);
                 count = 0;
             }
         }
 
         // Commit final lingering batch
         if (count > 0) {
-            console.log(`Committing final batch...`);
+            log(`Uploading Final Batch...`);
             await batch.commit();
         }
 
-        console.log(`Safe Seed Complete. Processed ${students.length} students.`);
+        log(`✅ Success! Processed ${students.length} students.`);
     },
 
     async addStudent(student: Student) {
