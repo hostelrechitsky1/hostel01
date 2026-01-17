@@ -156,10 +156,11 @@ export default function ManagerPanel() {
             }
 
             // 2. Run Seed
-            addLog("Step 2: Running Safe Seed...");
+            addLog("Step 2: Processing data...");
             await firestoreService.seedStudents(studentsRawData);
-            addLog("✅ Seed Complete!");
-            alert('Success! Database verified.');
+
+            addLog("✅ Seed Complete! All Batches Committed.");
+            alert('Success! Database verified and synced.');
             refreshData();
         } catch (e: any) {
             addLog(`❌ ERROR: ${e.message}`);

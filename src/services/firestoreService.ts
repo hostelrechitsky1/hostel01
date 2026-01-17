@@ -17,6 +17,7 @@ export const firestoreService = {
     async seedStudents(rawData: string) {
         console.log("Starting Safe Seed...");
         const students = parseRawStudentData(rawData);
+        console.log(`Parsed ${students.length} students from raw data.`);
 
         // 1. Fetch existing PINs to preserve them
         const existingDocs = await getDocs(collection(db, STUDENTS_COL));
@@ -34,23 +35,44 @@ export const firestoreService = {
         // 2. Generator Helper
         const generatePin = () => Math.floor(100 + Math.random() * 900).toString();
 
-        // 3. Update/Create Students
+        // 3. Batch Writes (Max 500 operations per batch)
+        const batchSize = 400; // Safe limit
+        let batch = writeBatch(db);
+        let count = 0;
+        let batchCount = 0;
+
         for (const student of students) {
             // Check if this room already has a PIN from DB
             let pin = pinMap.get(student.roomNumber);
 
             if (!pin) {
-                // If not in DB, generate new and save to map (so roommates get same new pin)
                 pin = generatePin();
                 pinMap.set(student.roomNumber, pin);
             }
 
-            // Assign the preserved (or new) pin
             student.pin = pin;
 
-            // Use setDoc with merge: true to update name/id but KEEP other potential fields
-            await setDoc(doc(db, STUDENTS_COL, student.id), student, { merge: true });
+            // Add to batch
+            const ref = doc(db, STUDENTS_COL, student.id);
+            batch.set(ref, student, { merge: true });
+            count++;
+
+            // Commit if full
+            if (count >= batchSize) {
+                batchCount++;
+                console.log(`Committing batch ${batchCount}...`);
+                await batch.commit();
+                batch = writeBatch(db); // Reset
+                count = 0;
+            }
         }
+
+        // Commit final lingering batch
+        if (count > 0) {
+            console.log(`Committing final batch...`);
+            await batch.commit();
+        }
+
         console.log(`Safe Seed Complete. Processed ${students.length} students.`);
     },
 
