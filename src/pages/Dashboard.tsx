@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking } from '../types';
+import type { Machine, Booking, Banner } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
+import BannerCarousel from '../components/BannerCarousel';
 import { formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekday, isAutoBookingWindowOpen } from '../utils/time';
 
 export default function Dashboard() {
@@ -15,6 +16,7 @@ export default function Dashboard() {
     const [history, setHistory] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
+    const [banners, setBanners] = useState<Banner[]>([]);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
 
@@ -30,15 +32,17 @@ export default function Dashboard() {
 
         const loadData = async () => {
             try {
-                const [fetchedMachines, fetchedBookings, fetchedSettings] = await Promise.all([
+                const [fetchedMachines, fetchedBookings, fetchedSettings, fetchedBanners] = await Promise.all([
                     firestoreService.getMachines(),
                     firestoreService.getBookings(),
-                    firestoreService.getSettings()
+                    firestoreService.getSettings(),
+                    firestoreService.getBanners()
                 ]);
 
                 setMachines(fetchedMachines);
                 setAllBookings(fetchedBookings);
                 setSettings(fetchedSettings);
+                setBanners(fetchedBanners);
 
                 // Filter for My Bookings
                 const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
@@ -129,6 +133,9 @@ export default function Dashboard() {
                     <LogOut size={20} />
                 </button>
             </header>
+
+            {/* Announcements Carousel */}
+            <BannerCarousel banners={banners} />
 
             {/* Main Action */}
             <div

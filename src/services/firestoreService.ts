@@ -170,8 +170,71 @@ export const firestoreService = {
         await deleteDoc(doc(db, 'feedbacks', id));
     },
 
-    // --- Auth Sync (Helper to keep local user state) ---
+    // --- Banners / Announcements ---
+    async getBanners(): Promise<any[]> {
+        const snapshot = await getDocs(collection(db, 'banners'));
+        return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => (a.priority || 99) - (b.priority || 99));
+    },
+
+    async addBanner(banner: any) {
+        await setDoc(doc(db, 'banners', banner.id), banner);
+    },
+
+    async deleteBanner(id: string) {
+        await deleteDoc(doc(db, 'banners', id));
+    },
+
+    async toggleBannerStatus(id: string, isActive: boolean) {
+        await updateDoc(doc(db, 'banners', id), { isActive });
+    },
+
+    // --- Auth Sync ---
     // In a real app with Firebase Auth, we'd use onAuthStateChanged.
     // Here we are "simulating" login with just a student ID, so we keep using localStorage for session
     // but validate against Firestore.
+
+    // --- Tickets (Sri Lankan Night) ---
+    async createTickets(tickets: any[]) {
+        const batch = writeBatch(db);
+        tickets.forEach(ticket => {
+            const ref = doc(db, 'tickets', ticket.id);
+            batch.set(ref, ticket);
+        });
+        await batch.commit();
+    },
+
+    async validateTicket(barcode: string): Promise<{ valid: boolean; message: string; ticket?: any }> {
+        const ref = doc(db, 'tickets', barcode);
+        const snap = await getDoc(ref);
+
+        if (!snap.exists()) {
+            return { valid: false, message: 'Invalid Ticket ID' };
+        }
+
+        const ticket = snap.data();
+
+        if (ticket.status === 'used') {
+            const time = new Date(ticket.scannedAt).toLocaleTimeString();
+            return { valid: false, message: `ALREADY USED at ${time}`, ticket };
+        }
+
+        if (ticket.status === 'revoked') {
+            return { valid: false, message: 'TICKET REVOKED', ticket };
+        }
+
+        // Mark as used
+        await updateDoc(ref, {
+            status: 'used',
+            scannedAt: Date.now()
+        });
+
+        return { valid: true, message: 'Welcome!', ticket };
+    },
+
+    async getTicketStats(): Promise<{ total: number; used: number }> {
+        const snapshot = await getDocs(collection(db, 'tickets'));
+        const total = snapshot.size;
+        const used = snapshot.docs.filter(d => d.data().status === 'used').length;
+        return { total, used };
+    }
 };

@@ -46,6 +46,20 @@ export interface CalendarSlot {
   booking?: Booking;
 }
 
+export interface Banner {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkUrl?: string; // Optional external link
+  isActive: boolean;
+  createdAt: number;
+  priority: number; // For sorting (1 = top)
+  type: 'image' | 'alert'; // Future proofing
+  message?: string; // For text-only alerts
+}
+
+export type FeedbackType = 'bug' | 'feature' | 'other';
+
 export interface Feedback {
   id: string;
   studentId?: string;
@@ -55,4 +69,13 @@ export interface Feedback {
   type: 'bug' | 'feature' | 'other';
   timestamp: number;
   read: boolean;
+}
+
+export interface Ticket {
+  id: string; // The barcode value (e.g., "SLN-2026-001")
+  batchId: string; // Group ID for bulk generation
+  status: 'active' | 'used' | 'revoked';
+  generatedAt: number;
+  scannedAt?: number;
+  scannedBy?: string; // Optional: Manager who scanned it
 }
