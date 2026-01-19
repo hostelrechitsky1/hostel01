@@ -456,10 +456,25 @@ export default function ManagerPanel() {
                                 {newBanner.imageUrl && (
                                     <div>
                                         <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Preview</label>
-                                        <div className="banner-card-preview" style={{ backgroundImage: `url(${newBanner.imageUrl})` }}>
-                                            <div className="banner-card-overlay">
-                                                <div style={{ fontWeight: 'bold', fontSize: '18px' }}>{newBanner.title}</div>
-                                            </div>
+                                        <div className="banner-card-preview" style={{
+                                            background: '#1f2937', // Debug background
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}>
+                                            {/* Preview Image using direct URL helper but simple img tag for preview */}
+                                            <img
+                                                src={getDirectImageUrl(newBanner.imageUrl)}
+                                                alt="Preview"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                referrerPolicy="no-referrer"
+                                                onError={(e) => e.currentTarget.style.display = 'none'}
+                                            />
+
+                                            {newBanner.title && (
+                                                <div className="banner-card-overlay">
+                                                    <div style={{ fontWeight: 'bold', fontSize: '18px' }}>{newBanner.title}</div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -475,7 +490,13 @@ export default function ManagerPanel() {
                     <div className="grid-cols-2" style={{ marginBottom: '32px' }}>
                         {banners.map(b => (
                             <div key={b.id} className="glass-panel" style={{ padding: 0, borderRadius: '12px', overflow: 'hidden', position: 'relative', border: b.isActive ? '1px solid var(--primary)' : '1px solid var(--glass-border)', opacity: b.isActive ? 1 : 0.6 }}>
-                                <div style={{ height: '140px', background: `url(${b.imageUrl}) center/cover`, position: 'relative' }}>
+                                <div style={{ height: '140px', background: '#1f2937', position: 'relative', overflow: 'hidden' }}>
+                                    <img
+                                        src={b.imageUrl}
+                                        alt="Banner"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        referrerPolicy="no-referrer"
+                                    />
                                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)' }} />
                                     <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', color: 'white' }}>
                                         <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>{b.title}</div>
