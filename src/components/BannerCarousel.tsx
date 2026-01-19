@@ -71,34 +71,38 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                             backgroundPosition: 'center',
                         }} />
 
-                        {/* Gradient Overlay for Text */}
-                        <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0) 100%)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'flex-end',
-                            padding: '20px'
-                        }}>
-                            <h3 style={{
-                                margin: 0,
-                                color: 'white',
-                                fontSize: 'clamp(18px, 4vw, 24px)',
-                                textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                        {/* Gradient Overlay for Text - Only show if title or message exists */}
+                        {(banner.title || banner.message) && (
+                            <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0) 100%)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'flex-end',
+                                padding: '20px'
                             }}>
-                                {banner.title}
-                            </h3>
-                            {banner.message && (
-                                <p style={{
-                                    margin: '4px 0 0 0',
-                                    color: 'rgba(255,255,255,0.9)',
-                                    fontSize: '14px'
-                                }}>
-                                    {banner.message}
-                                </p>
-                            )}
-                        </div>
+                                {banner.title && (
+                                    <h3 style={{
+                                        margin: 0,
+                                        color: 'white',
+                                        fontSize: 'clamp(18px, 4vw, 24px)',
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                                    }}>
+                                        {banner.title}
+                                    </h3>
+                                )}
+                                {banner.message && (
+                                    <p style={{
+                                        margin: '4px 0 0 0',
+                                        color: 'rgba(255,255,255,0.9)',
+                                        fontSize: '14px'
+                                    }}>
+                                        {banner.message}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </a>
                 ))}
             </div>

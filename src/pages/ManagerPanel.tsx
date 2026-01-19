@@ -102,13 +102,23 @@ export default function ManagerPanel() {
             return;
         }
 
+        let finalImageUrl = newBanner.imageUrl;
+
+        // Auto-convert Google Drive links
+        if (finalImageUrl.includes('drive.google.com')) {
+            const idMatch = finalImageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (idMatch && idMatch[1]) {
+                finalImageUrl = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1920`; // Use high-res thumbnail endpoint which is more reliable than uc?export=view
+            }
+        }
+
         const banner: Banner = {
             id: `banner-${Date.now()}`,
-            title: newBanner.title || 'Announcement',
-            imageUrl: newBanner.imageUrl,
+            title: newBanner.title, // Allow empty title
+            imageUrl: finalImageUrl,
             linkUrl: newBanner.linkUrl,
             priority: newBanner.priority,
-            isActive: true,
+            isActive: true, // Default to true so they see it immediately
             createdAt: Date.now(),
             type: 'image'
         };
@@ -412,10 +422,10 @@ export default function ManagerPanel() {
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Title / Message</label>
+                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Title (Optional - Leave empty if text is in image)</label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. Hostel Night 2026!"
+                                        placeholder="Leave empty to show only image"
                                         value={newBanner.title}
                                         onChange={(e) => setNewBanner({ ...newBanner, title: e.target.value })}
                                         style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
