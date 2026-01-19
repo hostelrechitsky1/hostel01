@@ -42,14 +42,23 @@ const SmartImage = ({ src, alt, className, style }: { src: string, alt: string, 
 };
 
 export default function BannerCarousel({ banners }: InternalBannerCarouselProps) {
-    // Filter active banners and sort
+    // Filter    // activeBanners filtering is redundant if done inside the component, but good to keep clean
     const activeBanners = banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority);
     const [currentIndex, setCurrentIndex] = useState(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // Swipe State
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragOffset, setDragOffset] = useState(0);
+
+    // Minimum swipe distance to trigger slide change
+    const minSwipeDistance = 50;
+
     // Auto-play
     useEffect(() => {
-        if (activeBanners.length <= 1) return;
+        if (activeBanners.length <= 1 || isDragging) return;
 
         const startInterval = () => {
             intervalRef.current = setInterval(() => {
@@ -62,26 +71,36 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [activeBanners.length]);
-
-    // Touch state for swipe
-    const [touchStart, setTouchStart] = useState<number | null>(null);
-    const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-    // Minimum swipe distance
-    const minSwipeDistance = 50;
+    }, [activeBanners.length, isDragging]);
 
     const onTouchStart = (e: React.TouchEvent) => {
-        setTouchEnd(null);
         setTouchStart(e.targetTouches[0].clientX);
+        setTouchEnd(null);
+        setIsDragging(true);
+        setDragOffset(0);
+
+        // Pause auto-play immediately on touch
+        if (intervalRef.current) clearInterval(intervalRef.current);
     };
 
     const onTouchMove = (e: React.TouchEvent) => {
-        setTouchEnd(e.targetTouches[0].clientX);
+        if (touchStart === null) return;
+
+        const currentTouch = e.targetTouches[0].clientX;
+        setTouchEnd(currentTouch);
+
+        // Calculate raw offset
+        const diff = currentTouch - touchStart;
+        setDragOffset(diff);
     };
 
     const onTouchEnd = () => {
-        if (!touchStart || !touchEnd) return;
+        setIsDragging(false);
+        if (!touchStart || !touchEnd) {
+            // If just a tap, reset
+            setDragOffset(0);
+            return;
+        }
 
         const distance = touchStart - touchEnd;
         const isLeftSwipe = distance > minSwipeDistance;
@@ -90,12 +109,15 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         if (isLeftSwipe) {
             // Next slide
             setCurrentIndex(prev => (prev + 1) % activeBanners.length);
-            if (intervalRef.current) clearInterval(intervalRef.current); // Pause auto-play
         } else if (isRightSwipe) {
-            // Prev slide - handle negative modulo
+            // Prev slide
             setCurrentIndex(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
-            if (intervalRef.current) clearInterval(intervalRef.current); // Pause auto-play
         }
+
+        // Reset drag offset - CSS transition will handle the snap
+        setDragOffset(0);
+        setTouchStart(null);
+        setTouchEnd(null);
     };
 
     if (activeBanners.length === 0) return null;
@@ -113,17 +135,20 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                 overflow: 'hidden',
                 position: 'relative',
                 aspectRatio: '16/9',
-                maxHeight: '300px', // Prevent too tall on desktop
+                maxHeight: '300px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                background: '#1f2937' // Fallback background
+                background: '#1f2937'
             }}
         >
-            {/* Slides */}
+            {/* Slides Track */}
             <div style={{
                 display: 'flex',
-                transform: `translateX(-${currentIndex * 100}%)`,
-                transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
-                height: '100%'
+                // Using calc to combine the index offset with the manual drag offset
+                transform: `translateX(calc(-${currentIndex * 100}% + ${dragOffset}px))`,
+                // disable transition while dragging for instant feedback, enable it on release for smooth snap
+                transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
+                height: '100%',
+                width: '100%'
             }}>
                 {activeBanners.map(banner => {
                     // Check if title should be shown (ignore legacy default "Announcement")
