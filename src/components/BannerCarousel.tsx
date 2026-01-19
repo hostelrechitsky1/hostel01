@@ -6,10 +6,10 @@ interface InternalBannerCarouselProps {
 }
 
 // Helper component to handle image loading and retries
-// Helper component to handle image loading and retries
-const SmartImage = ({ src, alt, className, style }: { src: string, alt: string, className?: string, style?: any }) => {
+const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
     const [imgSrc, setImgSrc] = useState(src);
     const [error, setError] = useState(false);
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         // Adaptive sizing for Google Drive images
@@ -23,6 +23,7 @@ const SmartImage = ({ src, alt, className, style }: { src: string, alt: string, 
 
         setImgSrc(optimizedSrc);
         setError(false);
+        setLoaded(false);
     }, [src]);
 
     const handleError = () => {
@@ -35,20 +36,46 @@ const SmartImage = ({ src, alt, className, style }: { src: string, alt: string, 
             }
         }
         setError(true);
+        setLoaded(true); // Stop loading state even on error
     };
 
-    if (error) return null; // Hide completely on final error
+    if (error) return null;
 
     return (
-        <img
-            src={imgSrc}
-            alt={alt}
-            className={className}
-            style={style}
-            onError={handleError}
-            referrerPolicy="no-referrer"
-            loading="lazy" // Native lazy loading for off-screen images
-        />
+        <>
+            {/* Skeleton Loader - Visible while image is loading */}
+            {!loaded && (
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.5s infinite',
+                    zIndex: 0
+                }} />
+            )}
+            <img
+                src={imgSrc}
+                alt={alt}
+                className={className}
+                style={{
+                    ...style,
+                    opacity: loaded ? 1 : 0,
+                    transition: 'opacity 0.3s ease-in-out',
+                    zIndex: 1
+                }}
+                onLoad={() => setLoaded(true)}
+                onError={handleError}
+                referrerPolicy="no-referrer"
+                loading={priority ? "eager" : "lazy"}
+            />
+            <style>{`
+                @keyframes shimmer {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+            `}</style>
+        </>
     );
 };
 
@@ -84,17 +111,22 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         };
     }, [activeBanners.length, isDragging]);
 
-    // Preload next image logic
+    // Preload ALL active images logic
     useEffect(() => {
-        if (activeBanners.length > 1) {
-            const nextIndex = (currentIndex + 1) % activeBanners.length;
-            const nextBanner = activeBanners[nextIndex];
-            if (nextBanner && nextBanner.imageUrl) {
-                const img = new Image();
-                img.src = nextBanner.imageUrl;
-            }
+        if (activeBanners.length > 0) {
+            activeBanners.forEach(banner => {
+                if (banner.imageUrl) {
+                    const img = new Image();
+                    // Apply same mobile optimization to preload url
+                    let src = banner.imageUrl;
+                    if (window.innerWidth < 768 && src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920')) {
+                        src = src.replace('sz=w1920', 'sz=w800');
+                    }
+                    img.src = src;
+                }
+            });
         }
-    }, [currentIndex, activeBanners]);
+    }, [activeBanners]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
@@ -176,7 +208,7 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                 height: '100%',
                 width: '100%'
             }}>
-                {activeBanners.map(banner => {
+                {activeBanners.map((banner, index) => {
                     // Check if title should be shown (ignore legacy default "Announcement")
                     const showTitle = banner.title &&
                         banner.title.trim() !== '' &&
@@ -203,6 +235,7 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                             <SmartImage
                                 src={banner.imageUrl}
                                 alt={showTitle ? banner.title : 'Banner'}
+                                priority={index === currentIndex} // Prioritize loading visible slide
                                 style={{
                                     width: '100%',
                                     height: '100%',
