@@ -64,20 +64,60 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         };
     }, [activeBanners.length]);
 
+    // Touch state for swipe
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+    // Minimum swipe distance
+    const minSwipeDistance = 50;
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe) {
+            // Next slide
+            setCurrentIndex(prev => (prev + 1) % activeBanners.length);
+            if (intervalRef.current) clearInterval(intervalRef.current); // Pause auto-play
+        } else if (isRightSwipe) {
+            // Prev slide - handle negative modulo
+            setCurrentIndex(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
+            if (intervalRef.current) clearInterval(intervalRef.current); // Pause auto-play
+        }
+    };
+
     if (activeBanners.length === 0) return null;
 
     return (
-        <div className="banner-carousel-container" style={{
-            width: '100%',
-            marginBottom: '24px',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            position: 'relative',
-            aspectRatio: '16/9',
-            maxHeight: '300px', // Prevent too tall on desktop
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-            background: '#1f2937' // Fallback background
-        }}>
+        <div
+            className="banner-carousel-container"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{
+                width: '100%',
+                marginBottom: '24px',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                position: 'relative',
+                aspectRatio: '16/9',
+                maxHeight: '300px', // Prevent too tall on desktop
+                boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                background: '#1f2937' // Fallback background
+            }}
+        >
             {/* Slides */}
             <div style={{
                 display: 'flex',
