@@ -6,12 +6,22 @@ interface InternalBannerCarouselProps {
 }
 
 // Helper component to handle image loading and retries
+// Helper component to handle image loading and retries
 const SmartImage = ({ src, alt, className, style }: { src: string, alt: string, className?: string, style?: any }) => {
     const [imgSrc, setImgSrc] = useState(src);
     const [error, setError] = useState(false);
 
     useEffect(() => {
-        setImgSrc(src);
+        // Adaptive sizing for Google Drive images
+        let optimizedSrc = src;
+        const isMobile = window.innerWidth < 768;
+
+        if (src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920') && isMobile) {
+            // Downscale to w800 for mobile devices to save bandwidth/load faster
+            optimizedSrc = src.replace('sz=w1920', 'sz=w800');
+        }
+
+        setImgSrc(optimizedSrc);
         setError(false);
     }, [src]);
 
@@ -37,6 +47,7 @@ const SmartImage = ({ src, alt, className, style }: { src: string, alt: string, 
             style={style}
             onError={handleError}
             referrerPolicy="no-referrer"
+            loading="lazy" // Native lazy loading for off-screen images
         />
     );
 };
@@ -72,6 +83,18 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
     }, [activeBanners.length, isDragging]);
+
+    // Preload next image logic
+    useEffect(() => {
+        if (activeBanners.length > 1) {
+            const nextIndex = (currentIndex + 1) % activeBanners.length;
+            const nextBanner = activeBanners[nextIndex];
+            if (nextBanner && nextBanner.imageUrl) {
+                const img = new Image();
+                img.src = nextBanner.imageUrl;
+            }
+        }
+    }, [currentIndex, activeBanners]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
