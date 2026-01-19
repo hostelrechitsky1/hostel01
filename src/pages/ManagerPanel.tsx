@@ -96,33 +96,33 @@ export default function ManagerPanel() {
     };
 
     // --- Banner Management ---
+    // Helper to convert Google Drive share links to direct image URLs
+    const getDirectImageUrl = (url: string): string => {
+        if (url.includes('drive.google.com')) {
+            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+                return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1920`;
+            }
+        }
+        return url;
+    };
+
     const handleAddBanner = async () => {
         if (!newBanner.imageUrl) {
             alert('Please enter an image URL');
             return;
         }
-
-        let finalImageUrl = newBanner.imageUrl;
-
-        // Auto-convert Google Drive links
-        if (finalImageUrl.includes('drive.google.com')) {
-            const idMatch = finalImageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-            if (idMatch && idMatch[1]) {
-                finalImageUrl = `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1920`; // Use high-res thumbnail endpoint which is more reliable than uc?export=view
-            }
-        }
-
+        const finalImageUrl = getDirectImageUrl(newBanner.imageUrl);
         const banner: Banner = {
             id: `banner-${Date.now()}`,
             title: newBanner.title, // Allow empty title
             imageUrl: finalImageUrl,
             linkUrl: newBanner.linkUrl,
             priority: newBanner.priority,
-            isActive: true, // Default to true so they see it immediately
+            isActive: true,
             createdAt: Date.now(),
             type: 'image'
         };
-
         await firestoreService.addBanner(banner);
         setNewBanner({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
         setShowBannerForm(false);
