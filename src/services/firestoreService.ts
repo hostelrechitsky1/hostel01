@@ -170,7 +170,25 @@ export const firestoreService = {
         await deleteDoc(doc(db, 'feedbacks', id));
     },
 
-    // --- Auth Sync (Helper to keep local user state) ---
+    // --- Banners / Announcements ---
+    async getBanners(): Promise<any[]> {
+        const snapshot = await getDocs(collection(db, 'banners'));
+        return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => (a.priority || 99) - (b.priority || 99));
+    },
+
+    async addBanner(banner: any) {
+        await setDoc(doc(db, 'banners', banner.id), banner);
+    },
+
+    async deleteBanner(id: string) {
+        await deleteDoc(doc(db, 'banners', id));
+    },
+
+    async toggleBannerStatus(id: string, isActive: boolean) {
+        await updateDoc(doc(db, 'banners', id), { isActive });
+    },
+
+    // --- Auth Sync ---
     // In a real app with Firebase Auth, we'd use onAuthStateChanged.
     // Here we are "simulating" login with just a student ID, so we keep using localStorage for session
     // but validate against Firestore.

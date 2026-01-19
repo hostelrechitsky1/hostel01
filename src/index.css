@@ -94,6 +94,7 @@ button {
 }
 
 @keyframes modalSuccessGlow {
+
   0%,
   100% {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
@@ -231,6 +232,28 @@ button {
   background: linear-gradient(to right, #818cf8, #c7d2fe);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.banner-card-preview {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.banner-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* Light Mode Support */

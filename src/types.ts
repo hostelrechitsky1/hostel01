@@ -46,6 +46,20 @@ export interface CalendarSlot {
   booking?: Booking;
 }
 
+export interface Banner {
+  id: string;
+  title: string;
+  imageUrl: string;
+  linkUrl?: string; // Optional external link
+  isActive: boolean;
+  createdAt: number;
+  priority: number; // For sorting (1 = top)
+  type: 'image' | 'alert'; // Future proofing
+  message?: string; // For text-only alerts
+}
+
+export type FeedbackType = 'bug' | 'feature' | 'other';
+
 export interface Feedback {
   id: string;
   studentId?: string;

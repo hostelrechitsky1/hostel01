@@ -3,7 +3,7 @@ import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Calendar }
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
-import type { Booking, Machine, Student, Feedback } from '../types';
+import type { Booking, Machine, Student, Feedback, Banner } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -12,6 +12,9 @@ export default function ManagerPanel() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+    const [banners, setBanners] = useState<Banner[]>([]);
+    const [showBannerForm, setShowBannerForm] = useState(false);
+    const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
@@ -27,18 +30,20 @@ export default function ManagerPanel() {
     const refreshData = async () => {
         setLoading(true);
         try {
-            const [fetchedBookings, fetchedMachines, fetchedStudents, fetchedSettings, fetchedFeedbacks] = await Promise.all([
+            const [fetchedBookings, fetchedMachines, fetchedStudents, fetchedSettings, fetchedFeedbacks, fetchedBanners] = await Promise.all([
                 firestoreService.getBookings(),
                 firestoreService.getMachines(),
                 firestoreService.getAllStudents(),
                 firestoreService.getSettings(),
-                firestoreService.getFeedbacks()
+                firestoreService.getFeedbacks(),
+                firestoreService.getBanners()
             ]);
             setBookings(fetchedBookings);
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
             setSettings(fetchedSettings);
             setFeedbacks(fetchedFeedbacks);
+            setBanners(fetchedBanners);
         } catch (error) {
             console.error("Failed to load admin data", error);
             alert("Failed to load data from database.");
@@ -88,6 +93,42 @@ export default function ManagerPanel() {
             await firestoreService.cancelBooking(id);
             refreshData();
         }
+    };
+
+    // --- Banner Management ---
+    const handleAddBanner = async () => {
+        if (!newBanner.imageUrl) {
+            alert('Please enter an image URL');
+            return;
+        }
+
+        const banner: Banner = {
+            id: `banner-${Date.now()}`,
+            title: newBanner.title || 'Announcement',
+            imageUrl: newBanner.imageUrl,
+            linkUrl: newBanner.linkUrl,
+            priority: newBanner.priority,
+            isActive: true,
+            createdAt: Date.now(),
+            type: 'image'
+        };
+
+        await firestoreService.addBanner(banner);
+        setNewBanner({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
+        setShowBannerForm(false);
+        refreshData();
+    };
+
+    const handleDeleteBanner = async (id: string) => {
+        if (confirm('Delete this banner?')) {
+            await firestoreService.deleteBanner(id);
+            refreshData();
+        }
+    };
+
+    const toggleBanner = async (banner: Banner) => {
+        await firestoreService.toggleBannerStatus(banner.id, !banner.isActive);
+        refreshData();
     };
 
     // --- Resident Management ---
@@ -340,6 +381,122 @@ export default function ManagerPanel() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </section>
+
+                {/* Banners Management */}
+                <section>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ margin: 0 }}>Banners & Announcements ({banners.length})</h3>
+                        <button
+                            onClick={() => setShowBannerForm(!showBannerForm)}
+                            className="primary-button"
+                            style={{ padding: '10px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                        >
+                            <Plus size={18} /> Add Banner
+                        </button>
+                    </div>
+
+                    {showBannerForm && (
+                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', marginBottom: '24px', animation: 'fadeIn 0.3s ease-out' }}>
+                            <h4 style={{ margin: '0 0 16px 0' }}>New Announcement</h4>
+                            <div style={{ display: 'grid', gap: '16px' }}>
+                                <div>
+                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Image URL (Wide landscape image best)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="https://imgur.com/..."
+                                        value={newBanner.imageUrl}
+                                        onChange={(e) => setNewBanner({ ...newBanner, imageUrl: e.target.value })}
+                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Title / Message</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Hostel Night 2026!"
+                                        value={newBanner.title}
+                                        onChange={(e) => setNewBanner({ ...newBanner, title: e.target.value })}
+                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                    />
+                                </div>
+                                <div className="grid-cols-2">
+                                    <div>
+                                        <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Action Link (Optional)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="https://..."
+                                            value={newBanner.linkUrl}
+                                            onChange={(e) => setNewBanner({ ...newBanner, linkUrl: e.target.value })}
+                                            style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Priority (1 = Top)</label>
+                                        <input
+                                            type="number"
+                                            value={newBanner.priority}
+                                            onChange={(e) => setNewBanner({ ...newBanner, priority: parseInt(e.target.value) })}
+                                            style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {newBanner.imageUrl && (
+                                    <div>
+                                        <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Preview</label>
+                                        <div className="banner-card-preview" style={{ backgroundImage: `url(${newBanner.imageUrl})` }}>
+                                            <div className="banner-card-overlay">
+                                                <div style={{ fontWeight: 'bold', fontSize: '18px' }}>{newBanner.title}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                    <button onClick={handleAddBanner} className="primary-button" style={{ flex: 1, padding: '12px', borderRadius: '8px' }}>Post Announcement</button>
+                                    <button onClick={() => setShowBannerForm(false)} className="glass-button" style={{ padding: '12px 24px', borderRadius: '8px' }}>Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="grid-cols-2" style={{ marginBottom: '32px' }}>
+                        {banners.map(b => (
+                            <div key={b.id} className="glass-panel" style={{ padding: 0, borderRadius: '12px', overflow: 'hidden', position: 'relative', border: b.isActive ? '1px solid var(--primary)' : '1px solid var(--glass-border)', opacity: b.isActive ? 1 : 0.6 }}>
+                                <div style={{ height: '140px', background: `url(${b.imageUrl}) center/cover`, position: 'relative' }}>
+                                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)' }} />
+                                    <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', color: 'white' }}>
+                                        <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>{b.title}</div>
+                                        <div style={{ fontSize: '10px', opacity: 0.8 }}>Priority: {b.priority} • {format(b.createdAt, 'MMM d')}</div>
+                                    </div>
+                                    <div style={{ position: 'absolute', top: '8px', right: '8px', background: b.isActive ? 'var(--success)' : 'var(--text-muted)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                                        {b.isActive ? 'LIVE' : 'HIDDEN'}
+                                    </div>
+                                </div>
+                                <div style={{ padding: '12px', display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={() => toggleBanner(b)}
+                                        className="glass-button"
+                                        style={{ flex: 1, fontSize: '12px', padding: '8px', borderRadius: '6px' }}
+                                    >
+                                        {b.isActive ? 'Hide' : 'Show'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteBanner(b.id)}
+                                        style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                        {banners.length === 0 && !showBannerForm && (
+                            <div className="glass-panel" style={{ padding: '32px', gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
+                                No banners yet. Click "Add Banner" to start.
+                            </div>
+                        )}
                     </div>
                 </section>
 
