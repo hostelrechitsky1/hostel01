@@ -137,7 +137,10 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                 aspectRatio: '16/9',
                 maxHeight: '300px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                background: '#1f2937'
+                background: '#1f2937', // Fallback background
+                touchAction: 'pan-y', // Allow vertical scroll but reserve horizontal for custom swipe
+                userSelect: 'none',   // Prevent text selection while dragging
+                WebkitUserSelect: 'none'
             }}
         >
             {/* Slides Track */}
