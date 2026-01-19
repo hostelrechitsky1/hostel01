@@ -56,3 +56,10 @@ export interface Feedback {
   timestamp: number;
   read: boolean;
 }
+
+export interface AppSettings {
+  forceShowNextWeek: boolean;
+  forceCloseBookings: boolean;
+  bannerEnabled?: boolean;
+  bannerDriveLink?: string;
+}

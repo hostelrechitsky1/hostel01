@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking } from '../types';
+import type { Machine, Booking, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
 import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
@@ -35,7 +35,12 @@ export default function BookingFlow() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
+    const [settings, setSettings] = useState<AppSettings>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        bannerEnabled: false,
+        bannerDriveLink: ''
+    });
 
     // Async State
     const [machines, setMachines] = useState<Machine[]>([]);
