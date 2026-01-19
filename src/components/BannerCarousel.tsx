@@ -59,22 +59,24 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                             position: 'relative',
                             textDecoration: 'none',
                             display: 'block',
-                            pointerEvents: banner.linkUrl ? 'auto' : 'none'
+                            pointerEvents: banner.linkUrl ? 'auto' : 'none',
+                            backgroundColor: '#1f2937' // Dark gray background fallback
                         }}
                     >
                         {/* Image - Using img tag for better loading and accessibility */}
                         <img
                             src={banner.imageUrl}
-                            alt={banner.title || 'Announcement'}
+                            alt={banner.title || ''} // Empty alt if no title to avoid showing text on broken image
+                            referrerPolicy="no-referrer"
                             style={{
                                 width: '100%',
                                 height: '100%',
                                 objectFit: 'cover',
                                 display: 'block'
                             }}
-                            onError={() => {
-                                // Fallback for error to avoid blank space if possible, or just log
-                                console.error('Banner image failed to load', banner.imageUrl);
+                            onError={(e) => {
+                                const img = e.currentTarget;
+                                img.style.display = 'none'; // Hide broken image completely so background shows
                             }}
                         />
 
