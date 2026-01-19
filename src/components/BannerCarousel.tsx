@@ -10,6 +10,7 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     const [imgSrc, setImgSrc] = useState(src);
     const [error, setError] = useState(false);
     const [loaded, setLoaded] = useState(false);
+    const imgRef = useRef<HTMLImageElement>(null);
 
     useEffect(() => {
         // Adaptive sizing for Google Drive images
@@ -17,13 +18,21 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
         const isMobile = window.innerWidth < 768;
 
         if (src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920') && isMobile) {
-            // Downscale to w800 for mobile devices to save bandwidth/load faster
             optimizedSrc = src.replace('sz=w1920', 'sz=w800');
         }
 
-        setImgSrc(optimizedSrc);
+        // Only reset loaded state if the source is actually changing to a new URL
+        if (optimizedSrc !== imgSrc) {
+            setLoaded(false);
+            setImgSrc(optimizedSrc);
+        } else {
+            // If source is same, check if already complete (e.g. from cache or instant load)
+            if (imgRef.current?.complete) {
+                setLoaded(true);
+            }
+        }
+
         setError(false);
-        setLoaded(false);
     }, [src]);
 
     const handleError = () => {
@@ -31,7 +40,10 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
         if (imgSrc.includes('drive.google.com/thumbnail')) {
             const idMatch = imgSrc.match(/id=([^&]+)/);
             if (idMatch && idMatch[1]) {
-                setImgSrc(`https://drive.google.com/uc?export=view&id=${idMatch[1]}`);
+                const newSrc = `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
+                setImgSrc(newSrc);
+                // We are trying a new source, so we are "loading" again
+                setLoaded(false);
                 return;
             }
         }
@@ -55,6 +67,7 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
                 }} />
             )}
             <img
+                ref={imgRef}
                 src={imgSrc}
                 alt={alt}
                 className={className}
