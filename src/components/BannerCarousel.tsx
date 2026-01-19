@@ -72,7 +72,7 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                                 objectFit: 'cover',
                                 display: 'block'
                             }}
-                            onError={(e) => {
+                            onError={() => {
                                 // Fallback for error to avoid blank space if possible, or just log
                                 console.error('Banner image failed to load', banner.imageUrl);
                             }}
