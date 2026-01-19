@@ -70,3 +70,12 @@ export interface Feedback {
   timestamp: number;
   read: boolean;
 }
+
+export interface Ticket {
+  id: string; // The barcode value (e.g., "SLN-2026-001")
+  batchId: string; // Group ID for bulk generation
+  status: 'active' | 'used' | 'revoked';
+  generatedAt: number;
+  scannedAt?: number;
+  scannedBy?: string; // Optional: Manager who scanned it
+}

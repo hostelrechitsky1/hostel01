@@ -244,16 +244,27 @@ export default function ManagerPanel() {
                     >
                         <ShieldCheck size={16} /> Print Codes
                     </button>
-                    <button
-                        onClick={() => navigate('/manager/print-schedule')}
-                        className="glass-button"
-                        style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                    >
-                        <Printer size={16} /> Print Schedule
+                    <button onClick={() => navigate('/manager/print-schedule')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                        <Calendar size={18} /> Print Schedule
                     </button>
-                    <button onClick={() => navigate('/')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px' }}>
-                        Exit
+                    <button onClick={() => navigate('/manager/print-credentials')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                        <Printer size={18} /> Print Credentials
                     </button>
+                </div>
+
+                {/* Event Ticketing Section */}
+                <div style={{ background: 'linear-gradient(45deg, #1e1b4b, #312e81)', padding: '20px', borderRadius: '12px', marginBottom: '30px', border: '1px solid #4ade80', boxShadow: '0 4px 15px rgba(74, 222, 128, 0.2)' }}>
+                    <h2 style={{ margin: '0 0 15px 0', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.2rem' }}>
+                        <span style={{ fontSize: '1.5rem' }}>🎟️</span> Sri Lankan Night Ticketing
+                    </h2>
+                    <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                        <button onClick={() => navigate('/manager/tickets')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#d97706', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                            <Printer size={18} /> Generate Tickets
+                        </button>
+                        <button onClick={() => navigate('/manager/scanner')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                            <ShieldCheck size={18} /> Launch Scanner
+                        </button>
+                    </div>
                 </div>
             </div>
 
