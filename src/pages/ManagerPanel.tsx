@@ -3,9 +3,10 @@ import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Calendar }
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
-import type { Booking, Machine, Student, Feedback } from '../types';
+import type { Booking, Machine, Student, Feedback, AppSettings } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { normalizeDriveLink } from '../utils/driveLink';
 
 export default function ManagerPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -14,7 +15,14 @@ export default function ManagerPanel() {
     const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
+    const [settings, setSettings] = useState<AppSettings>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        bannerEnabled: false,
+        bannerDriveLink: ''
+    });
+    const [bannerEnabledInput, setBannerEnabledInput] = useState(false);
+    const [bannerDriveLinkInput, setBannerDriveLinkInput] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -38,6 +46,8 @@ export default function ManagerPanel() {
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
             setSettings(fetchedSettings);
+            setBannerEnabledInput(Boolean(fetchedSettings.bannerEnabled));
+            setBannerDriveLinkInput(fetchedSettings.bannerDriveLink ?? '');
             setFeedbacks(fetchedFeedbacks);
         } catch (error) {
             console.error("Failed to load admin data", error);
@@ -177,6 +187,21 @@ export default function ManagerPanel() {
         }
     };
 
+    const handleSaveBannerSettings = async () => {
+        const normalizedLink = normalizeDriveLink(bannerDriveLinkInput);
+
+        if (bannerEnabledInput && !normalizedLink) {
+            alert('Please provide a valid Google Drive link before enabling the announcement banner.');
+            return;
+        }
+
+        await firestoreService.updateSettings({
+            bannerEnabled: bannerEnabledInput,
+            bannerDriveLink: normalizedLink ?? ''
+        });
+        refreshData();
+    };
+
     if (loading && bookings.length === 0 && machines.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
@@ -244,6 +269,54 @@ export default function ManagerPanel() {
                                     style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '12px' }}
                                 >
                                     {settings.forceShowNextWeek ? 'Disable Open' : 'Force Open'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'grid', gap: '16px' }}>
+                            <div>
+                                <h3 style={{ margin: '0 0 6px 0' }}>Announcement Banner</h3>
+                                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
+                                    Add a Google Drive link to power the dashboard CTA. Supported: Drive file or folder share URLs.
+                                </p>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '14px' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={bannerEnabledInput}
+                                    onChange={(event) => setBannerEnabledInput(event.target.checked)}
+                                    style={{ width: '18px', height: '18px' }}
+                                />
+                                Enable announcement banner
+                            </label>
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                                <input
+                                    type="url"
+                                    value={bannerDriveLinkInput}
+                                    onChange={(event) => setBannerDriveLinkInput(event.target.value)}
+                                    placeholder="https://drive.google.com/..."
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        background: 'var(--glass-bg)',
+                                        border: '1px solid var(--glass-border)',
+                                        color: 'var(--text-main)',
+                                        fontSize: '14px',
+                                        outline: 'none'
+                                    }}
+                                />
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                    We store a cleaned URL and reject invalid formats when you save.
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={handleSaveBannerSettings}
+                                    className="primary-button"
+                                    style={{ padding: '10px 18px', borderRadius: '10px', fontSize: '13px' }}
+                                >
+                                    Save Banner Settings
                                 </button>
                             </div>
                         </div>

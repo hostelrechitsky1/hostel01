@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking } from '../types';
+import type { Machine, Booking, AppSettings } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 import { formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekday, isAutoBookingWindowOpen } from '../utils/time';
 
 export default function Dashboard() {
@@ -16,7 +17,12 @@ export default function Dashboard() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
+    const [settings, setSettings] = useState<AppSettings>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        bannerEnabled: false,
+        bannerDriveLink: ''
+    });
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -113,6 +119,9 @@ export default function Dashboard() {
     if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
     if (!user) return null;
 
+    const bannerCtaUrl = settings.bannerEnabled && settings.bannerDriveLink ? settings.bannerDriveLink.trim() : '';
+    const shouldShowBanner = Boolean(settings.bannerEnabled && bannerCtaUrl);
+
     return (
         <div className="container animate-fade-in">
             {/* Header */}
@@ -129,6 +138,17 @@ export default function Dashboard() {
                     <LogOut size={20} />
                 </button>
             </header>
+
+            {shouldShowBanner ? (
+                <div style={{ marginBottom: '32px' }}>
+                    <AnnouncementBanner
+                        title="Laundry room update"
+                        subtitle="Check the latest announcement and keep your weekly schedule in sync."
+                        ctaLabel="Open Drive"
+                        ctaUrl={bannerCtaUrl}
+                    />
+                </div>
+            ) : null}
 
             {/* Main Action */}
             <div
