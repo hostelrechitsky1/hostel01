@@ -62,17 +62,24 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
                             pointerEvents: banner.linkUrl ? 'auto' : 'none'
                         }}
                     >
-                        {/* Background Image */}
-                        <div style={{
-                            width: '100%',
-                            height: '100%',
-                            backgroundImage: `url(${banner.imageUrl})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                        }} />
+                        {/* Image - Using img tag for better loading and accessibility */}
+                        <img
+                            src={banner.imageUrl}
+                            alt={banner.title || 'Announcement'}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                display: 'block'
+                            }}
+                            onError={(e) => {
+                                // Fallback for error to avoid blank space if possible, or just log
+                                console.error('Banner image failed to load', banner.imageUrl);
+                            }}
+                        />
 
-                        {/* Gradient Overlay for Text - Only show if title or message exists */}
-                        {(banner.title || banner.message) && (
+                        {/* Gradient Overlay for Text - Only show if title or message exists & is not empty */}
+                        {((banner.title && banner.title.trim() !== '') || (banner.message && banner.message.trim() !== '')) && (
                             <div style={{
                                 position: 'absolute',
                                 inset: 0,
