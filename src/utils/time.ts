@@ -63,6 +63,6 @@ export const isAutoBookingWindowOpen = (now: Date = new Date()) => {
     const hour = belarusNow.getUTCHours();
 
     if (day === 6 && hour >= 16) return true;
-    if (day === 0) return true;
+    if (day === 0 && hour < 20) return true;
     return false;
 };

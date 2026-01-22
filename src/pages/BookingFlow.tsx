@@ -234,7 +234,7 @@ export default function BookingFlow() {
                     {settings.forceCloseBookings ? 'Bookings Are Closed' : 'Bookings Are Currently Closed'}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-                    {settings.forceCloseBookings ? 'Paused by admin.' : 'Open Saturday 16:00 - Monday 09:00.'}
+                    {settings.forceCloseBookings ? 'Paused by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
                 </p>
                 <button onClick={() => navigate('/')} className="primary-button" style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <ChevronLeft size={20} /> Back to Dashboard
