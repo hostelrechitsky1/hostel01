@@ -139,10 +139,10 @@ export default function Dashboard() {
                         zIndex: 100,
                         padding: '12px 16px',
                         background: settings.topAlert.type === 'urgent'
-                            ? 'rgba(239, 68, 68, 0.4)' // Red glass
+                            ? 'rgba(239, 68, 68, 0.25)' // Red glass
                             : settings.topAlert.type === 'warning'
-                                ? 'rgba(245, 158, 11, 0.4)' // Amber glass
-                                : 'rgba(59, 130, 246, 0.4)', // Blue glass
+                                ? 'rgba(245, 158, 11, 0.25)' // Amber glass
+                                : 'rgba(59, 130, 246, 0.25)', // Blue glass
                         backdropFilter: 'blur(12px)',
                         WebkitBackdropFilter: 'blur(12px)',
                         display: 'flex',

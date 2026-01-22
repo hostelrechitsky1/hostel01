@@ -143,11 +143,23 @@ export const firestoreService = {
         if (snap.empty) return defaultSettings;
 
         const configDoc = snap.docs.find(d => d.id === 'config');
-        return configDoc ? { ...defaultSettings, ...(configDoc.data() as Partial<AppSettings>) } : defaultSettings;
+        if (!configDoc) return defaultSettings;
+
+        const data = configDoc.data() as Partial<AppSettings>;
+        return {
+            ...defaultSettings,
+            ...data,
+            // Force number type to prevent "3" string vs 3 number issues
+            maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay
+        };
     },
 
     async updateSettings(settings: Partial<AppSettings>) {
-        await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
+        const cleanSettings = { ...settings };
+        if (cleanSettings.maintenanceDay !== undefined) {
+            cleanSettings.maintenanceDay = Number(cleanSettings.maintenanceDay);
+        }
+        await setDoc(doc(db, 'settings', 'config'), cleanSettings, { merge: true });
     },
 
     async clearAllBookings() {
