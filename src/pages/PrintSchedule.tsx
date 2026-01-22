@@ -196,44 +196,46 @@ export default function PrintSchedule() {
                                             <td style={{ ...cellStyle, background: '#f5f5f5', fontWeight: 'bold', textAlign: 'center' }}>
                                                 {time}
                                             </td>
+                                            {weekDays.map(day => {
                                                 // Find booking
                                                 const booking = bookings.find(b =>
-                                            b.machineId === machine.id &&
-                                            b.startTime === time &&
-                                            b.date === formatBelarusDate(day)
-                                            );
+                                                    b.machineId === machine.id &&
+                                                    b.startTime === time &&
+                                                    b.date === formatBelarusDate(day)
+                                                );
                                                 const student = booking ? students.find(s => s.id === booking.studentId) : null;
 
-                                            if (booking) {
+                                                if (booking) {
                                                     return (
-                                            <td key={day.toString()} style={cellStyle}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
-                                                    <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                                                        {booking.roomNumber || student?.roomNumber || '???'}
-                                                    </span>
-                                                    <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                                                        {booking.studentName || student?.name || 'Unknown'}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            );
+                                                        <td key={day.toString()} style={cellStyle}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
+                                                                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                                                    {booking.roomNumber || student?.roomNumber || '???'}
+                                                                </span>
+                                                                <span style={{ fontSize: '12px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                                                    {booking.studentName || student?.name || 'Unknown'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                    );
                                                 }
 
-                                            const isMaintenanceDay = getBelarusWeekday(day) === maintenanceDay;
+                                                const isMaintenanceDay = getBelarusWeekday(day) === maintenanceDay;
 
-                                            if (isMaintenanceDay) {
+                                                if (isMaintenanceDay) {
                                                     return (
-                                            <td key={day.toString()} style={{ ...cellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
-                                                <div style={{ transform: 'rotate(-45deg)', fontSize: '10px', letterSpacing: '1px' }}>MAINTENANCE</div>
-                                            </td>
-                                            );
+                                                        <td key={day.toString()} style={{ ...cellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
+                                                            <div style={{ transform: 'rotate(-45deg)', fontSize: '10px', letterSpacing: '1px' }}>MAINTENANCE</div>
+                                                        </td>
+                                                    );
                                                 }
 
-                                            return (
-                                            <td key={day.toString()} style={cellStyle}>
-                                                {/* Empty cell */}
-                                            </td>
-                                            );
+                                                return (
+                                                    <td key={day.toString()} style={cellStyle}>
+                                                        {/* Empty cell */}
+                                                    </td>
+                                                );
+                                            })}
                                         </tr>
                                     ))}
                                 </tbody>
