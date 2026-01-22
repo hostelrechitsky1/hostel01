@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction } from 'firebase/firestore';
-import type { Student, Machine, Booking } from '../types';
+import type { Student, Machine, Booking, AppSettings } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
 
@@ -131,15 +131,22 @@ export const firestoreService = {
     },
 
     // --- Settings ---
-    async getSettings(): Promise<{ forceShowNextWeek: boolean; forceCloseBookings: boolean }> {
+    async getSettings(): Promise<AppSettings> {
         const snap = await getDocs(collection(db, 'settings'));
-        if (snap.empty) return { forceShowNextWeek: false, forceCloseBookings: false };
+        const defaultSettings: AppSettings = {
+            forceShowNextWeek: false,
+            forceCloseBookings: false,
+            maintenanceDay: 3, // Default Wednesday
+            topAlert: { message: '', isActive: false, type: 'info' }
+        };
+
+        if (snap.empty) return defaultSettings;
 
         const configDoc = snap.docs.find(d => d.id === 'config');
-        return configDoc ? (configDoc.data() as { forceShowNextWeek: boolean; forceCloseBookings: boolean }) : { forceShowNextWeek: false, forceCloseBookings: false };
+        return configDoc ? { ...defaultSettings, ...(configDoc.data() as Partial<AppSettings>) } : defaultSettings;
     },
 
-    async updateSettings(settings: { forceShowNextWeek?: boolean; forceCloseBookings?: boolean }) {
+    async updateSettings(settings: Partial<AppSettings>) {
         await setDoc(doc(db, 'settings', 'config'), settings, { merge: true });
     },
 

@@ -70,3 +70,16 @@ export interface Feedback {
   timestamp: number;
   read: boolean;
 }
+
+export interface TopAlert {
+  message: string;
+  isActive: boolean;
+  type: 'info' | 'warning' | 'urgent';
+}
+
+export interface AppSettings {
+  forceShowNextWeek: boolean;
+  forceCloseBookings: boolean;
+  maintenanceDay: number; // 0=Sun, 1=Mon, ..., 6=Sat
+  topAlert?: TopAlert;
+}

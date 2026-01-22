@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Calendar } from 'lucide-react';
+import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
-import type { Booking, Machine, Student, Feedback, Banner } from '../types';
+import type { Booking, Machine, Student, Feedback, Banner, AppSettings } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -17,7 +17,7 @@ export default function ManagerPanel() {
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
+    const [settings, setSettings] = useState<AppSettings>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3, topAlert: { message: '', isActive: false, type: 'info' } });
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -228,6 +228,17 @@ export default function ManagerPanel() {
         }
     };
 
+    const updateSettings = async (newSettings: Partial<AppSettings>) => {
+        try {
+            await firestoreService.updateSettings(newSettings);
+            // Optimistic update
+            setSettings(prev => ({ ...prev, ...newSettings }));
+        } catch (error) {
+            console.error("Failed to update settings:", error);
+            alert("Failed to save settings");
+        }
+    };
+
     if (loading && bookings.length === 0 && machines.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
@@ -259,466 +270,492 @@ export default function ManagerPanel() {
 
             <div style={{ display: 'grid', gap: '32px' }}>
                 {/* Global Settings */}
-                <section>
-                    <div className="grid-cols-2">
-                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                                <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Calendar size={20} className="text-primary" /> Schedule Controls
-                                </h3>
-                                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                    {settings.forceCloseBookings
-                                        ? <span style={{ color: 'var(--error)' }}>CLOSED (Forced)</span>
-                                        : settings.forceShowNextWeek
-                                            ? <span style={{ color: 'var(--success)' }}>OPEN (Forced)</span>
-                                            : <span>Auto: Sat 4PM - Mon 9AM</span>}
+                <div style={{ background: '#1f2937', padding: '24px', borderRadius: '16px', border: '1px solid #374151' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #374151' }}>
+                        <div style={{ padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '8px' }}>
+                            <AlertTriangle size={24} color="#3b82f6" />
+                        </div>
+                        <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'white' }}>System Configuration</h2>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '24px' }}>
+                        {/* Maintenance Schedule */}
+                        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#9ca3af' }}>Maintenance Day</label>
+                            <select
+                                value={settings.maintenanceDay ?? 3} // Default Wed
+                                onChange={(e) => updateSettings({ maintenanceDay: parseInt(e.target.value) })}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    borderRadius: '8px',
+                                    background: '#374151',
+                                    border: '1px solid #4b5563',
+                                    color: 'white',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => (
+                                    <option key={day} value={index}>{day}</option>
+                                ))}
+                            </select>
+                            <p style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280' }}>
+                                Students will see "Maintenance Day" on this day of the week.
+                            </p>
+                        </div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                            {settings.forceCloseBookings
+                                ? <span style={{ color: 'var(--error)' }}>CLOSED (Forced)</span>
+                                : settings.forceShowNextWeek
+                                    ? <span style={{ color: 'var(--success)' }}>OPEN (Forced)</span>
+                                    : <span>Auto: Sat 4PM - Mon 9AM</span>}
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                        <button
+                            onClick={() => handleToggleSetting('forceCloseBookings')}
+                            className="glass-button"
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                background: settings.forceCloseBookings ? 'rgba(239, 68, 68, 0.2)' : undefined,
+                                color: settings.forceCloseBookings ? 'var(--error)' : undefined,
+                                border: settings.forceCloseBookings ? '1px solid var(--error)' : undefined,
+                                fontSize: '12px'
+                            }}
+                        >
+                            {settings.forceCloseBookings ? 'Unlock Booking' : 'Force Close'}
+                        </button>
+                        <button
+                            onClick={() => handleToggleSetting('forceShowNextWeek')}
+                            className={settings.forceShowNextWeek ? 'primary-button' : 'glass-button'}
+                            style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '12px' }}
+                        >
+                            {settings.forceShowNextWeek ? 'Disable Open' : 'Force Open'}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                    <div>
+                        <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--error)' }}>
+                            <AlertTriangle size={20} /> Danger Zone
+                        </h3>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                            Destructive Actions
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                        <button
+                            onClick={handleClearBookings}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                background: 'rgba(239, 68, 68, 0.2)',
+                                color: 'var(--error)',
+                                border: '1px solid var(--error)',
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                            }}
+                        >
+                            <Trash2 size={14} style={{ marginRight: '8px' }} /> Clear All Books
+                        </button>
+                        <button
+                            onClick={handleSeedDatabase}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                background: 'rgba(239, 68, 68, 0.2)',
+                                color: 'var(--error)',
+                                border: '1px solid var(--error)',
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                            }}
+                        >
+                            <Database size={14} style={{ marginRight: '8px' }} /> Reset DB/PINs
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            {/* Machine Management */}
+            <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Machine Management</h3>
+                    <button
+                        onClick={handleAddMachine}
+                        className="primary-button"
+                        style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <Plus size={20} /> Add Machine
+                    </button>
+                </div>
+                <div className="grid-cols-2">
+                    {machines.map(m => (
+                        <div key={m.id} className="glass-panel" style={{ padding: '16px', borderRadius: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <div>
+                                    <div style={{ fontWeight: 600 }}>{m.name}</div>
+                                    <div style={{ fontSize: '12px', color: m.status === 'available' ? 'var(--success)' : 'var(--error)' }}>{m.status}</div>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
                                 <button
-                                    onClick={() => handleToggleSetting('forceCloseBookings')}
+                                    onClick={() => toggleMachine(m)}
                                     className="glass-button"
-                                    style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '8px',
-                                        background: settings.forceCloseBookings ? 'rgba(239, 68, 68, 0.2)' : undefined,
-                                        color: settings.forceCloseBookings ? 'var(--error)' : undefined,
-                                        border: settings.forceCloseBookings ? '1px solid var(--error)' : undefined,
-                                        fontSize: '12px'
-                                    }}
+                                    style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', flex: 1 }}
                                 >
-                                    {settings.forceCloseBookings ? 'Unlock Booking' : 'Force Close'}
+                                    {m.status === 'available' ? 'Disable' : 'Enable'}
                                 </button>
                                 <button
-                                    onClick={() => handleToggleSetting('forceShowNextWeek')}
-                                    className={settings.forceShowNextWeek ? 'primary-button' : 'glass-button'}
-                                    style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '12px' }}
+                                    onClick={() => handleDeleteMachine(m.id, m.name)}
+                                    style={{
+                                        fontSize: '12px',
+                                        padding: '6px 12px',
+                                        borderRadius: '8px',
+                                        background: 'rgba(239, 68, 68, 0.15)',
+                                        color: 'var(--error)',
+                                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
                                 >
-                                    {settings.forceShowNextWeek ? 'Disable Open' : 'Force Open'}
+                                    <Trash2 size={14} /> Delete
                                 </button>
                             </div>
                         </div>
+                    ))}
+                </div>
+            </section>
 
-                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+            {/* Banners Management */}
+            <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Banners & Announcements ({banners.length})</h3>
+                    <button
+                        onClick={() => setShowBannerForm(!showBannerForm)}
+                        className="primary-button"
+                        style={{ padding: '10px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <Plus size={18} /> Add Banner
+                    </button>
+                </div>
+
+                {showBannerForm && (
+                    <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', marginBottom: '24px', animation: 'fadeIn 0.3s ease-out' }}>
+                        <h4 style={{ margin: '0 0 16px 0' }}>New Announcement</h4>
+                        <div style={{ display: 'grid', gap: '16px' }}>
                             <div>
-                                <h3 style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--error)' }}>
-                                    <AlertTriangle size={20} /> Danger Zone
-                                </h3>
-                                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                    Destructive Actions
+                                <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Image URL (Wide landscape image best)</label>
+                                <input
+                                    type="text"
+                                    placeholder="https://imgur.com/..."
+                                    value={newBanner.imageUrl}
+                                    onChange={(e) => setNewBanner({ ...newBanner, imageUrl: e.target.value })}
+                                    style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Title (Optional - Leave empty if text is in image)</label>
+                                <input
+                                    type="text"
+                                    placeholder="Leave empty to show only image"
+                                    value={newBanner.title}
+                                    onChange={(e) => setNewBanner({ ...newBanner, title: e.target.value })}
+                                    style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                />
+                            </div>
+                            <div className="grid-cols-2">
+                                <div>
+                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Action Link (Optional)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="https://..."
+                                        value={newBanner.linkUrl}
+                                        onChange={(e) => setNewBanner({ ...newBanner, linkUrl: e.target.value })}
+                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Priority (1 = Top)</label>
+                                    <input
+                                        type="number"
+                                        value={newBanner.priority}
+                                        onChange={(e) => setNewBanner({ ...newBanner, priority: parseInt(e.target.value) })}
+                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
+                                    />
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
-                                <button
-                                    onClick={handleClearBookings}
-                                    style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '8px',
-                                        background: 'rgba(239, 68, 68, 0.2)',
-                                        color: 'var(--error)',
-                                        border: '1px solid var(--error)',
-                                        cursor: 'pointer',
-                                        fontSize: '12px'
-                                    }}
-                                >
-                                    <Trash2 size={14} style={{ marginRight: '8px' }} /> Clear All Books
-                                </button>
-                                <button
-                                    onClick={handleSeedDatabase}
-                                    style={{
-                                        padding: '8px 16px',
-                                        borderRadius: '8px',
-                                        background: 'rgba(239, 68, 68, 0.2)',
-                                        color: 'var(--error)',
-                                        border: '1px solid var(--error)',
-                                        cursor: 'pointer',
-                                        fontSize: '12px'
-                                    }}
-                                >
-                                    <Database size={14} style={{ marginRight: '8px' }} /> Reset DB/PINs
-                                </button>
+
+                            {newBanner.imageUrl && (
+                                <div>
+                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Preview</label>
+                                    <div className="banner-card-preview" style={{
+                                        background: '#1f2937', // Debug background
+                                        position: 'relative',
+                                        overflow: 'hidden'
+                                    }}>
+                                        {/* Preview Image using direct URL helper but simple img tag for preview */}
+                                        <img
+                                            src={getDirectImageUrl(newBanner.imageUrl)}
+                                            alt="Preview"
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            referrerPolicy="no-referrer"
+                                            onError={(e) => e.currentTarget.style.display = 'none'}
+                                        />
+
+                                        {newBanner.title && (
+                                            <div className="banner-card-overlay">
+                                                <div style={{ fontWeight: 'bold', fontSize: '18px' }}>{newBanner.title}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                <button onClick={handleAddBanner} className="primary-button" style={{ flex: 1, padding: '12px', borderRadius: '8px' }}>Post Announcement</button>
+                                <button onClick={() => setShowBannerForm(false)} className="glass-button" style={{ padding: '12px 24px', borderRadius: '8px' }}>Cancel</button>
                             </div>
                         </div>
                     </div>
-                </section>
+                )}
 
-                {/* Machine Management */}
-                <section>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0 }}>Machine Management</h3>
-                        <button
-                            onClick={handleAddMachine}
-                            className="primary-button"
-                            style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                        >
-                            <Plus size={20} /> Add Machine
-                        </button>
-                    </div>
-                    <div className="grid-cols-2">
-                        {machines.map(m => (
-                            <div key={m.id} className="glass-panel" style={{ padding: '16px', borderRadius: '12px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 600 }}>{m.name}</div>
-                                        <div style={{ fontSize: '12px', color: m.status === 'available' ? 'var(--success)' : 'var(--error)' }}>{m.status}</div>
-                                    </div>
+                <div className="grid-cols-2" style={{ marginBottom: '32px' }}>
+                    {banners.map(b => (
+                        <div key={b.id} className="glass-panel" style={{ padding: 0, borderRadius: '12px', overflow: 'hidden', position: 'relative', border: b.isActive ? '1px solid var(--primary)' : '1px solid var(--glass-border)', opacity: b.isActive ? 1 : 0.6 }}>
+                            <div style={{ height: '140px', background: '#1f2937', position: 'relative', overflow: 'hidden' }}>
+                                <img
+                                    src={b.imageUrl}
+                                    alt="Banner"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    referrerPolicy="no-referrer"
+                                />
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)' }} />
+                                <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', color: 'white' }}>
+                                    <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>{b.title}</div>
+                                    <div style={{ fontSize: '10px', opacity: 0.8 }}>Priority: {b.priority} • {format(b.createdAt, 'MMM d')}</div>
                                 </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button
-                                        onClick={() => toggleMachine(m)}
-                                        className="glass-button"
-                                        style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', flex: 1 }}
-                                    >
-                                        {m.status === 'available' ? 'Disable' : 'Enable'}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteMachine(m.id, m.name)}
-                                        style={{
-                                            fontSize: '12px',
-                                            padding: '6px 12px',
-                                            borderRadius: '8px',
-                                            background: 'rgba(239, 68, 68, 0.15)',
-                                            color: 'var(--error)',
-                                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}
-                                    >
-                                        <Trash2 size={14} /> Delete
-                                    </button>
+                                <div style={{ position: 'absolute', top: '8px', right: '8px', background: b.isActive ? 'var(--success)' : 'var(--text-muted)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                                    {b.isActive ? 'LIVE' : 'HIDDEN'}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                </section>
-
-                {/* Banners Management */}
-                <section>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0 }}>Banners & Announcements ({banners.length})</h3>
-                        <button
-                            onClick={() => setShowBannerForm(!showBannerForm)}
-                            className="primary-button"
-                            style={{ padding: '10px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                        >
-                            <Plus size={18} /> Add Banner
-                        </button>
-                    </div>
-
-                    {showBannerForm && (
-                        <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', marginBottom: '24px', animation: 'fadeIn 0.3s ease-out' }}>
-                            <h4 style={{ margin: '0 0 16px 0' }}>New Announcement</h4>
-                            <div style={{ display: 'grid', gap: '16px' }}>
-                                <div>
-                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Image URL (Wide landscape image best)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="https://imgur.com/..."
-                                        value={newBanner.imageUrl}
-                                        onChange={(e) => setNewBanner({ ...newBanner, imageUrl: e.target.value })}
-                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Title (Optional - Leave empty if text is in image)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Leave empty to show only image"
-                                        value={newBanner.title}
-                                        onChange={(e) => setNewBanner({ ...newBanner, title: e.target.value })}
-                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
-                                    />
-                                </div>
-                                <div className="grid-cols-2">
-                                    <div>
-                                        <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Action Link (Optional)</label>
-                                        <input
-                                            type="text"
-                                            placeholder="https://..."
-                                            value={newBanner.linkUrl}
-                                            onChange={(e) => setNewBanner({ ...newBanner, linkUrl: e.target.value })}
-                                            style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Priority (1 = Top)</label>
-                                        <input
-                                            type="number"
-                                            value={newBanner.priority}
-                                            onChange={(e) => setNewBanner({ ...newBanner, priority: parseInt(e.target.value) })}
-                                            style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
-                                        />
-                                    </div>
-                                </div>
-
-                                {newBanner.imageUrl && (
-                                    <div>
-                                        <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Preview</label>
-                                        <div className="banner-card-preview" style={{
-                                            background: '#1f2937', // Debug background
-                                            position: 'relative',
-                                            overflow: 'hidden'
-                                        }}>
-                                            {/* Preview Image using direct URL helper but simple img tag for preview */}
-                                            <img
-                                                src={getDirectImageUrl(newBanner.imageUrl)}
-                                                alt="Preview"
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                referrerPolicy="no-referrer"
-                                                onError={(e) => e.currentTarget.style.display = 'none'}
-                                            />
-
-                                            {newBanner.title && (
-                                                <div className="banner-card-overlay">
-                                                    <div style={{ fontWeight: 'bold', fontSize: '18px' }}>{newBanner.title}</div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                                    <button onClick={handleAddBanner} className="primary-button" style={{ flex: 1, padding: '12px', borderRadius: '8px' }}>Post Announcement</button>
-                                    <button onClick={() => setShowBannerForm(false)} className="glass-button" style={{ padding: '12px 24px', borderRadius: '8px' }}>Cancel</button>
-                                </div>
+                            <div style={{ padding: '12px', display: 'flex', gap: '8px' }}>
+                                <button
+                                    onClick={() => toggleBanner(b)}
+                                    className="glass-button"
+                                    style={{ flex: 1, fontSize: '12px', padding: '8px', borderRadius: '6px' }}
+                                >
+                                    {b.isActive ? 'Hide' : 'Show'}
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteBanner(b.id)}
+                                    style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}
+                                >
+                                    <Trash2 size={16} />
+                                </button>
                             </div>
+                        </div>
+                    ))}
+                    {banners.length === 0 && !showBannerForm && (
+                        <div className="glass-panel" style={{ padding: '32px', gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
+                            No banners yet. Click "Add Banner" to start.
                         </div>
                     )}
+                </div>
+            </section>
 
-                    <div className="grid-cols-2" style={{ marginBottom: '32px' }}>
-                        {banners.map(b => (
-                            <div key={b.id} className="glass-panel" style={{ padding: 0, borderRadius: '12px', overflow: 'hidden', position: 'relative', border: b.isActive ? '1px solid var(--primary)' : '1px solid var(--glass-border)', opacity: b.isActive ? 1 : 0.6 }}>
-                                <div style={{ height: '140px', background: '#1f2937', position: 'relative', overflow: 'hidden' }}>
-                                    <img
-                                        src={b.imageUrl}
-                                        alt="Banner"
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        referrerPolicy="no-referrer"
-                                    />
-                                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)' }} />
-                                    <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', color: 'white' }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>{b.title}</div>
-                                        <div style={{ fontSize: '10px', opacity: 0.8 }}>Priority: {b.priority} • {format(b.createdAt, 'MMM d')}</div>
+            {/* Resident Management */}
+            <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0 }}>Residents</h3>
+                    <button
+                        onClick={handleAddStudent}
+                        className="primary-button"
+                        style={{ padding: '10px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <Plus size={18} /> Add Resident
+                    </button>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                    <input
+                        type="text"
+                        placeholder="Search residents by Name or Room..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            borderRadius: '12px',
+                            background: 'var(--glass-bg)',
+                            border: '1px solid var(--glass-border)',
+                            color: 'var(--text-main)',
+                            fontSize: '16px',
+                            outline: 'none'
+                        }}
+                    />
+                </div>
+
+                <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0, borderRadius: '16px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                        <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
+                            <tr>
+                                <th style={{ padding: '12px', textAlign: 'left' }}>Room</th>
+                                <th style={{ padding: '12px', textAlign: 'left' }}>Name</th>
+                                <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {students
+                                .filter(s =>
+                                    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    s.roomNumber.toLowerCase().includes(searchTerm.toLowerCase())
+                                )
+                                .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
+                                .slice(0, 50) // Limit display for perf
+                                .map(s => (
+                                    <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                                        <td style={{ padding: '12px', fontWeight: 600 }}>{s.roomNumber}</td>
+                                        <td style={{ padding: '12px' }}>{s.name}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                                            <button onClick={() => handleEditStudent(s)} style={{ marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)' }}>Edit</button>
+                                            <button onClick={() => handleDeleteStudent(s)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--error)' }}>Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                        </tbody>
+                    </table>
+                    {students.length === 0 && <div className="p-4 text-center">No students found. Seed DB?</div>}
+                </div>
+            </section>
+
+            {/* Recent Bookings */}
+            <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                    <h3 style={{ margin: 0 }}>All Bookings ({bookings.length})</h3>
+                    <input
+                        type="text"
+                        placeholder="Search Name or Room..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{
+                            padding: '10px 16px',
+                            borderRadius: '12px',
+                            border: '1px solid var(--glass-border)',
+                            background: 'var(--glass-bg)',
+                            color: 'var(--text-main)',
+                            outline: 'none',
+                            width: '100%',
+                            maxWidth: '250px'
+                        }}
+                    />
+                </div>
+
+                <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', background: 'none', border: 'none', padding: 0 }}>
+                    {filteredBookings.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {filteredBookings.map(b => {
+                                const student = students.find(s => s.id === b.studentId);
+                                const machine = machines.find(m => m.id === b.machineId);
+                                return (
+                                    <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, fontSize: '16px' }}>
+                                                {student?.name || 'Unknown'} <span style={{ opacity: 0.7, fontSize: '14px' }}>({student?.roomNumber || '?'})</span>
+                                            </div>
+                                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                                {format(new Date(b.date), 'MMM d')} • {b.startTime} • {machine?.name || 'Unknown Machine'}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => cancelBooking(b.id)}
+                                            style={{
+                                                color: 'var(--error)',
+                                                background: 'rgba(239, 68, 68, 0.1)',
+                                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                borderRadius: '8px',
+                                                padding: '8px 12px',
+                                                cursor: 'pointer',
+                                                fontSize: '13px'
+                                            }}
+                                        >
+                                            Cancel
+                                        </button>
                                     </div>
-                                    <div style={{ position: 'absolute', top: '8px', right: '8px', background: b.isActive ? 'var(--success)' : 'var(--text-muted)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
-                                        {b.isActive ? 'LIVE' : 'HIDDEN'}
-                                    </div>
-                                </div>
-                                <div style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-                                    <button
-                                        onClick={() => toggleBanner(b)}
-                                        className="glass-button"
-                                        style={{ flex: 1, fontSize: '12px', padding: '8px', borderRadius: '6px' }}
-                                    >
-                                        {b.isActive ? 'Hide' : 'Show'}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteBanner(b.id)}
-                                        style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                        {banners.length === 0 && !showBannerForm && (
-                            <div className="glass-panel" style={{ padding: '32px', gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
-                                No banners yet. Click "Add Banner" to start.
-                            </div>
-                        )}
-                    </div>
-                </section>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
+                            No bookings found matching "{searchTerm}"
+                        </div>
+                    )}
+                </div>
+            </section>
 
-                {/* Resident Management */}
-                <section>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0 }}>Residents</h3>
-                        <button
-                            onClick={handleAddStudent}
-                            className="primary-button"
-                            style={{ padding: '10px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                        >
-                            <Plus size={18} /> Add Resident
-                        </button>
-                    </div>
-
-                    <div style={{ marginBottom: '16px' }}>
-                        <input
-                            type="text"
-                            placeholder="Search residents by Name or Room..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                borderRadius: '12px',
-                                background: 'var(--glass-bg)',
-                                border: '1px solid var(--glass-border)',
-                                color: 'var(--text-main)',
-                                fontSize: '16px',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
-
-                    <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0, borderRadius: '16px' }}>
+            {/* Feedback Section */}
+            <section>
+                <h3 style={{ marginBottom: '16px' }}>Student Feedback ({feedbacks.length})</h3>
+                <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+                    {feedbacks.length > 0 ? (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                             <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
                                 <tr>
-                                    <th style={{ padding: '12px', textAlign: 'left' }}>Room</th>
-                                    <th style={{ padding: '12px', textAlign: 'left' }}>Name</th>
-                                    <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
+                                    <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
+                                    <th style={{ padding: '12px', textAlign: 'left' }}>From</th>
+                                    <th style={{ padding: '12px', textAlign: 'left' }}>Message</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>Time</th>
+                                    <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {students
-                                    .filter(s =>
-                                        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                        s.roomNumber.toLowerCase().includes(searchTerm.toLowerCase())
-                                    )
-                                    .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
-                                    .slice(0, 50) // Limit display for perf
-                                    .map(s => (
-                                        <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                            <td style={{ padding: '12px', fontWeight: 600 }}>{s.roomNumber}</td>
-                                            <td style={{ padding: '12px' }}>{s.name}</td>
-                                            <td style={{ padding: '12px', textAlign: 'right' }}>
-                                                <button onClick={() => handleEditStudent(s)} style={{ marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)' }}>Edit</button>
-                                                <button onClick={() => handleDeleteStudent(s)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--error)' }}>Delete</button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                {feedbacks.map(f => (
+                                    <tr key={f.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                                        <td style={{ padding: '12px' }}>
+                                            <span style={{
+                                                padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
+                                                background: f.type === 'bug' ? 'rgba(239, 68, 68, 0.2)' : f.type === 'feature' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(107, 114, 128, 0.2)',
+                                                color: f.type === 'bug' ? '#ef4444' : f.type === 'feature' ? '#3b82f6' : '#9ca3af'
+                                            }}>
+                                                {f.type.toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '12px' }}>
+                                            <div style={{ fontWeight: 600 }}>{f.studentName}</div>
+                                            <div style={{ fontSize: '12px', opacity: 0.7 }}>Room {f.roomNumber}</div>
+                                        </td>
+                                        <td style={{ padding: '12px' }}>{f.text}</td>
+                                        <td style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                            {format(f.timestamp, 'MMM d, H:mm')}
+                                        </td>
+                                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm('Delete feedback?')) {
+                                                        await firestoreService.deleteFeedback(f.id);
+                                                        const [fb] = await Promise.all([firestoreService.getFeedbacks()]);
+                                                        setFeedbacks(fb);
+                                                    }
+                                                }}
+                                                style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
-                        {students.length === 0 && <div className="p-4 text-center">No students found. Seed DB?</div>}
-                    </div>
-                </section>
+                    ) : (
+                        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No feedback yet.</div>
+                    )}
+                </div>
+            </section>
+        </div >
 
-                {/* Recent Bookings */}
-                <section>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                        <h3 style={{ margin: 0 }}>All Bookings ({bookings.length})</h3>
-                        <input
-                            type="text"
-                            placeholder="Search Name or Room..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{
-                                padding: '10px 16px',
-                                borderRadius: '12px',
-                                border: '1px solid var(--glass-border)',
-                                background: 'var(--glass-bg)',
-                                color: 'var(--text-main)',
-                                outline: 'none',
-                                width: '100%',
-                                maxWidth: '250px'
-                            }}
-                        />
-                    </div>
-
-                    <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', background: 'none', border: 'none', padding: 0 }}>
-                        {filteredBookings.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                {filteredBookings.map(b => {
-                                    const student = students.find(s => s.id === b.studentId);
-                                    const machine = machines.find(m => m.id === b.machineId);
-                                    return (
-                                        <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: '16px' }}>
-                                                    {student?.name || 'Unknown'} <span style={{ opacity: 0.7, fontSize: '14px' }}>({student?.roomNumber || '?'})</span>
-                                                </div>
-                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                                    {format(new Date(b.date), 'MMM d')} • {b.startTime} • {machine?.name || 'Unknown Machine'}
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => cancelBooking(b.id)}
-                                                style={{
-                                                    color: 'var(--error)',
-                                                    background: 'rgba(239, 68, 68, 0.1)',
-                                                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                                                    borderRadius: '8px',
-                                                    padding: '8px 12px',
-                                                    cursor: 'pointer',
-                                                    fontSize: '13px'
-                                                }}
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
-                                No bookings found matching "{searchTerm}"
-                            </div>
-                        )}
-                    </div>
-                </section>
-
-                {/* Feedback Section */}
-                <section>
-                    <h3 style={{ marginBottom: '16px' }}>Student Feedback ({feedbacks.length})</h3>
-                    <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto' }}>
-                        {feedbacks.length > 0 ? (
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
-                                    <tr>
-                                        <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
-                                        <th style={{ padding: '12px', textAlign: 'left' }}>From</th>
-                                        <th style={{ padding: '12px', textAlign: 'left' }}>Message</th>
-                                        <th style={{ padding: '12px', textAlign: 'right' }}>Time</th>
-                                        <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {feedbacks.map(f => (
-                                        <tr key={f.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                            <td style={{ padding: '12px' }}>
-                                                <span style={{
-                                                    padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
-                                                    background: f.type === 'bug' ? 'rgba(239, 68, 68, 0.2)' : f.type === 'feature' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(107, 114, 128, 0.2)',
-                                                    color: f.type === 'bug' ? '#ef4444' : f.type === 'feature' ? '#3b82f6' : '#9ca3af'
-                                                }}>
-                                                    {f.type.toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '12px' }}>
-                                                <div style={{ fontWeight: 600 }}>{f.studentName}</div>
-                                                <div style={{ fontSize: '12px', opacity: 0.7 }}>Room {f.roomNumber}</div>
-                                            </td>
-                                            <td style={{ padding: '12px' }}>{f.text}</td>
-                                            <td style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                {format(f.timestamp, 'MMM d, H:mm')}
-                                            </td>
-                                            <td style={{ padding: '12px', textAlign: 'right' }}>
-                                                <button
-                                                    onClick={async () => {
-                                                        if (confirm('Delete feedback?')) {
-                                                            await firestoreService.deleteFeedback(f.id);
-                                                            const [fb] = await Promise.all([firestoreService.getFeedbacks()]);
-                                                            setFeedbacks(fb);
-                                                        }
-                                                    }}
-                                                    style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        ) : (
-                            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No feedback yet.</div>
-                        )}
-                    </div>
-                </section>
-            </div>
-        </div>
     );
 }

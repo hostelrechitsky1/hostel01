@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking, Banner } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle } from 'lucide-react';
+import type { Machine, Booking, Banner, AppSettings } from '../types';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -18,7 +18,12 @@ export default function Dashboard() {
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
+    const [settings, setSettings] = useState<AppSettings>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        maintenanceDay: 3,
+        topAlert: { message: '', isActive: false, type: 'info' }
+    });
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -85,9 +90,12 @@ export default function Dashboard() {
 
     const getMachineRealTimeStatus = (machine: Machine) => {
         const now = getBelarusNow();
-        const isWed = getBelarusWeekday(getBelarusDate()) === 3;
+        const currentBWeekday = getBelarusWeekday(getBelarusDate());
+        // Use setting or default to 3 (Wednesday)
+        const maintenanceDay = settings.maintenanceDay ?? 3;
+        const isMaintenanceDay = currentBWeekday === maintenanceDay;
 
-        if (isWed) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
+        if (isMaintenanceDay) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
         if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
 
         // Check current bookings using allBookings state
@@ -119,8 +127,50 @@ export default function Dashboard() {
 
     return (
         <div className="container animate-fade-in">
+            {/* Top Alert Banner */}
+            {settings.topAlert?.isActive && settings.topAlert.message && (
+                <div
+                    className="slide-down-in"
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        zIndex: 100,
+                        padding: '12px 16px',
+                        background: settings.topAlert.type === 'urgent'
+                            ? 'rgba(239, 68, 68, 0.95)'
+                            : settings.topAlert.type === 'warning'
+                                ? 'rgba(245, 158, 11, 0.95)'
+                                : 'rgba(59, 130, 246, 0.95)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        color: 'white',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+                        borderBottom: '1px solid rgba(255,255,255,0.1)'
+                    }}
+                >
+                    {settings.topAlert.type === 'urgent' && <AlertTriangle size={18} fill="white" stroke="rgba(239, 68, 68, 1)" />}
+                    {settings.topAlert.type === 'info' && <Info size={18} />}
+                    {settings.topAlert.type === 'warning' && <AlertTriangle size={18} />}
+                    <span style={{ fontWeight: 500, fontSize: '14px', textAlign: 'center' }}>
+                        {settings.topAlert.message}
+                    </span>
+                </div>
+            )}
+
             {/* Header */}
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingTop: '16px' }}>
+            <header style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '32px',
+                marginTop: settings.topAlert?.isActive ? '48px' : '16px', // Push down if alert is visible
+                transition: 'margin-top 0.3s ease'
+            }}>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '24px' }}>Hello, {user.name.split(' ')[0]} 👋</h2>
                     <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>Room {user.roomNumber}</p>
