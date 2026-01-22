@@ -303,6 +303,91 @@ export default function ManagerPanel() {
                                 Students will see "Maintenance Day" on this day of the week.
                             </p>
                         </div>
+
+                        {/* Top Alert Configuration */}
+                        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                <label style={{ fontWeight: '500', color: '#9ca3af' }}>Top Dashboard Alert</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '12px', color: settings.topAlert?.isActive ? '#4ade80' : '#ef4444' }}>
+                                        {settings.topAlert?.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                    </span>
+                                    <button
+                                        onClick={() => updateSettings({ 
+                                            topAlert: { ...settings.topAlert, isActive: !settings.topAlert?.isActive } as any 
+                                        })}
+                                        style={{
+                                            background: settings.topAlert?.isActive ? '#10b981' : '#ef4444',
+                                            width: '40px',
+                                            height: '20px',
+                                            borderRadius: '20px',
+                                            position: 'relative',
+                                            border: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'absolute',
+                                            left: settings.topAlert?.isActive ? '22px' : '2px',
+                                            top: '2px',
+                                            width: '16px',
+                                            height: '16px',
+                                            background: 'white',
+                                            borderRadius: '50%',
+                                            transition: 'all 0.2s'
+                                        }} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '12px' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Alert Message (e.g. 'Gym is closed today')"
+                                    value={settings.topAlert?.message || ''}
+                                    onChange={(e) => {
+                                        const newAlert = { ...settings.topAlert, message: e.target.value } as any;
+                                        setSettings(prev => ({ ...prev, topAlert: newAlert }));
+                                    }}
+                                    onBlur={() => updateSettings({ topAlert: settings.topAlert })}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '8px',
+                                        background: '#374151',
+                                        border: '1px solid #4b5563',
+                                        color: 'white'
+                                    }}
+                                />
+                                
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    {(['info', 'warning', 'urgent'] as const).map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => {
+                                                const newAlert = { ...settings.topAlert, type };
+                                                setSettings(prev => ({ ...prev, topAlert: newAlert as any }));
+                                                updateSettings({ topAlert: newAlert as any });
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '8px',
+                                                borderRadius: '6px',
+                                                border: '1px solid',
+                                                borderColor: settings.topAlert?.type === type ? 'white' : 'transparent',
+                                                background: type === 'urgent' ? 'rgba(239, 68, 68, 0.2)' : type === 'warning' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                                                color: type === 'urgent' ? '#fca5a5' : type === 'warning' ? '#fcd34d' : '#93c5fd',
+                                                cursor: 'pointer',
+                                                fontWeight: settings.topAlert?.type === type ? 'bold' : 'normal',
+                                                textTransform: 'capitalize'
+                                            }}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                         <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                             {settings.forceCloseBookings
                                 ? <span style={{ color: 'var(--error)' }}>CLOSED (Forced)</span>

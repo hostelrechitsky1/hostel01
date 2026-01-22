@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking } from '../types';
+import type { Machine, Booking, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
 import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
@@ -35,7 +35,7 @@ export default function BookingFlow() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [settings, setSettings] = useState({ forceShowNextWeek: false, forceCloseBookings: false });
+    const [settings, setSettings] = useState<Partial<AppSettings>>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3 });
 
     // Async State
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -195,7 +195,10 @@ export default function BookingFlow() {
         }
     };
 
-    const isWed = getBelarusWeekday(selectedDate) === 3;
+    // Use setting or default to 3 (Wednesday)
+    const maintenanceDay = settings.maintenanceDay ?? 3;
+    const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
+    const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
 
     // --- RENDER ---
     if (loading) {
@@ -257,7 +260,7 @@ export default function BookingFlow() {
                 <div style={{ display: 'flex', overflowX: 'auto', gap: '12px', paddingBottom: '16px', marginBottom: '16px' }}>
                     {dateOptions.map(date => {
                         const isSelected = isSameBelarusDay(date, selectedDate);
-                        const isDateWed = getBelarusWeekday(date) === 3;
+                        const isDateMaintenance = getBelarusWeekday(date) === maintenanceDay;
                         return (
                             <button
                                 key={date.toISOString()}
@@ -272,11 +275,11 @@ export default function BookingFlow() {
                                     color: isSelected ? 'white' : 'var(--text-muted)',
                                     cursor: 'pointer',
                                     textAlign: 'center',
-                                    opacity: isDateWed ? 0.7 : 1
+                                    opacity: isDateMaintenance ? 0.7 : 1
                                 }}
                             >
-                                <div style={{ fontSize: '12px', marginBottom: '4px', color: isDateWed ? '#ef4444' : 'inherit' }}>
-                                    {isDateWed ? 'Maint' : formatBelarusWeekdayLabel(date).slice(0, 3)}
+                                <div style={{ fontSize: '12px', marginBottom: '4px', color: isDateMaintenance ? '#ef4444' : 'inherit' }}>
+                                    {isDateMaintenance ? 'Maint' : formatBelarusWeekdayLabel(date).slice(0, 3)}
                                 </div>
                                 <div style={{ fontSize: '20px', fontWeight: 700 }}>{formatBelarusMonthDayLabel(date).split(' ')[1]}</div>
                             </button>
@@ -285,13 +288,13 @@ export default function BookingFlow() {
                 </div>
             )}
 
-            {isWed ? (
+            {isMaintenanceDay ? (
                 <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', borderRadius: '24px' }}>
                     <div style={{ background: 'rgba(239, 68, 68, 0.2)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                         <AlertCircle size={32} color="#ef4444" />
                     </div>
                     <h3>Maintenance Day</h3>
-                    <p style={{ color: 'var(--text-muted)' }}>Washing machines are closed for service on Wednesdays.</p>
+                    <p style={{ color: 'var(--text-muted)' }}>Washing machines are closed for service on {maintenanceDayName}s.</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
