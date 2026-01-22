@@ -139,24 +139,35 @@ export default function Dashboard() {
                         zIndex: 100,
                         padding: '12px 16px',
                         background: settings.topAlert.type === 'urgent'
-                            ? 'rgba(239, 68, 68, 0.95)'
+                            ? 'rgba(239, 68, 68, 0.4)' // Red glass
                             : settings.topAlert.type === 'warning'
-                                ? 'rgba(245, 158, 11, 0.95)'
-                                : 'rgba(59, 130, 246, 0.95)',
-                        backdropFilter: 'blur(8px)',
+                                ? 'rgba(245, 158, 11, 0.4)' // Amber glass
+                                : 'rgba(59, 130, 246, 0.4)', // Blue glass
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
                         color: 'white',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-                        borderBottom: '1px solid rgba(255,255,255,0.1)'
+                        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.1)'
                     }}
                 >
-                    {settings.topAlert.type === 'urgent' && <AlertTriangle size={18} fill="white" stroke="rgba(239, 68, 68, 1)" />}
-                    {settings.topAlert.type === 'info' && <Info size={18} />}
-                    {settings.topAlert.type === 'warning' && <AlertTriangle size={18} />}
-                    <span style={{ fontWeight: 500, fontSize: '14px', textAlign: 'center' }}>
+                    <div style={{
+                        background: 'rgba(255,255,255,0.2)',
+                        padding: '4px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        {settings.topAlert.type === 'urgent' && <AlertTriangle size={16} fill="white" />}
+                        {settings.topAlert.type === 'info' && <Info size={16} />}
+                        {settings.topAlert.type === 'warning' && <AlertTriangle size={16} />}
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '14px', textAlign: 'center', letterSpacing: '0.01em' }}>
                         {settings.topAlert.message}
                     </span>
                 </div>

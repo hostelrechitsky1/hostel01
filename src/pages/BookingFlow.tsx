@@ -196,7 +196,7 @@ export default function BookingFlow() {
     };
 
     // Use setting or default to 3 (Wednesday)
-    const maintenanceDay = settings.maintenanceDay ?? 3;
+    const maintenanceDay = typeof settings.maintenanceDay === 'number' ? settings.maintenanceDay : 3;
     const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
 
