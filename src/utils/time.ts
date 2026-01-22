@@ -64,6 +64,5 @@ export const isAutoBookingWindowOpen = (now: Date = new Date()) => {
 
     if (day === 6 && hour >= 16) return true;
     if (day === 0) return true;
-    if (day === 1 && hour < 9) return true;
     return false;
 };
