@@ -23,6 +23,8 @@ export default function PrintSchedule() {
         return isAutoBookingWindowOpen() ? 1 : 0;
     });
 
+    const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
     // Async Data
     const [machines, setMachines] = useState<Machine[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -129,6 +131,28 @@ export default function PrintSchedule() {
                     >
                         Next Week
                     </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', padding: '4px 8px', border: '1px solid var(--glass-border)' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: '8px' }}>Maintenance:</span>
+                        <select
+                            value={maintenanceDay}
+                            onChange={(e) => setMaintenanceDay(Number(e.target.value))}
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                color: 'var(--text-main)',
+                                cursor: 'pointer',
+                                outline: 'none'
+                            }}
+                        >
+                            {DAYS_OF_WEEK.map((day, index) => (
+                                <option key={day} value={index}>{day}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <button
                         onClick={handlePrint}
                         className="primary-button"
@@ -265,7 +289,7 @@ export default function PrintSchedule() {
                     color: black;
                 }
             `}</style>
-        </div>
+        </div >
     );
 }
 
