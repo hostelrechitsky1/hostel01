@@ -27,6 +27,7 @@ export default function PrintSchedule() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [maintenanceDay, setMaintenanceDay] = useState(3);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -53,6 +54,9 @@ export default function PrintSchedule() {
                 // Smart Auto-Switch if Force Open is active
                 if (settings.forceShowNextWeek) {
                     setWeekOffset(1);
+                }
+                if (typeof settings.maintenanceDay === 'number') {
+                    setMaintenanceDay(settings.maintenanceDay);
                 }
             } catch (e) {
                 console.error("Failed to load schedule data", e);
@@ -193,9 +197,9 @@ export default function PrintSchedule() {
                                                 {time}
                                             </td>
                                             {weekDays.map(day => {
-                                                const isWed = getBelarusWeekday(day) === 3;
+                                                const isMaintenanceDay = getBelarusWeekday(day) === maintenanceDay;
 
-                                                if (isWed) {
+                                                if (isMaintenanceDay) {
                                                     return (
                                                         <td key={day.toString()} style={{ ...cellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
                                                             <div style={{ transform: 'rotate(-45deg)', fontSize: '10px', letterSpacing: '1px' }}>MAINTENANCE</div>
