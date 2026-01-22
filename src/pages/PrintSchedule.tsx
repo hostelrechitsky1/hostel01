@@ -23,10 +23,13 @@ export default function PrintSchedule() {
         return isAutoBookingWindowOpen() ? 1 : 0;
     });
 
+    const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
     // Async Data
     const [machines, setMachines] = useState<Machine[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [maintenanceDay, setMaintenanceDay] = useState(3);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -53,6 +56,9 @@ export default function PrintSchedule() {
                 // Smart Auto-Switch if Force Open is active
                 if (settings.forceShowNextWeek) {
                     setWeekOffset(1);
+                }
+                if (typeof settings.maintenanceDay === 'number') {
+                    setMaintenanceDay(settings.maintenanceDay);
                 }
             } catch (e) {
                 console.error("Failed to load schedule data", e);
@@ -125,6 +131,28 @@ export default function PrintSchedule() {
                     >
                         Next Week
                     </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', padding: '4px 8px', border: '1px solid var(--glass-border)' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: '8px' }}>Maintenance:</span>
+                        <select
+                            value={maintenanceDay}
+                            onChange={(e) => setMaintenanceDay(Number(e.target.value))}
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                color: 'var(--text-main)',
+                                cursor: 'pointer',
+                                outline: 'none'
+                            }}
+                        >
+                            {DAYS_OF_WEEK.map((day, index) => (
+                                <option key={day} value={index}>{day}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <button
                         onClick={handlePrint}
                         className="primary-button"
@@ -193,16 +221,6 @@ export default function PrintSchedule() {
                                                 {time}
                                             </td>
                                             {weekDays.map(day => {
-                                                const isWed = getBelarusWeekday(day) === 3;
-
-                                                if (isWed) {
-                                                    return (
-                                                        <td key={day.toString()} style={{ ...cellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
-                                                            <div style={{ transform: 'rotate(-45deg)', fontSize: '10px', letterSpacing: '1px' }}>MAINTENANCE</div>
-                                                        </td>
-                                                    );
-                                                }
-
                                                 // Find booking
                                                 const booking = bookings.find(b =>
                                                     b.machineId === machine.id &&
@@ -211,9 +229,9 @@ export default function PrintSchedule() {
                                                 );
                                                 const student = booking ? students.find(s => s.id === booking.studentId) : null;
 
-                                                return (
-                                                    <td key={day.toString()} style={cellStyle}>
-                                                        {booking ? (
+                                                if (booking) {
+                                                    return (
+                                                        <td key={day.toString()} style={cellStyle}>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
                                                                 <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
                                                                     {booking.roomNumber || student?.roomNumber || '???'}
@@ -222,7 +240,23 @@ export default function PrintSchedule() {
                                                                     {booking.studentName || student?.name || 'Unknown'}
                                                                 </span>
                                                             </div>
-                                                        ) : null}
+                                                        </td>
+                                                    );
+                                                }
+
+                                                const isMaintenanceDay = getBelarusWeekday(day) === maintenanceDay;
+
+                                                if (isMaintenanceDay) {
+                                                    return (
+                                                        <td key={day.toString()} style={{ ...cellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
+                                                            <div style={{ transform: 'rotate(-45deg)', fontSize: '10px', letterSpacing: '1px' }}>MAINTENANCE</div>
+                                                        </td>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <td key={day.toString()} style={cellStyle}>
+                                                        {/* Empty cell */}
                                                     </td>
                                                 );
                                             })}
@@ -255,7 +289,7 @@ export default function PrintSchedule() {
                     color: black;
                 }
             `}</style>
-        </div>
+        </div >
     );
 }
 
