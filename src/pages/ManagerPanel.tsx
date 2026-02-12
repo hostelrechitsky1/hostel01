@@ -17,6 +17,7 @@ export default function ManagerPanel() {
     const [showBannerForm, setShowBannerForm] = useState(false);
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
     const [searchTerm, setSearchTerm] = useState('');
+    const [bookingPage, setBookingPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<AppSettings>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3, topAlert: { message: '', isActive: false, type: 'info' } });
     const navigate = useNavigate();
@@ -67,6 +68,25 @@ export default function ManagerPanel() {
             );
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [bookings, students, machines, searchTerm]);
+
+    const BOOKING_ITEMS_PER_PAGE = 12;
+    const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKING_ITEMS_PER_PAGE));
+
+    const paginatedBookings = useMemo(() => {
+        const start = (bookingPage - 1) * BOOKING_ITEMS_PER_PAGE;
+        return filteredBookings.slice(start, start + BOOKING_ITEMS_PER_PAGE);
+    }, [filteredBookings, bookingPage]);
+
+    useEffect(() => {
+        setBookingPage(1);
+    }, [searchTerm, bookings.length]);
+
+    useEffect(() => {
+        if (bookingPage > totalBookingPages) {
+            setBookingPage(totalBookingPages);
+        }
+    }, [bookingPage, totalBookingPages]);
+
 
     const toggleMachine = async (machine: Machine) => {
         const newStatus = machine.status === 'available' ? 'maintenance' : 'available';
@@ -785,7 +805,7 @@ export default function ManagerPanel() {
             {/* Recent Bookings */}
             <section>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                    <h3 style={{ margin: 0 }}>All Bookings ({bookings.length})</h3>
+                    <h3 style={{ margin: 0 }}>All Bookings ({filteredBookings.length})</h3>
                     <input
                         type="text"
                         placeholder="Search Name or Room..."
@@ -807,7 +827,7 @@ export default function ManagerPanel() {
                 <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', background: 'none', border: 'none', padding: 0 }}>
                     {filteredBookings.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {filteredBookings.map(b => {
+                            {paginatedBookings.map(b => {
                                 const student = students.find(s => s.id === b.studentId);
                                 const machine = machines.find(m => m.id === b.machineId);
                                 return (
@@ -844,6 +864,32 @@ export default function ManagerPanel() {
                         </div>
                     )}
                 </div>
+
+                {filteredBookings.length > 0 && (
+                    <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                            Page {bookingPage} of {totalBookingPages}
+                        </span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                className="glass-button"
+                                onClick={() => setBookingPage((prev) => Math.max(1, prev - 1))}
+                                disabled={bookingPage === 1}
+                                style={{ padding: '8px 12px', borderRadius: '8px', opacity: bookingPage === 1 ? 0.5 : 1 }}
+                            >
+                                Previous
+                            </button>
+                            <button
+                                className="glass-button"
+                                onClick={() => setBookingPage((prev) => Math.min(totalBookingPages, prev + 1))}
+                                disabled={bookingPage === totalBookingPages}
+                                style={{ padding: '8px 12px', borderRadius: '8px', opacity: bookingPage === totalBookingPages ? 0.5 : 1 }}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </section>
 
             {/* Feedback Section */}
