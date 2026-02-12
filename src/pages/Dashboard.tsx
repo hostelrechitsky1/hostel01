@@ -247,16 +247,25 @@ export default function Dashboard() {
             <h3 style={{ marginBottom: '10px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
             <div className="glass-panel" style={{
                 marginBottom: '16px',
-                padding: '12px 14px',
+                padding: '14px 16px',
                 borderRadius: '12px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)'
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.24) 0%, rgba(99, 102, 241, 0.12) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.45)'
             }}>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Live Slot Capacity</div>
-                <div style={{ fontSize: '14px', fontWeight: 700 }}>
-                    Remaining {slotCapacity.remainingSlots}/{slotCapacity.totalSlots}
+                <div>
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>Live Slot Capacity</div>
+                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>
+                        Total Slots: {slotCapacity.totalSlots}
+                    </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Total Remaining</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
+                        {slotCapacity.remainingSlots}
+                    </div>
                 </div>
             </div>
             <div className="grid-cols-2">
