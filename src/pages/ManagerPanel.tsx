@@ -558,7 +558,7 @@ export default function ManagerPanel() {
                         <Plus size={20} /> Add Machine
                     </button>
                 </div>
-                <div className="grid-cols-2">
+                <div className="grid-auto-fit">
                     {machines.map(m => (
                         <div key={m.id} className="glass-panel" style={{ padding: '16px', borderRadius: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -635,7 +635,7 @@ export default function ManagerPanel() {
                                     style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
                                 />
                             </div>
-                            <div className="grid-cols-2">
+                            <div className="grid-auto-fit">
                                 <div>
                                     <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Action Link (Optional)</label>
                                     <input
@@ -691,7 +691,7 @@ export default function ManagerPanel() {
                     </div>
                 )}
 
-                <div className="grid-cols-2" style={{ marginBottom: '32px' }}>
+                <div className="grid-auto-fit" style={{ marginBottom: '32px' }}>
                     {banners.map(b => (
                         <div key={b.id} className="glass-panel" style={{ padding: 0, borderRadius: '12px', overflow: 'hidden', position: 'relative', border: b.isActive ? '1px solid var(--primary)' : '1px solid var(--glass-border)', opacity: b.isActive ? 1 : 0.6 }}>
                             <div style={{ height: '140px', background: '#1f2937', position: 'relative', overflow: 'hidden' }}>
