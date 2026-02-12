@@ -10,7 +10,7 @@ export default function HostelAdminDashboard() {
     const [students, setStudents] = useState<Student[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
-    const [isRussian, setIsRussian] = useState(false);
+    const [isRussian, setIsRussian] = useState(() => sessionStorage.getItem('hostel_admin_lang') === 'ru');
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
     const t = useMemo(() => {
@@ -222,7 +222,11 @@ export default function HostelAdminDashboard() {
                     <p style={{ color: 'var(--text-muted)', margin: '4px 0 0' }}>{t.subtitle}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button onClick={() => setIsRussian((prev) => !prev)} className="glass-button" style={{ padding: '8px 14px', fontSize: '14px' }}>
+                    <button onClick={() => {
+                        const next = !isRussian;
+                        setIsRussian(next);
+                        sessionStorage.setItem('hostel_admin_lang', next ? 'ru' : 'en');
+                    }} className="glass-button" style={{ padding: '8px 14px', fontSize: '14px' }}>
                         <Languages size={16} style={{ marginRight: '8px' }} /> {t.switchLanguage}
                     </button>
                     <button onClick={handleLogout} className="glass-button" style={{ padding: '8px 16px', fontSize: '14px' }}>
