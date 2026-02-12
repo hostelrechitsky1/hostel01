@@ -6,6 +6,7 @@ import { studentsRawData } from '../data/studentsRaw';
 import type { Booking, Machine, Student, Feedback, Banner, AppSettings } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { useAdminDialog } from '../components/useAdminDialog';
 
 export default function ManagerPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -19,6 +20,7 @@ export default function ManagerPanel() {
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<AppSettings>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3, topAlert: { message: '', isActive: false, type: 'info' } });
     const navigate = useNavigate();
+    const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
     useEffect(() => {
         if (!sessionStorage.getItem('manager_auth')) {
@@ -46,7 +48,7 @@ export default function ManagerPanel() {
             setBanners(fetchedBanners);
         } catch (error) {
             console.error("Failed to load admin data", error);
-            alert("Failed to load data from database.");
+            await alertDialog('Load Failed', 'Failed to load data from database.');
         } finally {
             setLoading(false);
         }
@@ -73,23 +75,35 @@ export default function ManagerPanel() {
     };
 
     const handleAddMachine = async () => {
-        const name = prompt('Enter New Machine Name (e.g. Machine 5)');
-        if (name) {
-            await firestoreService.addMachine(name);
+        const name = await promptDialog('Add Machine', 'Enter New Machine Name (e.g. Machine 5)', {
+            placeholder: 'Machine name',
+            confirmText: 'Add Machine'
+        });
+        if (name?.trim()) {
+            await firestoreService.addMachine(name.trim());
             refreshData();
         }
     };
 
     const handleDeleteMachine = async (id: string, machineName: string) => {
-        if (confirm(`Permanently delete ${machineName}? This will also remove all bookings for this machine.`)) {
-            // Note: Ideally backend should cascade delete bookings, doing it here logicially
+        const confirmed = await confirmDialog(
+            'Delete Machine?',
+            `Permanently delete ${machineName}? This will also remove all bookings for this machine.`,
+            { confirmText: 'Delete', cancelText: 'Cancel', isDanger: true }
+        );
+        if (confirmed) {
             await firestoreService.deleteMachine(id);
             refreshData();
         }
     };
 
     const cancelBooking = async (id: string) => {
-        if (confirm('Are you sure you want to cancel this booking?')) {
+        const confirmed = await confirmDialog('Cancel Booking?', 'Are you sure you want to cancel this booking?', {
+            confirmText: 'Cancel Booking',
+            cancelText: 'Keep Booking',
+            isDanger: true
+        });
+        if (confirmed) {
             await firestoreService.cancelBooking(id);
             refreshData();
         }
@@ -109,7 +123,7 @@ export default function ManagerPanel() {
 
     const handleAddBanner = async () => {
         if (!newBanner.imageUrl) {
-            alert('Please enter an image URL');
+            await alertDialog('Banner Image Required', 'Please enter an image URL.');
             return;
         }
         const finalImageUrl = getDirectImageUrl(newBanner.imageUrl);
@@ -130,7 +144,12 @@ export default function ManagerPanel() {
     };
 
     const handleDeleteBanner = async (id: string) => {
-        if (confirm('Delete this banner?')) {
+        const confirmed = await confirmDialog('Delete Banner?', 'Delete this banner?', {
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            isDanger: true
+        });
+        if (confirmed) {
             await firestoreService.deleteBanner(id);
             refreshData();
         }
@@ -143,34 +162,47 @@ export default function ManagerPanel() {
 
     // --- Resident Management ---
     const handleAddStudent = async () => {
-        const name = prompt('Enter Student Name:');
-        if (!name) return;
-        const room = prompt('Enter Room Number (e.g. 101):');
-        if (!room) return;
+        const name = await promptDialog('Add Resident', 'Enter Student Name:', {
+            placeholder: 'Student name',
+            confirmText: 'Next'
+        });
+        if (!name?.trim()) return;
+
+        const room = await promptDialog('Add Resident', 'Enter Room Number (e.g. 101):', {
+            placeholder: 'Room number',
+            confirmText: 'Create'
+        });
+        if (!room?.trim()) return;
 
         // Preserve existing room PIN so current residents are never locked out.
-        const existingStudent = students.find(s => s.roomNumber === room);
+        const normalizedRoom = room.trim();
+        const normalizedName = name.trim();
+        const existingStudent = students.find(s => s.roomNumber === normalizedRoom);
         const pin = existingStudent?.pin || Math.floor(100 + Math.random() * 900).toString();
 
         const newStudent: Student = {
-            id: `${room}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
-            name,
-            roomNumber: room,
+            id: `${normalizedRoom}-${normalizedName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+            name: normalizedName,
+            roomNumber: normalizedRoom,
             pin
         };
 
         await firestoreService.addStudent(newStudent);
-        alert(`Resident added successfully.\n\nName: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
+        await alertDialog('Resident Added', `Name: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
         refreshData();
     };
 
-    const verifyManagerBeforePrintingCodes = () => {
-        const enteredPassword = prompt('Security check: Enter manager password to open Print Codes');
+    const verifyManagerBeforePrintingCodes = async () => {
+        const enteredPassword = await promptDialog('Security Check', 'Enter manager password to open Print Codes', {
+            placeholder: 'Password',
+            inputType: 'password',
+            confirmText: 'Verify'
+        });
         if (!enteredPassword) return;
 
         const correctPassword = import.meta.env.VITE_MANAGER_PASSWORD || 'admin123';
         if (enteredPassword !== correctPassword) {
-            alert('Incorrect password. Print Codes access denied.');
+            await alertDialog('Access Denied', 'Incorrect password. Print Codes access denied.');
             return;
         }
 
@@ -178,30 +210,43 @@ export default function ManagerPanel() {
     };
 
     const handleDeleteStudent = async (student: Student) => {
-        if (confirm(`Remove ${student.name} from Room ${student.roomNumber}?`)) {
+        const confirmed = await confirmDialog('Remove Resident?', `Remove ${student.name} from Room ${student.roomNumber}?`, {
+            confirmText: 'Delete',
+            cancelText: 'Keep',
+            isDanger: true
+        });
+        if (confirmed) {
             await firestoreService.deleteStudent(student.id);
             refreshData();
         }
     };
 
     const handleEditStudent = async (student: Student) => {
-        const newName = prompt('Edit Name:', student.name);
-        if (newName && newName !== student.name) {
-            const updated = { ...student, name: newName };
+        const newName = await promptDialog('Edit Resident', 'Update resident name:', {
+            defaultValue: student.name,
+            confirmText: 'Save'
+        });
+        if (newName && newName.trim() && newName.trim() !== student.name) {
+            const updated = { ...student, name: newName.trim() };
             await firestoreService.updateStudent(updated);
             refreshData();
         }
     };
 
     const handleSeedDatabase = async () => {
-        if (confirm('⚠️ WARNING: This will RESET all Room PINs and re-seed the student list.\n\nAll existing PINs will stop working.\nAre you sure?')) {
+        const confirmed = await confirmDialog(
+            'Reset Room PINs?',
+            'This will reset all room PINs and re-seed the student list. Existing PINs will stop working.',
+            { confirmText: 'Reset PINs', cancelText: 'Cancel', isDanger: true }
+        );
+        if (confirmed) {
             setLoading(true);
             try {
                 await firestoreService.seedStudents(studentsRawData);
-                alert('Database reset complete. New PINs generated.');
+                await alertDialog('Database Reset Complete', 'New PINs were generated successfully.');
                 refreshData();
             } catch (e) {
-                alert('Error: ' + e);
+                await alertDialog('Reset Failed', 'Error: ' + e);
             } finally {
                 setLoading(false);
             }
@@ -209,14 +254,19 @@ export default function ManagerPanel() {
     };
 
     const handleClearBookings = async () => {
-        if (confirm('⚠️ WARNING: This will DELETE ALL BOOKINGS.\n\nThis cannot be undone. Are you sure?')) {
+        const confirmed = await confirmDialog(
+            'Delete All Bookings?',
+            'This will permanently delete all bookings. This action cannot be undone.',
+            { confirmText: 'Delete All', cancelText: 'Cancel', isDanger: true }
+        );
+        if (confirmed) {
             setLoading(true);
             try {
                 await firestoreService.clearAllBookings();
-                alert('All bookings cleared.');
+                await alertDialog('Bookings Cleared', 'All bookings were deleted.');
                 refreshData();
             } catch (e) {
-                alert('Error: ' + e);
+                await alertDialog('Delete Failed', 'Error: ' + e);
             } finally {
                 setLoading(false);
             }
@@ -233,7 +283,8 @@ export default function ManagerPanel() {
         };
 
         // @ts-ignore
-        if (confirm(messages[key])) {
+        const confirmed = await confirmDialog('Confirm Setting Update', messages[key]);
+        if (confirmed) {
             await firestoreService.updateSettings({ [key]: newValue });
             refreshData();
         }
@@ -246,7 +297,7 @@ export default function ManagerPanel() {
             setSettings(prev => ({ ...prev, ...newSettings }));
         } catch (error) {
             console.error("Failed to update settings:", error);
-            alert("Failed to save settings");
+            await alertDialog('Save Failed', 'Failed to save settings.');
         }
     };
 
@@ -833,7 +884,12 @@ export default function ManagerPanel() {
                                         <td style={{ padding: '12px', textAlign: 'right' }}>
                                             <button
                                                 onClick={async () => {
-                                                    if (confirm('Delete feedback?')) {
+                                                    const confirmed = await confirmDialog('Delete Feedback?', 'Delete this feedback entry?', {
+                                                        confirmText: 'Delete',
+                                                        cancelText: 'Cancel',
+                                                        isDanger: true
+                                                    });
+                                                    if (confirmed) {
                                                         await firestoreService.deleteFeedback(f.id);
                                                         const [fb] = await Promise.all([firestoreService.getFeedbacks()]);
                                                         setFeedbacks(fb);
@@ -853,6 +909,7 @@ export default function ManagerPanel() {
                     )}
                 </div>
             </section>
+            {dialogNode}
         </div >
 
     );

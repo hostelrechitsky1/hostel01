@@ -3,12 +3,14 @@ import { Printer, Users, LogOut, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { firestoreService } from '../services/firestoreService';
 import type { Student } from '../types';
+import { useAdminDialog } from '../components/useAdminDialog';
 
 export default function HostelAdminDashboard() {
     const navigate = useNavigate();
     const [students, setStudents] = useState<Student[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+    const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
     useEffect(() => {
         if (!sessionStorage.getItem('hostel_admin_auth')) {
@@ -26,7 +28,7 @@ export default function HostelAdminDashboard() {
             setStudents(fetchedStudents);
         } catch (error) {
             console.error('Failed to load residents', error);
-            alert('Failed to load residents from database.');
+            await alertDialog('Load Failed', 'Failed to load residents from database. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -37,12 +39,16 @@ export default function HostelAdminDashboard() {
         navigate('/hostel-admin');
     };
 
-    const verifyHostelAdminBeforePrintingCodes = () => {
-        const enteredPin = prompt('Security check: Enter hostel admin PIN to open Print Codes');
+    const verifyHostelAdminBeforePrintingCodes = async () => {
+        const enteredPin = await promptDialog('Security Check', 'Enter hostel admin PIN to open Print Codes', {
+            placeholder: 'Enter PIN',
+            inputType: 'password',
+            confirmText: 'Verify'
+        });
         if (!enteredPin) return;
 
         if (enteredPin !== '2001') {
-            alert('Incorrect PIN. Print Codes access denied.');
+            await alertDialog('Access Denied', 'Incorrect PIN. Print Codes access denied.');
             return;
         }
 
@@ -50,38 +56,54 @@ export default function HostelAdminDashboard() {
     };
 
     const handleAddStudent = async () => {
-        const name = prompt('Enter Student Name:');
-        if (!name) return;
-        const room = prompt('Enter Room Number (e.g. 101):');
-        if (!room) return;
+        const name = await promptDialog('Add Resident', 'Enter Student Name:', {
+            placeholder: 'Student name',
+            confirmText: 'Next'
+        });
+        if (!name?.trim()) return;
+
+        const room = await promptDialog('Add Resident', 'Enter Room Number (e.g. 101):', {
+            placeholder: 'Room number',
+            confirmText: 'Create'
+        });
+        if (!room?.trim()) return;
 
         // Preserve existing room PIN so current residents are never locked out.
-        const existingStudent = students.find((s) => s.roomNumber === room);
+        const existingStudent = students.find((s) => s.roomNumber === room.trim());
         const pin = existingStudent?.pin || Math.floor(100 + Math.random() * 900).toString();
 
         const newStudent: Student = {
-            id: `${room}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
-            name,
-            roomNumber: room,
+            id: `${room.trim()}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+            name: name.trim(),
+            roomNumber: room.trim(),
             pin
         };
 
         await firestoreService.addStudent(newStudent);
-        alert(`Resident added successfully.\n\nName: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
+        await alertDialog('Resident Added', `Name: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
         refreshStudents();
     };
 
     const handleDeleteStudent = async (student: Student) => {
-        if (confirm(`Remove ${student.name} from Room ${student.roomNumber}?`)) {
+        const confirmed = await confirmDialog(
+            'Remove Resident?',
+            `Remove ${student.name} from Room ${student.roomNumber}?`,
+            { confirmText: 'Delete', cancelText: 'Keep', isDanger: true }
+        );
+        if (confirmed) {
             await firestoreService.deleteStudent(student.id);
             refreshStudents();
         }
     };
 
     const handleEditStudent = async (student: Student) => {
-        const newName = prompt('Edit Name:', student.name);
-        if (newName && newName !== student.name) {
-            const updated = { ...student, name: newName };
+        const newName = await promptDialog('Edit Resident', 'Update resident name:', {
+            defaultValue: student.name,
+            confirmText: 'Save'
+        });
+
+        if (newName && newName.trim() && newName.trim() !== student.name) {
+            const updated = { ...student, name: newName.trim() };
             await firestoreService.updateStudent(updated);
             refreshStudents();
         }
@@ -247,6 +269,7 @@ export default function HostelAdminDashboard() {
             <div style={{ marginTop: '40px', textAlign: 'center', opacity: 0.5, fontSize: '12px' }}>
                 Restricted Area • Authorized Personnel Only
             </div>
+            {dialogNode}
         </div>
     );
 }
