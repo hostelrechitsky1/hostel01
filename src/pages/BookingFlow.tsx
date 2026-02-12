@@ -158,6 +158,16 @@ export default function BookingFlow() {
         });
     }, [selectedDate, activeMachines, bookings]);
 
+
+    const totalSlotsPerTime = activeMachines.length;
+    const totalRemainingForDay = useMemo(() => {
+        return availability.reduce((sum, slot) => {
+            if (slot.isPassed) return sum;
+            const remaining = Math.max(totalSlotsPerTime - slot.bookedMachineIds.length, 0);
+            return sum + remaining;
+        }, 0);
+    }, [availability, totalSlotsPerTime]);
+
     const handleBook = async () => {
         if (!selectedSlot || !selectedMachine || !user || submitting) return;
         setSubmitting(true);
@@ -292,6 +302,28 @@ export default function BookingFlow() {
                 </div>
             )}
 
+            {!isMaintenanceDay && (
+                <div className="glass-panel" style={{
+                    marginBottom: '14px',
+                    padding: '14px 16px',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '10px',
+                    flexWrap: 'wrap',
+                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)'
+                }}>
+                    <div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Live Slot Capacity</div>
+                        <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalRemainingForDay} remaining today</div>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                        {totalSlotsPerTime} total slots per time
+                    </div>
+                </div>
+            )}
+
             {isMaintenanceDay ? (
                 <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', borderRadius: '24px' }}>
                     <div style={{ background: 'rgba(239, 68, 68, 0.2)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
@@ -302,7 +334,9 @@ export default function BookingFlow() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => (
+                    {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => {
+                        const remainingSlots = Math.max(totalSlotsPerTime - bookedMachineIds.length, 0);
+                        return (
                         <div key={time}>
                             <button
                                 disabled={isFull || isPassed}
@@ -334,8 +368,13 @@ export default function BookingFlow() {
                                     <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
                                     <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
                                 </div>
-                                <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)' }}>
-                                    {isPassed ? 'Passed' : isFull ? 'Full' : `${activeMachines.length - bookedMachineIds.length} Free`}
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)', fontWeight: 600 }}>
+                                        {isPassed ? 'Passed' : isFull ? 'Full' : 'Open'}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                        Remaining {remainingSlots}/{totalSlotsPerTime}
+                                    </div>
                                 </div>
                             </button>
 
@@ -376,7 +415,8 @@ export default function BookingFlow() {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
