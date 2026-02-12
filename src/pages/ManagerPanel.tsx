@@ -327,9 +327,9 @@ export default function ManagerPanel() {
 
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', gap: '12px', flexWrap: 'wrap' }}>
                 <h2>Manager Panel</h2>
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
                         onClick={verifyManagerBeforePrintingCodes}
                         className="glass-button"
@@ -767,7 +767,7 @@ export default function ManagerPanel() {
                     />
                 </div>
 
-                <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0, borderRadius: '16px' }}>
+                <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', overflowX: 'auto', padding: 0, borderRadius: '16px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                         <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
                             <tr>
@@ -831,9 +831,9 @@ export default function ManagerPanel() {
                                 const student = students.find(s => s.id === b.studentId);
                                 const machine = machines.find(m => m.id === b.machineId);
                                 return (
-                                    <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, fontSize: '16px' }}>
+                                    <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '16px', wordBreak: 'break-word' }}>
                                                 {student?.name || 'Unknown'} <span style={{ opacity: 0.7, fontSize: '14px' }}>({student?.roomNumber || '?'})</span>
                                             </div>
                                             <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -895,7 +895,7 @@ export default function ManagerPanel() {
             {/* Feedback Section */}
             <section>
                 <h3 style={{ marginBottom: '16px' }}>Student Feedback ({feedbacks.length})</h3>
-                <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+                <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto', overflowX: 'auto' }}>
                     {feedbacks.length > 0 ? (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                             <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
