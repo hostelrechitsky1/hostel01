@@ -24,6 +24,7 @@
 html {
   background-color: var(--bg-solid);
   min-height: 100%;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -31,10 +32,12 @@ body {
   font-family: var(--font-family);
   background: var(--bg-gradient);
   background-color: var(--bg-solid);
-  background-attachment: fixed;
+  background-attachment: scroll;
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
 }
 
 /* Prevent iOS Zoom on inputs */
