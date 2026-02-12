@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
+import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
@@ -116,6 +117,16 @@ export default function Dashboard() {
 
         return { state: 'available', label: 'Ready to use', color: '#10b981' };
     };
+
+
+    const slotCapacity = useMemo(() => {
+        const activeMachines = machines.filter(m => m.status === 'available');
+        const totalSlots = TIME_SLOTS.length * activeMachines.length;
+        const selectedDate = formatBelarusDate(getBelarusDate());
+        const bookedToday = allBookings.filter(b => b.date === selectedDate).length;
+        const remainingSlots = Math.max(totalSlots - bookedToday, 0);
+        return { totalSlots, remainingSlots };
+    }, [machines, allBookings]);
 
     const handleLogout = () => {
         bookingService.logout();
@@ -233,7 +244,21 @@ export default function Dashboard() {
             </div>
 
             {/* Machine Status - Live View */}
-            <h3 style={{ marginBottom: '16px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
+            <h3 style={{ marginBottom: '10px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
+            <div className="glass-panel" style={{
+                marginBottom: '16px',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)'
+            }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Live Slot Capacity</div>
+                <div style={{ fontSize: '14px', fontWeight: 700 }}>
+                    Remaining {slotCapacity.remainingSlots}/{slotCapacity.totalSlots}
+                </div>
+            </div>
             <div className="grid-cols-2">
                 {machines.map(machine => {
                     const status = getMachineRealTimeStatus(machine);

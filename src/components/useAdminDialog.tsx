@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type DialogMode = 'alert' | 'confirm' | 'prompt';
 
@@ -118,5 +119,9 @@ export function useAdminDialog() {
         </div>
     ) : null;
 
-    return { alertDialog, confirmDialog, promptDialog, dialogNode };
+    const portalNode = typeof document !== 'undefined' && dialogNode
+        ? createPortal(dialogNode, document.body)
+        : dialogNode;
+
+    return { alertDialog, confirmDialog, promptDialog, dialogNode: portalNode };
 }
