@@ -148,7 +148,7 @@ export default function ManagerPanel() {
         const room = prompt('Enter Room Number (e.g. 101):');
         if (!room) return;
 
-        // Auto-generate PIN if exists for room, else new
+        // Preserve existing room PIN so current residents are never locked out.
         const existingStudent = students.find(s => s.roomNumber === room);
         const pin = existingStudent?.pin || Math.floor(100 + Math.random() * 900).toString();
 
@@ -159,11 +159,22 @@ export default function ManagerPanel() {
             pin
         };
 
-        // We need a proper addStudent method in service, but setDoc works
-        // Using direct firestoreService internals isn't ideal but we can add method to service or just use setDoc here?
-        // Better to add method to service.
         await firestoreService.addStudent(newStudent);
+        alert(`Resident added successfully.\n\nName: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
         refreshData();
+    };
+
+    const verifyManagerBeforePrintingCodes = () => {
+        const enteredPassword = prompt('Security check: Enter manager password to open Print Codes');
+        if (!enteredPassword) return;
+
+        const correctPassword = import.meta.env.VITE_MANAGER_PASSWORD || 'admin123';
+        if (enteredPassword !== correctPassword) {
+            alert('Incorrect password. Print Codes access denied.');
+            return;
+        }
+
+        navigate('/manager/print-credentials');
     };
 
     const handleDeleteStudent = async (student: Student) => {
@@ -249,7 +260,7 @@ export default function ManagerPanel() {
                 <h2>Manager Panel</h2>
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
-                        onClick={() => navigate('/manager/print-credentials')}
+                        onClick={verifyManagerBeforePrintingCodes}
                         className="glass-button"
                         style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
@@ -691,6 +702,7 @@ export default function ManagerPanel() {
                             <tr>
                                 <th style={{ padding: '12px', textAlign: 'left' }}>Room</th>
                                 <th style={{ padding: '12px', textAlign: 'left' }}>Name</th>
+                                <th style={{ padding: '12px', textAlign: 'left' }}>PIN</th>
                                 <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>
@@ -706,6 +718,7 @@ export default function ManagerPanel() {
                                     <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                                         <td style={{ padding: '12px', fontWeight: 600 }}>{s.roomNumber}</td>
                                         <td style={{ padding: '12px' }}>{s.name}</td>
+                                        <td style={{ padding: '12px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>{s.pin || '---'}</td>
                                         <td style={{ padding: '12px', textAlign: 'right' }}>
                                             <button onClick={() => handleEditStudent(s)} style={{ marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)' }}>Edit</button>
                                             <button onClick={() => handleDeleteStudent(s)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--error)' }}>Delete</button>
