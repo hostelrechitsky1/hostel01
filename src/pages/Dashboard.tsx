@@ -8,7 +8,7 @@ import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCir
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
-import { formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekday, isAutoBookingWindowOpen } from '../utils/time';
+import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -121,12 +121,24 @@ export default function Dashboard() {
 
     const slotCapacity = useMemo(() => {
         const activeMachines = machines.filter(m => m.status === 'available');
-        const totalSlots = TIME_SLOTS.length * activeMachines.length;
-        const selectedDate = formatBelarusDate(getBelarusDate());
-        const bookedToday = allBookings.filter(b => b.date === selectedDate).length;
-        const remainingSlots = Math.max(totalSlots - bookedToday, 0);
-        return { totalSlots, remainingSlots };
-    }, [machines, allBookings]);
+        const slotsPerDay = TIME_SLOTS.length * activeMachines.length;
+
+        const today = getBelarusDate();
+        const weekStart = isNextWeekOpen ? addBelarusDays(getBelarusWeekStart(today), 7) : getBelarusWeekStart(today);
+        const targetWeekId = getBelarusWeekId(weekStart);
+
+        const maintenanceDay = settings.maintenanceDay ?? 3;
+        const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
+        const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
+
+        const totalSlots = slotsPerDay * bookableDates.length;
+        const bookedInTargetWeek = allBookings.filter(
+            b => b.weekId === targetWeekId && bookableDates.includes(b.date)
+        ).length;
+        const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
+
+        return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
+    }, [machines, allBookings, settings.maintenanceDay, isNextWeekOpen]);
 
     const handleLogout = () => {
         bookingService.logout();
@@ -258,11 +270,11 @@ export default function Dashboard() {
                 <div>
                     <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>Live Slot Capacity</div>
                     <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>
-                        Total Slots: {slotCapacity.totalSlots}
+                        Total Slots: {slotCapacity.slotsPerDay}×{slotCapacity.bookableDays} = {slotCapacity.totalSlots}
                     </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Total Remaining</div>
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Week Remaining</div>
                     <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
                         {slotCapacity.remainingSlots}
                     </div>
