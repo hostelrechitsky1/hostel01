@@ -24,6 +24,32 @@ export default function PrintSchedule() {
     });
 
     const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const isStaff = sessionStorage.getItem('hostel_admin_auth');
+    const isRussian = !!isStaff && sessionStorage.getItem('hostel_admin_lang') === 'ru';
+
+    const t = isRussian ? {
+        loading: 'Загрузка расписания...',
+        back: 'Назад',
+        title: 'Печать расписания',
+        nextWeekTag: '(Следующая неделя)',
+        tip: 'Совет: Если в предпросмотре печати ориентация портретная, переключите на альбомную в настройках печати.',
+        currentWeek: 'Текущая неделя',
+        nextWeek: 'Следующая неделя',
+        maintenance: 'Обслуживание:',
+        printNow: 'Печатать',
+        time: 'Время'
+    } : {
+        loading: 'Loading Schedule...',
+        back: 'Back',
+        title: 'Print Schedule',
+        nextWeekTag: '(Next Week)',
+        tip: 'Tip: If the print preview is portrait, switch Orientation to Landscape in your print options.',
+        currentWeek: 'Current Week',
+        nextWeek: 'Next Week',
+        maintenance: 'Maintenance:',
+        printNow: 'Print Now',
+        time: 'Time'
+    };
 
     // Async Data
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -84,7 +110,7 @@ export default function PrintSchedule() {
         window.print();
     };
 
-    if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading Schedule...</div>;
+    if (loading) return <div className="flex-center" style={{ height: '100vh' }}>{t.loading}</div>;
 
 
 
@@ -101,17 +127,17 @@ export default function PrintSchedule() {
                 marginBottom: '40px'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <button onClick={() => navigate('/manager')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <ChevronLeft size={16} /> Back
+                    <button onClick={() => navigate(isStaff ? '/hostel-admin/dashboard' : '/manager')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ChevronLeft size={16} /> {t.back}
                     </button>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: '18px' }}>Print Schedule</h2>
+                        <h2 style={{ margin: 0, fontSize: '18px' }}>{t.title}</h2>
                         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '12px' }}>
                             {formatBelarusMonthDayLabel(weekStart)} - {formatBelarusMonthDayYearLabel(weekEnd)}
-                            {weekOffset === 1 && <span style={{ marginLeft: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>(Next Week)</span>}
+                            {weekOffset === 1 && <span style={{ marginLeft: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>{t.nextWeekTag}</span>}
                         </p>
                         <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '12px' }}>
-                            Tip: If the print preview is portrait, switch Orientation to Landscape in your print options.
+                            {t.tip}
                         </p>
                     </div>
                 </div>
@@ -122,18 +148,18 @@ export default function PrintSchedule() {
                         className={weekOffset === 0 ? 'primary-button' : 'glass-button'}
                         style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '14px' }}
                     >
-                        Current Week
+                        {t.currentWeek}
                     </button>
                     <button
                         onClick={() => setWeekOffset(1)}
                         className={weekOffset === 1 ? 'primary-button' : 'glass-button'}
                         style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '14px' }}
                     >
-                        Next Week
+                        {t.nextWeek}
                     </button>
 
                     <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', padding: '4px 8px', border: '1px solid var(--glass-border)' }}>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: '8px' }}>Maintenance:</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: '8px' }}>{t.maintenance}</span>
                         <select
                             value={maintenanceDay}
                             onChange={(e) => setMaintenanceDay(Number(e.target.value))}
@@ -166,7 +192,7 @@ export default function PrintSchedule() {
                             color: '#000'
                         }}
                     >
-                        <Printer size={18} /> Print Now
+                        <Printer size={18} /> {t.printNow}
                     </button>
                 </div>
             </div>
@@ -205,7 +231,7 @@ export default function PrintSchedule() {
                             <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ ...headerStyle, width: '60px' }}>Time</th>
+                                        <th style={{ ...headerStyle, width: '60px' }}>{t.time}</th>
                                         {weekDays.map(day => (
                                             <th key={day.toString()} style={headerStyle}>
                                                 {formatBelarusWeekdayLabel(day)}<br />

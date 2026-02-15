@@ -24,6 +24,8 @@
 html {
   background-color: var(--bg-solid);
   min-height: 100%;
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
 }
 
 body {
@@ -31,10 +33,13 @@ body {
   font-family: var(--font-family);
   background: var(--bg-gradient);
   background-color: var(--bg-solid);
-  background-attachment: fixed;
+  background-attachment: scroll;
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
+  touch-action: pan-y;
 }
 
 /* Prevent iOS Zoom on inputs */
@@ -52,6 +57,8 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overscroll-behavior-y: none;
+  overflow-x: clip;
 }
 
 /* Animations */
@@ -224,6 +231,12 @@ button {
 .grid-cols-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.grid-auto-fit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 

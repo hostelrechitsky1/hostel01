@@ -6,6 +6,7 @@ import { studentsRawData } from '../data/studentsRaw';
 import type { Booking, Machine, Student, Feedback, Banner, AppSettings } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { useAdminDialog } from '../components/useAdminDialog';
 
 export default function ManagerPanel() {
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -16,9 +17,11 @@ export default function ManagerPanel() {
     const [showBannerForm, setShowBannerForm] = useState(false);
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
     const [searchTerm, setSearchTerm] = useState('');
+    const [bookingPage, setBookingPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<AppSettings>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3, topAlert: { message: '', isActive: false, type: 'info' } });
     const navigate = useNavigate();
+    const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
     useEffect(() => {
         if (!sessionStorage.getItem('manager_auth')) {
@@ -46,7 +49,7 @@ export default function ManagerPanel() {
             setBanners(fetchedBanners);
         } catch (error) {
             console.error("Failed to load admin data", error);
-            alert("Failed to load data from database.");
+            await alertDialog('Load Failed', 'Failed to load data from database.');
         } finally {
             setLoading(false);
         }
@@ -66,6 +69,25 @@ export default function ManagerPanel() {
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [bookings, students, machines, searchTerm]);
 
+    const BOOKING_ITEMS_PER_PAGE = 12;
+    const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKING_ITEMS_PER_PAGE));
+
+    const paginatedBookings = useMemo(() => {
+        const start = (bookingPage - 1) * BOOKING_ITEMS_PER_PAGE;
+        return filteredBookings.slice(start, start + BOOKING_ITEMS_PER_PAGE);
+    }, [filteredBookings, bookingPage]);
+
+    useEffect(() => {
+        setBookingPage(1);
+    }, [searchTerm, bookings.length]);
+
+    useEffect(() => {
+        if (bookingPage > totalBookingPages) {
+            setBookingPage(totalBookingPages);
+        }
+    }, [bookingPage, totalBookingPages]);
+
+
     const toggleMachine = async (machine: Machine) => {
         const newStatus = machine.status === 'available' ? 'maintenance' : 'available';
         await firestoreService.updateMachineStatus(machine.id, newStatus);
@@ -73,23 +95,35 @@ export default function ManagerPanel() {
     };
 
     const handleAddMachine = async () => {
-        const name = prompt('Enter New Machine Name (e.g. Machine 5)');
-        if (name) {
-            await firestoreService.addMachine(name);
+        const name = await promptDialog('Add Machine', 'Enter New Machine Name (e.g. Machine 5)', {
+            placeholder: 'Machine name',
+            confirmText: 'Add Machine'
+        });
+        if (name?.trim()) {
+            await firestoreService.addMachine(name.trim());
             refreshData();
         }
     };
 
     const handleDeleteMachine = async (id: string, machineName: string) => {
-        if (confirm(`Permanently delete ${machineName}? This will also remove all bookings for this machine.`)) {
-            // Note: Ideally backend should cascade delete bookings, doing it here logicially
+        const confirmed = await confirmDialog(
+            'Delete Machine?',
+            `Permanently delete ${machineName}? This will also remove all bookings for this machine.`,
+            { confirmText: 'Delete', cancelText: 'Cancel', isDanger: true }
+        );
+        if (confirmed) {
             await firestoreService.deleteMachine(id);
             refreshData();
         }
     };
 
     const cancelBooking = async (id: string) => {
-        if (confirm('Are you sure you want to cancel this booking?')) {
+        const confirmed = await confirmDialog('Cancel Booking?', 'Are you sure you want to cancel this booking?', {
+            confirmText: 'Cancel Booking',
+            cancelText: 'Keep Booking',
+            isDanger: true
+        });
+        if (confirmed) {
             await firestoreService.cancelBooking(id);
             refreshData();
         }
@@ -109,7 +143,7 @@ export default function ManagerPanel() {
 
     const handleAddBanner = async () => {
         if (!newBanner.imageUrl) {
-            alert('Please enter an image URL');
+            await alertDialog('Banner Image Required', 'Please enter an image URL.');
             return;
         }
         const finalImageUrl = getDirectImageUrl(newBanner.imageUrl);
@@ -130,7 +164,12 @@ export default function ManagerPanel() {
     };
 
     const handleDeleteBanner = async (id: string) => {
-        if (confirm('Delete this banner?')) {
+        const confirmed = await confirmDialog('Delete Banner?', 'Delete this banner?', {
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            isDanger: true
+        });
+        if (confirmed) {
             await firestoreService.deleteBanner(id);
             refreshData();
         }
@@ -143,54 +182,91 @@ export default function ManagerPanel() {
 
     // --- Resident Management ---
     const handleAddStudent = async () => {
-        const name = prompt('Enter Student Name:');
-        if (!name) return;
-        const room = prompt('Enter Room Number (e.g. 101):');
-        if (!room) return;
+        const name = await promptDialog('Add Resident', 'Enter Student Name:', {
+            placeholder: 'Student name',
+            confirmText: 'Next'
+        });
+        if (!name?.trim()) return;
 
-        // Auto-generate PIN if exists for room, else new
-        const existingStudent = students.find(s => s.roomNumber === room);
+        const room = await promptDialog('Add Resident', 'Enter Room Number (e.g. 101):', {
+            placeholder: 'Room number',
+            confirmText: 'Create'
+        });
+        if (!room?.trim()) return;
+
+        // Preserve existing room PIN so current residents are never locked out.
+        const normalizedRoom = room.trim();
+        const normalizedName = name.trim();
+        const existingStudent = students.find(s => s.roomNumber === normalizedRoom);
         const pin = existingStudent?.pin || Math.floor(100 + Math.random() * 900).toString();
 
         const newStudent: Student = {
-            id: `${room}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
-            name,
-            roomNumber: room,
+            id: `${normalizedRoom}-${normalizedName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+            name: normalizedName,
+            roomNumber: normalizedRoom,
             pin
         };
 
-        // We need a proper addStudent method in service, but setDoc works
-        // Using direct firestoreService internals isn't ideal but we can add method to service or just use setDoc here?
-        // Better to add method to service.
         await firestoreService.addStudent(newStudent);
+        await alertDialog('Resident Added', `Name: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
         refreshData();
     };
 
+    const verifyManagerBeforePrintingCodes = async () => {
+        const enteredPassword = await promptDialog('Security Check', 'Enter manager password to open Print Codes', {
+            placeholder: 'Password',
+            inputType: 'password',
+            confirmText: 'Verify'
+        });
+        if (!enteredPassword) return;
+
+        const correctPassword = import.meta.env.VITE_MANAGER_PASSWORD || 'admin123';
+        if (enteredPassword !== correctPassword) {
+            await alertDialog('Access Denied', 'Incorrect password. Print Codes access denied.');
+            return;
+        }
+
+        navigate('/manager/print-credentials');
+    };
+
     const handleDeleteStudent = async (student: Student) => {
-        if (confirm(`Remove ${student.name} from Room ${student.roomNumber}?`)) {
+        const confirmed = await confirmDialog('Remove Resident?', `Remove ${student.name} from Room ${student.roomNumber}?`, {
+            confirmText: 'Delete',
+            cancelText: 'Keep',
+            isDanger: true
+        });
+        if (confirmed) {
             await firestoreService.deleteStudent(student.id);
             refreshData();
         }
     };
 
     const handleEditStudent = async (student: Student) => {
-        const newName = prompt('Edit Name:', student.name);
-        if (newName && newName !== student.name) {
-            const updated = { ...student, name: newName };
+        const newName = await promptDialog('Edit Resident', 'Update resident name:', {
+            defaultValue: student.name,
+            confirmText: 'Save'
+        });
+        if (newName && newName.trim() && newName.trim() !== student.name) {
+            const updated = { ...student, name: newName.trim() };
             await firestoreService.updateStudent(updated);
             refreshData();
         }
     };
 
     const handleSeedDatabase = async () => {
-        if (confirm('⚠️ WARNING: This will RESET all Room PINs and re-seed the student list.\n\nAll existing PINs will stop working.\nAre you sure?')) {
+        const confirmed = await confirmDialog(
+            'Reset Room PINs?',
+            'This will reset all room PINs and re-seed the student list. Existing PINs will stop working.',
+            { confirmText: 'Reset PINs', cancelText: 'Cancel', isDanger: true }
+        );
+        if (confirmed) {
             setLoading(true);
             try {
                 await firestoreService.seedStudents(studentsRawData);
-                alert('Database reset complete. New PINs generated.');
+                await alertDialog('Database Reset Complete', 'New PINs were generated successfully.');
                 refreshData();
             } catch (e) {
-                alert('Error: ' + e);
+                await alertDialog('Reset Failed', 'Error: ' + e);
             } finally {
                 setLoading(false);
             }
@@ -198,14 +274,19 @@ export default function ManagerPanel() {
     };
 
     const handleClearBookings = async () => {
-        if (confirm('⚠️ WARNING: This will DELETE ALL BOOKINGS.\n\nThis cannot be undone. Are you sure?')) {
+        const confirmed = await confirmDialog(
+            'Delete All Bookings?',
+            'This will permanently delete all bookings. This action cannot be undone.',
+            { confirmText: 'Delete All', cancelText: 'Cancel', isDanger: true }
+        );
+        if (confirmed) {
             setLoading(true);
             try {
                 await firestoreService.clearAllBookings();
-                alert('All bookings cleared.');
+                await alertDialog('Bookings Cleared', 'All bookings were deleted.');
                 refreshData();
             } catch (e) {
-                alert('Error: ' + e);
+                await alertDialog('Delete Failed', 'Error: ' + e);
             } finally {
                 setLoading(false);
             }
@@ -222,7 +303,8 @@ export default function ManagerPanel() {
         };
 
         // @ts-ignore
-        if (confirm(messages[key])) {
+        const confirmed = await confirmDialog('Confirm Setting Update', messages[key]);
+        if (confirmed) {
             await firestoreService.updateSettings({ [key]: newValue });
             refreshData();
         }
@@ -235,7 +317,7 @@ export default function ManagerPanel() {
             setSettings(prev => ({ ...prev, ...newSettings }));
         } catch (error) {
             console.error("Failed to update settings:", error);
-            alert("Failed to save settings");
+            await alertDialog('Save Failed', 'Failed to save settings.');
         }
     };
 
@@ -245,11 +327,11 @@ export default function ManagerPanel() {
 
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', gap: '12px', flexWrap: 'wrap' }}>
                 <h2>Manager Panel</h2>
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     <button
-                        onClick={() => navigate('/manager/print-credentials')}
+                        onClick={verifyManagerBeforePrintingCodes}
                         className="glass-button"
                         style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
@@ -476,7 +558,7 @@ export default function ManagerPanel() {
                         <Plus size={20} /> Add Machine
                     </button>
                 </div>
-                <div className="grid-cols-2">
+                <div className="grid-auto-fit">
                     {machines.map(m => (
                         <div key={m.id} className="glass-panel" style={{ padding: '16px', borderRadius: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -553,7 +635,7 @@ export default function ManagerPanel() {
                                     style={{ width: '100%', padding: '12px', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'white' }}
                                 />
                             </div>
-                            <div className="grid-cols-2">
+                            <div className="grid-auto-fit">
                                 <div>
                                     <label style={{ fontSize: '12px', display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>Action Link (Optional)</label>
                                     <input
@@ -609,7 +691,7 @@ export default function ManagerPanel() {
                     </div>
                 )}
 
-                <div className="grid-cols-2" style={{ marginBottom: '32px' }}>
+                <div className="grid-auto-fit" style={{ marginBottom: '32px' }}>
                     {banners.map(b => (
                         <div key={b.id} className="glass-panel" style={{ padding: 0, borderRadius: '12px', overflow: 'hidden', position: 'relative', border: b.isActive ? '1px solid var(--primary)' : '1px solid var(--glass-border)', opacity: b.isActive ? 1 : 0.6 }}>
                             <div style={{ height: '140px', background: '#1f2937', position: 'relative', overflow: 'hidden' }}>
@@ -685,12 +767,13 @@ export default function ManagerPanel() {
                     />
                 </div>
 
-                <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', padding: 0, borderRadius: '16px' }}>
+                <div className="glass-panel" style={{ maxHeight: '400px', overflowY: 'auto', overflowX: 'auto', padding: 0, borderRadius: '16px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                         <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
                             <tr>
                                 <th style={{ padding: '12px', textAlign: 'left' }}>Room</th>
                                 <th style={{ padding: '12px', textAlign: 'left' }}>Name</th>
+                                <th style={{ padding: '12px', textAlign: 'left' }}>PIN</th>
                                 <th style={{ padding: '12px', textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>
@@ -706,6 +789,7 @@ export default function ManagerPanel() {
                                     <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                                         <td style={{ padding: '12px', fontWeight: 600 }}>{s.roomNumber}</td>
                                         <td style={{ padding: '12px' }}>{s.name}</td>
+                                        <td style={{ padding: '12px', fontFamily: 'monospace', letterSpacing: '0.5px' }}>{s.pin || '---'}</td>
                                         <td style={{ padding: '12px', textAlign: 'right' }}>
                                             <button onClick={() => handleEditStudent(s)} style={{ marginRight: '8px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)' }}>Edit</button>
                                             <button onClick={() => handleDeleteStudent(s)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--error)' }}>Delete</button>
@@ -721,7 +805,7 @@ export default function ManagerPanel() {
             {/* Recent Bookings */}
             <section>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                    <h3 style={{ margin: 0 }}>All Bookings ({bookings.length})</h3>
+                    <h3 style={{ margin: 0 }}>All Bookings ({filteredBookings.length})</h3>
                     <input
                         type="text"
                         placeholder="Search Name or Room..."
@@ -743,13 +827,13 @@ export default function ManagerPanel() {
                 <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden', background: 'none', border: 'none', padding: 0 }}>
                     {filteredBookings.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {filteredBookings.map(b => {
+                            {paginatedBookings.map(b => {
                                 const student = students.find(s => s.id === b.studentId);
                                 const machine = machines.find(m => m.id === b.machineId);
                                 return (
-                                    <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, fontSize: '16px' }}>
+                                    <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '16px', wordBreak: 'break-word' }}>
                                                 {student?.name || 'Unknown'} <span style={{ opacity: 0.7, fontSize: '14px' }}>({student?.roomNumber || '?'})</span>
                                             </div>
                                             <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -780,12 +864,38 @@ export default function ManagerPanel() {
                         </div>
                     )}
                 </div>
+
+                {filteredBookings.length > 0 && (
+                    <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                            Page {bookingPage} of {totalBookingPages}
+                        </span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                className="glass-button"
+                                onClick={() => setBookingPage((prev) => Math.max(1, prev - 1))}
+                                disabled={bookingPage === 1}
+                                style={{ padding: '8px 12px', borderRadius: '8px', opacity: bookingPage === 1 ? 0.5 : 1 }}
+                            >
+                                Previous
+                            </button>
+                            <button
+                                className="glass-button"
+                                onClick={() => setBookingPage((prev) => Math.min(totalBookingPages, prev + 1))}
+                                disabled={bookingPage === totalBookingPages}
+                                style={{ padding: '8px 12px', borderRadius: '8px', opacity: bookingPage === totalBookingPages ? 0.5 : 1 }}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </section>
 
             {/* Feedback Section */}
             <section>
                 <h3 style={{ marginBottom: '16px' }}>Student Feedback ({feedbacks.length})</h3>
-                <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+                <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto', overflowX: 'auto' }}>
                     {feedbacks.length > 0 ? (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                             <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
@@ -820,7 +930,12 @@ export default function ManagerPanel() {
                                         <td style={{ padding: '12px', textAlign: 'right' }}>
                                             <button
                                                 onClick={async () => {
-                                                    if (confirm('Delete feedback?')) {
+                                                    const confirmed = await confirmDialog('Delete Feedback?', 'Delete this feedback entry?', {
+                                                        confirmText: 'Delete',
+                                                        cancelText: 'Cancel',
+                                                        isDanger: true
+                                                    });
+                                                    if (confirmed) {
                                                         await firestoreService.deleteFeedback(f.id);
                                                         const [fb] = await Promise.all([firestoreService.getFeedbacks()]);
                                                         setFeedbacks(fb);
@@ -840,6 +955,7 @@ export default function ManagerPanel() {
                     )}
                 </div>
             </section>
+            {dialogNode}
         </div >
 
     );

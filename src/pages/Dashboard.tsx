@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
+import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
-import { formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekday, isAutoBookingWindowOpen } from '../utils/time';
+import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
 
 export default function Dashboard() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
-    const [upcomingBooking, setUpcomingBooking] = useState<Booking | null>(null);
+    const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
     const [history, setHistory] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
@@ -24,6 +26,10 @@ export default function Dashboard() {
         maintenanceDay: 3,
         topAlert: { message: '', isActive: false, type: 'info' }
     });
+    const [reminderMinutes, setReminderMinutes] = useState(30);
+    const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
+    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -49,20 +55,13 @@ export default function Dashboard() {
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
 
-                // Filter for My Bookings
                 const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
-                const now = new Date();
-
-                // Sort: Newest first for sorting array handling
-                myBookings.sort((a, b) => {
-                    return new Date(b.date + 'T' + b.startTime).getTime() - new Date(a.date + 'T' + a.startTime).getTime();
-                });
-
                 const chronological = [...myBookings].sort((a, b) =>
                     new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
                 );
 
-                const nextBooking = chronological.find(b => {
+                const now = new Date();
+                const futureBookings = chronological.filter(b => {
                     const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
                     return end > now;
                 });
@@ -70,9 +69,9 @@ export default function Dashboard() {
                 const pastBookings = chronological.filter(b => {
                     const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
                     return end <= now;
-                }).reverse(); // Most recent finished first
+                }).reverse();
 
-                setUpcomingBooking(nextBooking || null);
+                setUpcomingBookings(futureBookings);
                 setHistory(pastBookings);
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
@@ -117,13 +116,164 @@ export default function Dashboard() {
         return { state: 'available', label: 'Ready to use', color: '#10b981' };
     };
 
+
+    const slotCapacity = useMemo(() => {
+        const activeMachines = machines.filter(m => m.status === 'available');
+        const slotsPerDay = TIME_SLOTS.length * activeMachines.length;
+
+        const today = getBelarusDate();
+        const weekStart = isNextWeekOpen ? addBelarusDays(getBelarusWeekStart(today), 7) : getBelarusWeekStart(today);
+        const targetWeekId = getBelarusWeekId(weekStart);
+
+        const maintenanceDay = settings.maintenanceDay ?? 3;
+        const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
+        const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
+
+        const totalSlots = slotsPerDay * bookableDates.length;
+        const bookedInTargetWeek = allBookings.filter(
+            b => b.weekId === targetWeekId && bookableDates.includes(b.date)
+        ).length;
+        const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
+
+        return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
+    }, [machines, allBookings, settings.maintenanceDay, isNextWeekOpen]);
+
     const handleLogout = () => {
         bookingService.logout();
         navigate('/login');
     };
 
+    const formatUtcForIcs = (date: Date) => {
+        return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    };
+
+    const hasUpcomingBooking = upcomingBookings.length > 0;
+    const primaryUpcomingBooking = upcomingBookings[0] || null;
+    const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
+    const mainActionSubtitle = isSystemClosed
+        ? 'Bookings are currently closed'
+        : hasUpcomingBooking
+            ? 'You already booked. You can still open slots page to browse remaining slots'
+            : 'Book your slot for next week';
+
+    const getUpcomingDateForWeekday = (weekday: number) => {
+        const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+        const dayOffset = weekday === 0 ? 6 : weekday - 1;
+        return addBelarusDays(baseWeekStart, dayOffset);
+    };
+
+    const handleQuickBookFromHistory = (booking: Booking) => {
+        setQuickBookModalBooking(booking);
+        setQuickBookModalMessage(null);
+    };
+
+    const handleConfirmQuickBook = async () => {
+        if (!user || !quickBookModalBooking || quickBookingId) return;
+
+        const booking = quickBookModalBooking;
+        const sourceDate = new Date(`${booking.date}T00:00:00Z`);
+        const targetDate = getUpcomingDateForWeekday(getBelarusWeekday(sourceDate));
+        const targetDateLabel = format(targetDate, 'EEE, MMM d');
+
+        if (settings.forceCloseBookings || !isNextWeekOpen) {
+            setQuickBookModalMessage({ type: 'error', text: 'Quick Book is closed right now. Booking window is not open yet.' });
+            return;
+        }
+
+        const machine = machines.find(m => m.id === booking.machineId);
+        if (!machine || machine.status === 'maintenance') {
+            setQuickBookModalMessage({ type: 'error', text: 'Machine is under maintenance. Please choose another slot.' });
+            return;
+        }
+
+        const maintenanceDay = settings.maintenanceDay ?? 3;
+        if (getBelarusWeekday(targetDate) === maintenanceDay) {
+            setQuickBookModalMessage({ type: 'error', text: 'Selected day is maintenance day, so quick booking is unavailable.' });
+            return;
+        }
+
+        if (!TIME_SLOTS.includes(booking.startTime as (typeof TIME_SLOTS)[number])) {
+            setQuickBookModalMessage({ type: 'error', text: 'Original slot time is no longer available.' });
+            return;
+        }
+
+        const targetDateStr = formatBelarusDate(targetDate);
+        const existingSlotBooking = allBookings.find(b =>
+            b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
+        );
+
+        if (existingSlotBooking) {
+            const isYourExistingBooking = existingSlotBooking.studentId === user.id;
+            setQuickBookModalMessage({
+                type: 'error',
+                text: isYourExistingBooking
+                    ? 'You already booked this exact machine and slot for next week (likely from Book Now page).'
+                    : 'This exact machine and slot is already booked by another resident for next week.'
+            });
+            return;
+        }
+
+        setQuickBookingId(booking.id);
+
+        const bookingData: Booking = {
+            id: Date.now().toString(),
+            machineId: booking.machineId,
+            studentId: user.id,
+            studentName: user.name,
+            roomNumber: user.roomNumber,
+            date: targetDateStr,
+            startTime: booking.startTime,
+            endTime: booking.startTime,
+            weekId: getBelarusWeekId(targetDate),
+            createdAt: Date.now()
+        };
+
+        try {
+            const result = await firestoreService.createBooking(bookingData);
+            if (!result.success) {
+                const detailedError = result.error?.includes('Slot already booked by another student')
+                    ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'
+                    : result.error?.includes('already booked a slot for this week')
+                        ? 'You already have a booking for this week (including bookings made via Book Now page).' 
+                        : result.error || 'Quick booking failed. Please try again.';
+                setQuickBookModalMessage({ type: 'error', text: detailedError });
+                return;
+            }
+
+            const refreshedBookings = await firestoreService.getBookings();
+            setAllBookings(refreshedBookings);
+
+            const myBookings = refreshedBookings.filter(b => b.studentId === user.id);
+            const chronological = [...myBookings].sort((a, b) =>
+                new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
+            );
+            const now = new Date();
+            const futureBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now);
+            const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
+
+            setUpcomingBookings(futureBookings);
+            setHistory(pastBookings);
+            setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+        } catch (error) {
+            console.error('Quick booking failed', error);
+            setQuickBookModalMessage({ type: 'error', text: 'Quick booking failed due to a system error.' });
+        } finally {
+            setQuickBookingId(null);
+        }
+    };
+
+
     if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
     if (!user) return null;
+
+    const quickBookTargetDate = quickBookModalBooking
+        ? getUpcomingDateForWeekday(getBelarusWeekday(new Date(`${quickBookModalBooking.date}T00:00:00Z`)))
+        : null;
+    const quickBookMachine = quickBookModalBooking
+        ? machines.find(m => m.id === quickBookModalBooking.machineId)
+        : null;
+    const quickBookMachineLabel = quickBookMachine?.name || `Machine ${quickBookModalBooking?.machineId || ''}`;
+    const modalRoot = typeof document !== 'undefined' ? document.body : null;
 
     return (
         <div className="container animate-fade-in">
@@ -214,7 +364,7 @@ export default function Dashboard() {
                 <div>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
-                        {isSystemClosed ? 'Bookings are currently closed' : 'Book your slot for next week'}
+                        {mainActionSubtitle}
                     </p>
                 </div>
                 <button
@@ -223,17 +373,40 @@ export default function Dashboard() {
                     style={{
                         padding: '12px 24px',
                         borderRadius: '12px',
-                        background: isSystemClosed ? '#ef4444' : 'var(--primary)',
+                        background: isSystemClosed ? '#ef4444' : hasUpcomingBooking ? '#10b981' : 'var(--primary)',
                         opacity: 1,
                         cursor: 'pointer'
                     }}
                 >
-                    {isSystemClosed ? 'Check Status' : 'Book Now'}
+                    {mainActionLabel}
                 </button>
             </div>
 
             {/* Machine Status - Live View */}
-            <h3 style={{ marginBottom: '16px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
+            <h3 style={{ marginBottom: '10px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
+            <div className="glass-panel" style={{
+                marginBottom: '16px',
+                padding: '14px 16px',
+                borderRadius: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.24) 0%, rgba(99, 102, 241, 0.12) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.45)'
+            }}>
+                <div>
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Total Slots</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
+                        {slotCapacity.totalSlots}
+                    </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Week Remaining</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
+                        {slotCapacity.remainingSlots}
+                    </div>
+                </div>
+            </div>
             <div className="grid-cols-2">
                 {machines.map(machine => {
                     const status = getMachineRealTimeStatus(machine);
@@ -281,7 +454,7 @@ export default function Dashboard() {
             {/* Your Bookings */}
             <div style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px' }}>Your Upcoming Booking</h3>
-                {upcomingBooking ? (
+                {primaryUpcomingBooking ? (
                     <div
                         className="glass-panel"
                         style={{
@@ -300,28 +473,68 @@ export default function Dashboard() {
                             </div>
                             <div>
                                 <p style={{ margin: 0, fontWeight: 600, fontSize: '18px' }}>
-                                    {format(new Date(upcomingBooking.date), 'EEEE, MMM d')}
+                                    {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMM d')}
                                 </p>
                                 <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                                    {upcomingBooking.startTime} • {machines.find(m => m.id === upcomingBooking.machineId)?.name || 'Machine'}
+                                    {primaryUpcomingBooking.startTime} • {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
                                 </p>
                             </div>
+                        </div>
+
+                        {upcomingBookings.length > 1 && (
+                            <div
+                                className="glass-panel"
+                                style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(99,102,241,0.35)',
+                                    background: 'rgba(99,102,241,0.08)'
+                                }}
+                            >
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Also upcoming</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {upcomingBookings.slice(1, 3).map((booking) => (
+                                        <div key={booking.id} style={{ fontSize: '13px' }}>
+                                            {format(new Date(booking.date), 'EEE, MMM d')} • {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Reminder</span>
+                            <select
+                                value={reminderMinutes}
+                                onChange={(e) => setReminderMinutes(Number(e.target.value))}
+                                style={{
+                                    padding: '8px 10px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(0,0,0,0.2)',
+                                    border: '1px solid var(--glass-border)',
+                                    color: 'var(--text-main)'
+                                }}
+                            >
+                                <option value={10}>10 min before</option>
+                                <option value={30}>30 min before</option>
+                                <option value={60}>1 hour before</option>
+                            </select>
                         </div>
 
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
                             {/* Google Calendar Button */}
                             <button
                                 onClick={() => {
-                                    if (!upcomingBooking) return;
-                                    const start = new Date(upcomingBooking.date + 'T' + upcomingBooking.startTime);
+                                    if (!primaryUpcomingBooking) return;
+                                    const start = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
                                     const end = addMinutes(start, 90);
 
                                     const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, "").slice(0, 15) + 'Z';
 
                                     const url = `https://www.google.com/calendar/render?action=TEMPLATE` +
-                                        `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === upcomingBooking.machineId)?.name || "Machine"))}` +
+                                        `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || "Machine"))}` +
                                         `&dates=${formatGCal(start)}/${formatGCal(end)}` +
-                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Remember to clear the machine when done.")}` +
+                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: " + reminderMinutes + " minutes before. Remember to clear the machine when done.")}` +
                                         `&location=${encodeURIComponent("Laundry Room")}` +
                                         `&sprop=&sprop=name:`;
 
@@ -336,35 +549,67 @@ export default function Dashboard() {
 
                             {/* ICS / Apple Calendar Button */}
                             <button
-                                onClick={() => {
-                                    if (!upcomingBooking) return;
-                                    const startStr = upcomingBooking.date.replace(/-/g, '') + 'T' + upcomingBooking.startTime.replace(':', '') + '00';
-                                    const end = addMinutes(new Date(upcomingBooking.date + 'T' + upcomingBooking.startTime), 90);
-                                    const endStr = format(end, "yyyyMMdd'T'HHmmss");
+                                onClick={async () => {
+                                    if (!primaryUpcomingBooking) return;
 
-                                    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-SUMMARY:Hostel Laundry - ${machines.find(m => m.id === upcomingBooking.machineId)?.name}
-DTSTART:${startStr}
-DTEND:${endStr}
-DESCRIPTION:Remember to empty the machine on time!
-LOCATION:Laundry Room
-BEGIN:VALARM
-TRIGGER:-PT30M
-DESCRIPTION:Laundry Reminder
-ACTION:DISPLAY
-END:VALARM
-END:VEVENT
-END:VCALENDAR`;
-                                    const blob = new Blob([icsContent], { type: 'text/calendar' });
+                                    const startDate = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
+                                    const endDate = addMinutes(startDate, 90);
+                                    const uid = `${primaryUpcomingBooking.id || Date.now()}@hostel-wash`;
+
+                                    const icsContent = [
+                                        'BEGIN:VCALENDAR',
+                                        'VERSION:2.0',
+                                        'PRODID:-//Hostel Wash//Booking Reminder//EN',
+                                        'CALSCALE:GREGORIAN',
+                                        'METHOD:PUBLISH',
+                                        'BEGIN:VEVENT',
+                                        `UID:${uid}`,
+                                        `DTSTAMP:${formatUtcForIcs(new Date())}`,
+                                        `DTSTART:${formatUtcForIcs(startDate)}`,
+                                        `DTEND:${formatUtcForIcs(endDate)}`,
+                                        `SUMMARY:Hostel Laundry - ${machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}`,
+                                        'DESCRIPTION:Remember to empty the machine on time!',
+                                        'LOCATION:Laundry Room',
+                                        'BEGIN:VALARM',
+                                        `TRIGGER:-PT${reminderMinutes}M`,
+                                        'ACTION:DISPLAY',
+                                        'DESCRIPTION:Laundry Reminder',
+                                        'END:VALARM',
+                                        'END:VEVENT',
+                                        'END:VCALENDAR'
+                                    ].join('\r\n');
+
+                                    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+                                    const file = new File([blob], 'laundry-booking.ics', { type: 'text/calendar' });
+
+                                    try {
+                                        if (navigator.share && (navigator as any).canShare?.({ files: [file] })) {
+                                            await navigator.share({
+                                                files: [file],
+                                                title: 'Laundry Booking Reminder'
+                                            });
+                                            return;
+                                        }
+                                    } catch {
+                                        // If share is cancelled/unsupported, fallback to download.
+                                    }
+
                                     const url = window.URL.createObjectURL(blob);
+
+                                    // iOS/Safari compatibility: attempt open in a new tab first, then fall back to explicit download.
+                                    const openedWindow = window.open(url, '_blank');
+                                    if (openedWindow) {
+                                        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                                        return;
+                                    }
+
                                     const link = document.createElement('a');
                                     link.href = url;
                                     link.setAttribute('download', 'laundry-booking.ics');
                                     document.body.appendChild(link);
                                     link.click();
                                     document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(url);
                                 }}
                                 className="glass-button"
                                 style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
@@ -407,15 +652,34 @@ END:VCALENDAR`;
                                         borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--glass-border)',
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        gap: '12px'
                                     }}
                                 >
                                     <div>
-                                        <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'MMM d, yyyy')}</div>
+                                        <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'EEE, MMM d, yyyy')}</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.startTime}</div>
                                     </div>
-                                    <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                        Done
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <button
+                                            onClick={() => handleQuickBookFromHistory(booking)}
+                                            className="primary-button"
+                                            disabled={quickBookingId === booking.id}
+                                            style={{
+                                                padding: '8px 12px',
+                                                borderRadius: '10px',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                background: 'var(--primary)',
+                                                opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
+                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
+                                            }}
+                                        >
+                                            {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
+                                        </button>
+                                        <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                            Done
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -423,6 +687,64 @@ END:VCALENDAR`;
                     </div>
                 )
             }
+
+            {modalRoot && quickBookModalBooking && createPortal(
+                <div className="modal-overlay" onClick={() => setQuickBookModalBooking(null)}>
+                    <div className="glass-panel modal-card" onClick={(e) => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
+                        <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
+                            {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
+                        </p>
+                        <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
+                            Machine: {quickBookMachineLabel}
+                        </p>
+
+                        {quickBookModalMessage && (
+                            <div
+                                style={{
+                                    marginBottom: '14px',
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    fontSize: '13px',
+                                    color: quickBookModalMessage.type === 'success' ? '#a7f3d0' : '#fecaca',
+                                    border: quickBookModalMessage.type === 'success'
+                                        ? '1px solid rgba(16,185,129,0.4)'
+                                        : '1px solid rgba(239,68,68,0.4)',
+                                    background: quickBookModalMessage.type === 'success'
+                                        ? 'rgba(16,185,129,0.12)'
+                                        : 'rgba(239,68,68,0.12)'
+                                }}
+                            >
+                                {quickBookModalMessage.text}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                            <button
+                                onClick={() => setQuickBookModalBooking(null)}
+                                className="glass-button"
+                                style={{ padding: '10px 18px', borderRadius: '10px' }}
+                            >
+                                Close
+                            </button>
+                            <button
+                                onClick={handleConfirmQuickBook}
+                                disabled={quickBookingId === quickBookModalBooking.id}
+                                className="primary-button"
+                                style={{
+                                    padding: '10px 18px',
+                                    borderRadius: '10px',
+                                    opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
+                                    cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                modalRoot
+            )}
 
             {/* Inline Feedback Section */}
             <DashboardFeedback />
