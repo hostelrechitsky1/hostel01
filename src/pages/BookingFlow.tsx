@@ -132,6 +132,12 @@ export default function BookingFlow() {
         }
     }, [showConfirmation]);
 
+    useEffect(() => {
+        if (!showConfirmation) return;
+        const timer = window.setTimeout(() => setShowConfirmation(false), 1800);
+        return () => window.clearTimeout(timer);
+    }, [showConfirmation]);
+
     const availability = useMemo(() => {
         const dateStr = formatBelarusDate(selectedDate);
         const dateBookings = bookings.filter(b => b.date === dateStr);
@@ -188,19 +194,21 @@ export default function BookingFlow() {
         try {
             const result = await firestoreService.createBooking(bookingData);
             if (result.success) {
+                const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
+                setBookings(prev => [...prev, { ...bookingData, id: createdSlotId }]);
                 triggerHaptic([20, 40, 20, 80, 20]);
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
-                setTimeout(() => navigate('/'), 2000);
+                setSelectedMachine(null);
             } else {
                 setError(result.error || 'Booking failed');
                 setTimeout(() => setError(''), 3000);
-                setSubmitting(false); // Only reset on error
             }
         } catch (e: any) {
             console.error('Booking transaction failed:', e);
             console.error('Error details:', e.message, e.code);
             setError(`System error: ${e.message || 'Please try again.'}`);
+        } finally {
             setSubmitting(false);
         }
     };
@@ -382,7 +390,9 @@ export default function BookingFlow() {
                             {selectedSlot === time && (
                                 <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
                                     {activeMachines.map(m => {
-                                        const isBooked = bookedMachineIds.includes(m.id);
+                                        const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
+                                        const isBooked = Boolean(bookingForMachine);
+                                        const isBookedByUser = bookingForMachine?.studentId === user?.id;
                                         return (
                                             <button
                                                 key={m.id}
@@ -400,15 +410,15 @@ export default function BookingFlow() {
                                                     background: isBooked
                                                         ? 'var(--glass-bg)'
                                                         : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
-                                                    border: isBooked ? '1px solid var(--glass-border)' : 'none',
-                                                    color: isBooked ? 'var(--text-muted)' : 'var(--text-main)',
+                                                    border: isBookedByUser ? '1px solid rgba(16, 185, 129, 0.5)' : isBooked ? '1px solid var(--glass-border)' : 'none',
+                                                    color: isBookedByUser ? '#a7f3d0' : isBooked ? 'var(--text-muted)' : 'var(--text-main)',
                                                     cursor: isBooked ? 'not-allowed' : 'pointer',
-                                                    opacity: isBooked ? 0.6 : 1,
+                                                    opacity: isBooked ? 0.75 : 1,
                                                     position: 'relative'
                                                 }}
                                             >
                                                 {m.name}
-                                                {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>(Booked)</div>}
+                                                {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
                                             </button>
                                         );
                                     })}
@@ -476,7 +486,7 @@ export default function BookingFlow() {
                                     <CheckCircle size={40} color="#10b981" />
                                 </div>
                                 <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
-                                <p style={{ color: 'var(--text-muted)' }}>See you in the laundry room.</p>
+                                <p style={{ color: 'var(--text-muted)' }}>Slot booked. You can continue browsing other available slots.</p>
                             </div>
                         </div>
                     )}
