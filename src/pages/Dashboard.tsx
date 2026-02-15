@@ -663,14 +663,13 @@ export default function Dashboard() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <button
                                             onClick={() => handleQuickBookFromHistory(booking)}
-                                            className="primary-button"
+                                            className="glass-button"
                                             disabled={quickBookingId === booking.id}
                                             style={{
                                                 padding: '8px 12px',
                                                 borderRadius: '10px',
                                                 fontSize: '12px',
-                                                fontWeight: 700,
-                                                background: 'var(--primary)',
+                                                fontWeight: 600,
                                                 opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
                                                 cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
                                             }}
