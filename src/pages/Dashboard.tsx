@@ -5,7 +5,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Sparkles, ArrowRight } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -663,35 +663,18 @@ export default function Dashboard() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <button
                                             onClick={() => handleQuickBookFromHistory(booking)}
-                                            className="glass-button"
+                                            className="primary-button"
                                             disabled={quickBookingId === booking.id}
                                             style={{
-                                                padding: '9px 13px',
-                                                borderRadius: '12px',
+                                                padding: '8px 12px',
+                                                borderRadius: '10px',
                                                 fontSize: '12px',
                                                 fontWeight: 700,
-                                                background: 'rgba(255, 255, 255, 0.1)',
                                                 opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                boxShadow: '0 8px 18px rgba(15, 23, 42, 0.28)',
-                                                border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                backdropFilter: 'blur(8px)',
-                                                WebkitBackdropFilter: 'blur(8px)',
-                                                transition: 'transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease'
+                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
                                             }}
                                         >
-                                            {quickBookingId === booking.id ? (
-                                                'Booking...'
-                                            ) : (
-                                                <>
-                                                    <Sparkles size={13} />
-                                                    <span>Quick Book</span>
-                                                    <ArrowRight size={13} />
-                                                </>
-                                            )}
+                                            {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
                                         </button>
                                         <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
                                             Done
