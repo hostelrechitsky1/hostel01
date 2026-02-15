@@ -663,22 +663,24 @@ export default function Dashboard() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <button
                                             onClick={() => handleQuickBookFromHistory(booking)}
-                                            className="primary-button"
+                                            className="glass-button"
                                             disabled={quickBookingId === booking.id}
                                             style={{
                                                 padding: '9px 13px',
                                                 borderRadius: '12px',
                                                 fontSize: '12px',
                                                 fontWeight: 700,
-                                                background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)',
+                                                background: 'rgba(255, 255, 255, 0.1)',
                                                 opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
                                                 cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 gap: '6px',
-                                                boxShadow: '0 8px 18px rgba(99, 102, 241, 0.35)',
-                                                border: '1px solid rgba(255, 255, 255, 0.22)',
-                                                transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                                                boxShadow: '0 8px 18px rgba(15, 23, 42, 0.28)',
+                                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                backdropFilter: 'blur(8px)',
+                                                WebkitBackdropFilter: 'blur(8px)',
+                                                transition: 'transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease'
                                             }}
                                         >
                                             {quickBookingId === booking.id ? (
