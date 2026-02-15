@@ -452,6 +452,14 @@ export default function Dashboard() {
                                     }
 
                                     const url = window.URL.createObjectURL(blob);
+
+                                    // iOS/Safari compatibility: attempt open in a new tab first, then fall back to explicit download.
+                                    const openedWindow = window.open(url, '_blank');
+                                    if (openedWindow) {
+                                        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                                        return;
+                                    }
+
                                     const link = document.createElement('a');
                                     link.href = url;
                                     link.setAttribute('download', 'laundry-booking.ics');
@@ -505,7 +513,7 @@ export default function Dashboard() {
                                     }}
                                 >
                                     <div>
-                                        <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'MMM d, yyyy')}</div>
+                                        <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'EEE, MMM d, yyyy')}</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.startTime}</div>
                                     </div>
                                     <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
