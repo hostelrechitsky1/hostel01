@@ -26,6 +26,8 @@ export default function Dashboard() {
         topAlert: { message: '', isActive: false, type: 'info' }
     });
     const [reminderMinutes, setReminderMinutes] = useState(30);
+    const [quickBookStatus, setQuickBookStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -51,19 +53,12 @@ export default function Dashboard() {
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
 
-                // Filter for My Bookings
                 const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
-                const now = new Date();
-
-                // Sort: Newest first for sorting array handling
-                myBookings.sort((a, b) => {
-                    return new Date(b.date + 'T' + b.startTime).getTime() - new Date(a.date + 'T' + a.startTime).getTime();
-                });
-
                 const chronological = [...myBookings].sort((a, b) =>
                     new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
                 );
 
+                const now = new Date();
                 const nextBooking = chronological.find(b => {
                     const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
                     return end > now;
@@ -72,7 +67,7 @@ export default function Dashboard() {
                 const pastBookings = chronological.filter(b => {
                     const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
                     return end <= now;
-                }).reverse(); // Most recent finished first
+                }).reverse();
 
                 setUpcomingBooking(nextBooking || null);
                 setHistory(pastBookings);
@@ -149,6 +144,99 @@ export default function Dashboard() {
     const formatUtcForIcs = (date: Date) => {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
+
+    const getUpcomingDateForWeekday = (weekday: number) => {
+        const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+        const dayOffset = weekday === 0 ? 6 : weekday - 1;
+        return addBelarusDays(baseWeekStart, dayOffset);
+    };
+
+    const handleQuickBookFromHistory = async (booking: Booking) => {
+        if (!user || quickBookingId) return;
+
+        if (settings.forceCloseBookings || !isNextWeekOpen) {
+            setQuickBookStatus({ type: 'error', text: 'Quick Book is closed right now. Booking window is not open yet.' });
+            return;
+        }
+
+        const sourceDate = new Date(`${booking.date}T00:00:00Z`);
+        const targetDate = getUpcomingDateForWeekday(getBelarusWeekday(sourceDate));
+        const targetDateLabel = format(targetDate, 'EEE, MMM d');
+
+        const confirmed = window.confirm(`Quick book ${booking.startTime} on ${targetDateLabel} with the same machine?`);
+        if (!confirmed) return;
+
+        const machine = machines.find(m => m.id === booking.machineId);
+        if (!machine || machine.status === 'maintenance') {
+            setQuickBookStatus({ type: 'error', text: 'This machine is under maintenance. Please pick another machine/time.' });
+            return;
+        }
+
+        const maintenanceDay = settings.maintenanceDay ?? 3;
+        if (getBelarusWeekday(targetDate) === maintenanceDay) {
+            setQuickBookStatus({ type: 'error', text: 'This day is maintenance day, so quick booking is not available.' });
+            return;
+        }
+
+        if (!TIME_SLOTS.includes(booking.startTime as (typeof TIME_SLOTS)[number])) {
+            setQuickBookStatus({ type: 'error', text: 'Original slot time is no longer available in the schedule.' });
+            return;
+        }
+
+        const targetDateStr = formatBelarusDate(targetDate);
+        const slotTaken = allBookings.some(b =>
+            b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
+        );
+
+        if (slotTaken) {
+            setQuickBookStatus({ type: 'error', text: 'That same machine/time is already booked for next week.' });
+            return;
+        }
+
+        setQuickBookingId(booking.id);
+
+        const bookingData: Booking = {
+            id: Date.now().toString(),
+            machineId: booking.machineId,
+            studentId: user.id,
+            studentName: user.name,
+            roomNumber: user.roomNumber,
+            date: targetDateStr,
+            startTime: booking.startTime,
+            endTime: booking.startTime,
+            weekId: getBelarusWeekId(targetDate),
+            createdAt: Date.now()
+        };
+
+        try {
+            const result = await firestoreService.createBooking(bookingData);
+            if (!result.success) {
+                setQuickBookStatus({ type: 'error', text: result.error || 'Quick booking failed. Please try again.' });
+                return;
+            }
+
+            const refreshedBookings = await firestoreService.getBookings();
+            setAllBookings(refreshedBookings);
+
+            const myBookings = refreshedBookings.filter(b => b.studentId === user.id);
+            const chronological = [...myBookings].sort((a, b) =>
+                new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
+            );
+            const now = new Date();
+            const nextBooking = chronological.find(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now) || null;
+            const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
+
+            setUpcomingBooking(nextBooking);
+            setHistory(pastBookings);
+            setQuickBookStatus({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+        } catch (error) {
+            console.error('Quick booking failed', error);
+            setQuickBookStatus({ type: 'error', text: 'Quick booking failed due to a system error.' });
+        } finally {
+            setQuickBookingId(null);
+        }
+    };
+
 
     if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
     if (!user) return null;
@@ -500,6 +588,25 @@ export default function Dashboard() {
                         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <History size={20} /> Past Bookings
                         </h3>
+                        {quickBookStatus && (
+                            <div
+                                style={{
+                                    marginBottom: '10px',
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    fontSize: '13px',
+                                    color: quickBookStatus.type === 'success' ? '#a7f3d0' : '#fecaca',
+                                    border: quickBookStatus.type === 'success'
+                                        ? '1px solid rgba(16,185,129,0.4)'
+                                        : '1px solid rgba(239,68,68,0.4)',
+                                    background: quickBookStatus.type === 'success'
+                                        ? 'rgba(16,185,129,0.12)'
+                                        : 'rgba(239,68,68,0.12)'
+                                }}
+                            >
+                                {quickBookStatus.text}
+                            </div>
+                        )}
                         <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden' }}>
                             {history.slice(0, 5).map((booking, i, arr) => (
                                 <div
@@ -509,15 +616,31 @@ export default function Dashboard() {
                                         borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--glass-border)',
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        gap: '12px'
                                     }}
                                 >
                                     <div>
                                         <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'EEE, MMM d, yyyy')}</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.startTime}</div>
                                     </div>
-                                    <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                        Done
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <button
+                                            onClick={() => handleQuickBookFromHistory(booking)}
+                                            className="glass-button"
+                                            disabled={quickBookingId === booking.id}
+                                            style={{
+                                                padding: '8px 10px',
+                                                borderRadius: '10px',
+                                                fontSize: '12px',
+                                                opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1
+                                            }}
+                                        >
+                                            {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
+                                        </button>
+                                        <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                            Done
+                                        </div>
                                     </div>
                                 </div>
                             ))}
