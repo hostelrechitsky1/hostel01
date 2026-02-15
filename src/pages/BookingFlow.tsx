@@ -316,7 +316,7 @@ export default function BookingFlow() {
                 }}>
                     <div>
                         <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Live Slot Capacity</div>
-                        <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalRemainingForDay} remaining today</div>
+                        <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalRemainingForDay} slots remaining for selected day</div>
                     </div>
                     <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                         {totalSlotsPerTime} total slots per time
