@@ -24,7 +24,8 @@
 html {
   background-color: var(--bg-solid);
   min-height: 100%;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
 }
 
 body {
@@ -36,7 +37,9 @@ body {
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: none;
+  overflow-x: hidden;
+  touch-action: pan-y;
 }
 
 /* Prevent iOS Zoom on inputs */
@@ -54,6 +57,8 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overscroll-behavior-y: none;
+  overflow-x: clip;
 }
 
 /* Animations */

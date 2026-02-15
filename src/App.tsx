@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import LoginScreen from './pages/LoginScreen';
 import Dashboard from './pages/Dashboard';
 import BookingFlow from './pages/BookingFlow';
@@ -10,9 +11,23 @@ import HostelAdminLogin from './pages/HostelAdminLogin';
 import HostelAdminDashboard from './pages/HostelAdminDashboard';
 import { PrivateRoute } from './components/PrivateRoute';
 
+
+function ScrollToTopOnRouteChange() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [pathname]);
+
+  return null;
+}
+
 function App() {
   return (
     <Router>
+      <ScrollToTopOnRouteChange />
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
 
