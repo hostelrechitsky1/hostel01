@@ -57,7 +57,7 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   overflow-x: clip;
 }
 
