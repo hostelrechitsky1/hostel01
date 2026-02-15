@@ -14,7 +14,7 @@ import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBe
 export default function Dashboard() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
-    const [upcomingBooking, setUpcomingBooking] = useState<Booking | null>(null);
+    const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
     const [history, setHistory] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
@@ -61,7 +61,7 @@ export default function Dashboard() {
                 );
 
                 const now = new Date();
-                const nextBooking = chronological.find(b => {
+                const futureBookings = chronological.filter(b => {
                     const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
                     return end > now;
                 });
@@ -71,7 +71,7 @@ export default function Dashboard() {
                     return end <= now;
                 }).reverse();
 
-                setUpcomingBooking(nextBooking || null);
+                setUpcomingBookings(futureBookings);
                 setHistory(pastBookings);
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
@@ -147,7 +147,8 @@ export default function Dashboard() {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
 
-    const hasUpcomingBooking = Boolean(upcomingBooking);
+    const hasUpcomingBooking = upcomingBookings.length > 0;
+    const primaryUpcomingBooking = upcomingBookings[0] || null;
     const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
     const mainActionSubtitle = isSystemClosed
         ? 'Bookings are currently closed'
@@ -247,10 +248,10 @@ export default function Dashboard() {
                 new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
             );
             const now = new Date();
-            const nextBooking = chronological.find(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now) || null;
+            const futureBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now);
             const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
 
-            setUpcomingBooking(nextBooking);
+            setUpcomingBookings(futureBookings);
             setHistory(pastBookings);
             setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
         } catch (error) {
@@ -453,7 +454,7 @@ export default function Dashboard() {
             {/* Your Bookings */}
             <div style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px' }}>Your Upcoming Booking</h3>
-                {upcomingBooking ? (
+                {primaryUpcomingBooking ? (
                     <div
                         className="glass-panel"
                         style={{
@@ -472,13 +473,34 @@ export default function Dashboard() {
                             </div>
                             <div>
                                 <p style={{ margin: 0, fontWeight: 600, fontSize: '18px' }}>
-                                    {format(new Date(upcomingBooking.date), 'EEEE, MMM d')}
+                                    {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMM d')}
                                 </p>
                                 <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                                    {upcomingBooking.startTime} • {machines.find(m => m.id === upcomingBooking.machineId)?.name || 'Machine'}
+                                    {primaryUpcomingBooking.startTime} • {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
                                 </p>
                             </div>
                         </div>
+
+                        {upcomingBookings.length > 1 && (
+                            <div
+                                className="glass-panel"
+                                style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(99,102,241,0.35)',
+                                    background: 'rgba(99,102,241,0.08)'
+                                }}
+                            >
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Also upcoming</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {upcomingBookings.slice(1, 3).map((booking) => (
+                                        <div key={booking.id} style={{ fontSize: '13px' }}>
+                                            {format(new Date(booking.date), 'EEE, MMM d')} • {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Reminder</span>
@@ -503,14 +525,14 @@ export default function Dashboard() {
                             {/* Google Calendar Button */}
                             <button
                                 onClick={() => {
-                                    if (!upcomingBooking) return;
-                                    const start = new Date(upcomingBooking.date + 'T' + upcomingBooking.startTime);
+                                    if (!primaryUpcomingBooking) return;
+                                    const start = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
                                     const end = addMinutes(start, 90);
 
                                     const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, "").slice(0, 15) + 'Z';
 
                                     const url = `https://www.google.com/calendar/render?action=TEMPLATE` +
-                                        `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === upcomingBooking.machineId)?.name || "Machine"))}` +
+                                        `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || "Machine"))}` +
                                         `&dates=${formatGCal(start)}/${formatGCal(end)}` +
                                         `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: " + reminderMinutes + " minutes before. Remember to clear the machine when done.")}` +
                                         `&location=${encodeURIComponent("Laundry Room")}` +
@@ -528,11 +550,11 @@ export default function Dashboard() {
                             {/* ICS / Apple Calendar Button */}
                             <button
                                 onClick={async () => {
-                                    if (!upcomingBooking) return;
+                                    if (!primaryUpcomingBooking) return;
 
-                                    const startDate = new Date(upcomingBooking.date + 'T' + upcomingBooking.startTime);
+                                    const startDate = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
                                     const endDate = addMinutes(startDate, 90);
-                                    const uid = `${upcomingBooking.id || Date.now()}@hostel-wash`;
+                                    const uid = `${primaryUpcomingBooking.id || Date.now()}@hostel-wash`;
 
                                     const icsContent = [
                                         'BEGIN:VCALENDAR',
@@ -545,7 +567,7 @@ export default function Dashboard() {
                                         `DTSTAMP:${formatUtcForIcs(new Date())}`,
                                         `DTSTART:${formatUtcForIcs(startDate)}`,
                                         `DTEND:${formatUtcForIcs(endDate)}`,
-                                        `SUMMARY:Hostel Laundry - ${machines.find(m => m.id === upcomingBooking.machineId)?.name || 'Machine'}`,
+                                        `SUMMARY:Hostel Laundry - ${machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}`,
                                         'DESCRIPTION:Remember to empty the machine on time!',
                                         'LOCATION:Laundry Room',
                                         'BEGIN:VALARM',
