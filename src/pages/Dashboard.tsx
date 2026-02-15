@@ -145,6 +145,14 @@ export default function Dashboard() {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
 
+    const hasUpcomingBooking = Boolean(upcomingBooking);
+    const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
+    const mainActionSubtitle = isSystemClosed
+        ? 'Bookings are currently closed'
+        : hasUpcomingBooking
+            ? 'You already booked. You can still open slots page to browse remaining slots'
+            : 'Book your slot for next week';
+
     const getUpcomingDateForWeekday = (weekday: number) => {
         const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
         const dayOffset = weekday === 0 ? 6 : weekday - 1;
@@ -330,7 +338,7 @@ export default function Dashboard() {
                 <div>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
-                        {isSystemClosed ? 'Bookings are currently closed' : 'Book your slot for next week'}
+                        {mainActionSubtitle}
                     </p>
                 </div>
                 <button
@@ -339,12 +347,12 @@ export default function Dashboard() {
                     style={{
                         padding: '12px 24px',
                         borderRadius: '12px',
-                        background: isSystemClosed ? '#ef4444' : 'var(--primary)',
+                        background: isSystemClosed ? '#ef4444' : hasUpcomingBooking ? '#10b981' : 'var(--primary)',
                         opacity: 1,
                         cursor: 'pointer'
                     }}
                 >
-                    {isSystemClosed ? 'Check Status' : 'Book Now'}
+                    {mainActionLabel}
                 </button>
             </div>
 
