@@ -197,12 +197,18 @@ export default function Dashboard() {
         }
 
         const targetDateStr = formatBelarusDate(targetDate);
-        const slotTaken = allBookings.some(b =>
+        const existingSlotBooking = allBookings.find(b =>
             b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
         );
 
-        if (slotTaken) {
-            setQuickBookModalMessage({ type: 'error', text: 'That same machine and time is already booked for next week.' });
+        if (existingSlotBooking) {
+            const isYourExistingBooking = existingSlotBooking.studentId === user.id;
+            setQuickBookModalMessage({
+                type: 'error',
+                text: isYourExistingBooking
+                    ? 'You already booked this exact machine and slot for next week (likely from Book Now page).'
+                    : 'This exact machine and slot is already booked by another resident for next week.'
+            });
             return;
         }
 
@@ -224,7 +230,12 @@ export default function Dashboard() {
         try {
             const result = await firestoreService.createBooking(bookingData);
             if (!result.success) {
-                setQuickBookModalMessage({ type: 'error', text: result.error || 'Quick booking failed. Please try again.' });
+                const detailedError = result.error?.includes('Slot already booked by another student')
+                    ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'
+                    : result.error?.includes('already booked a slot for this week')
+                        ? 'You already have a booking for this week (including bookings made via Book Now page).' 
+                        : result.error || 'Quick booking failed. Please try again.';
+                setQuickBookModalMessage({ type: 'error', text: detailedError });
                 return;
             }
 
@@ -630,13 +641,16 @@ export default function Dashboard() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <button
                                             onClick={() => handleQuickBookFromHistory(booking)}
-                                            className="glass-button"
+                                            className="primary-button"
                                             disabled={quickBookingId === booking.id}
                                             style={{
-                                                padding: '8px 10px',
+                                                padding: '8px 12px',
                                                 borderRadius: '10px',
                                                 fontSize: '12px',
-                                                opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1
+                                                fontWeight: 700,
+                                                background: 'var(--primary)',
+                                                opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
+                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
                                             }}
                                         >
                                             {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
