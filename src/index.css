@@ -24,7 +24,7 @@
 html {
   background-color: var(--bg-solid);
   min-height: 100%;
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: auto;
 }
 
 body {
@@ -36,8 +36,7 @@ body {
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: none;
-  touch-action: pan-y;
+  overscroll-behavior-y: auto;
 }
 
 /* Prevent iOS Zoom on inputs */

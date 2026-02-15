@@ -268,9 +268,9 @@ export default function Dashboard() {
                 border: '1px solid rgba(99, 102, 241, 0.45)'
             }}>
                 <div>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>Live Slot Capacity</div>
-                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>
-                        Total Slots: {slotCapacity.totalSlots}
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Total Slots</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
+                        {slotCapacity.totalSlots}
                     </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
