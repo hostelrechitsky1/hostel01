@@ -5,7 +5,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Sparkles, ArrowRight } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -666,16 +666,30 @@ export default function Dashboard() {
                                             className="primary-button"
                                             disabled={quickBookingId === booking.id}
                                             style={{
-                                                padding: '8px 12px',
-                                                borderRadius: '10px',
+                                                padding: '9px 13px',
+                                                borderRadius: '12px',
                                                 fontSize: '12px',
                                                 fontWeight: 700,
-                                                background: 'var(--primary)',
+                                                background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)',
                                                 opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
+                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 8px 18px rgba(99, 102, 241, 0.35)',
+                                                border: '1px solid rgba(255, 255, 255, 0.22)',
+                                                transition: 'transform 0.2s ease, box-shadow 0.2s ease'
                                             }}
                                         >
-                                            {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
+                                            {quickBookingId === booking.id ? (
+                                                'Booking...'
+                                            ) : (
+                                                <>
+                                                    <Sparkles size={13} />
+                                                    <span>Quick Book</span>
+                                                    <ArrowRight size={13} />
+                                                </>
+                                            )}
                                         </button>
                                         <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
                                             Done
