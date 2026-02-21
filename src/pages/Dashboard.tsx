@@ -380,15 +380,12 @@ export default function Dashboard() {
 
             {/* Main Action */}
             <div
-                className="glass-panel"
+                className="glass-panel main-action-layout"
                 style={{
                     padding: '24px',
                     borderRadius: '20px',
                     marginBottom: '32px',
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
+                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%)'
                 }}
             >
                 <div>
