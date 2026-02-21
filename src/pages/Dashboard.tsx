@@ -6,10 +6,25 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
-import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
+import { format, addMinutes, parse, isAfter, isBefore } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
+
+const SLOT_DURATION_MINUTES = 90;
+
+const isBookingUpcomingInBelarus = (booking: Booking, referenceNow: Date) => {
+    const currentDate = referenceNow.toISOString().slice(0, 10);
+    const currentMinutes = (referenceNow.getUTCHours() * 60) + referenceNow.getUTCMinutes();
+
+    if (booking.date > currentDate) return true;
+    if (booking.date < currentDate) return false;
+
+    const [startHour, startMinute] = booking.startTime.split(':').map(Number);
+    const bookingEndMinutes = (startHour * 60) + startMinute + SLOT_DURATION_MINUTES;
+
+    return bookingEndMinutes > currentMinutes;
+};
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -60,16 +75,9 @@ export default function Dashboard() {
                     new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
                 );
 
-                const now = new Date();
-                const futureBookings = chronological.filter(b => {
-                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
-                    return end > now;
-                });
-
-                const pastBookings = chronological.filter(b => {
-                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
-                    return end <= now;
-                }).reverse();
+                const now = getBelarusNow();
+                const futureBookings = chronological.filter(b => isBookingUpcomingInBelarus(b, now));
+                const pastBookings = chronological.filter(b => !isBookingUpcomingInBelarus(b, now)).reverse();
 
                 setUpcomingBookings(futureBookings);
                 setHistory(pastBookings);
@@ -147,7 +155,11 @@ export default function Dashboard() {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
 
-    const hasUpcomingBooking = upcomingBookings.length > 0;
+    const actionWeekStart = isNextWeekOpen
+        ? addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7)
+        : getBelarusWeekStart(getBelarusDate());
+    const actionWeekId = getBelarusWeekId(actionWeekStart);
+    const hasUpcomingBooking = upcomingBookings.some((booking) => booking.weekId === actionWeekId);
     const primaryUpcomingBooking = upcomingBookings[0] || null;
     const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
     const mainActionSubtitle = isSystemClosed
@@ -247,9 +259,9 @@ export default function Dashboard() {
             const chronological = [...myBookings].sort((a, b) =>
                 new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
             );
-            const now = new Date();
-            const futureBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now);
-            const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
+            const now = getBelarusNow();
+            const futureBookings = chronological.filter(b => isBookingUpcomingInBelarus(b, now));
+            const pastBookings = chronological.filter(b => !isBookingUpcomingInBelarus(b, now)).reverse();
 
             setUpcomingBookings(futureBookings);
             setHistory(pastBookings);
