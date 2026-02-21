@@ -6,7 +6,7 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
-import { ChevronLeft, Clock, AlertCircle } from 'lucide-react';
+import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
 import { motion } from 'framer-motion';
 import {
@@ -344,22 +344,66 @@ export default function BookingFlow() {
 
             {!isMaintenanceDay && (
                 <div className="glass-panel" style={{
-                    marginBottom: '14px',
-                    padding: '14px 16px',
-                    borderRadius: '14px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '10px',
-                    flexWrap: 'wrap',
-                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)'
+                    marginBottom: '20px',
+                    padding: '20px',
+                    borderRadius: '16px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)',
+                    border: '1px solid rgba(16, 185, 129, 0.2)'
                 }}>
-                    <div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Live Slot Capacity</div>
-                        <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalRemainingForDay} slots remaining for selected day</div>
+                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{
+                                background: 'rgba(16, 185, 129, 0.15)',
+                                padding: '12px',
+                                borderRadius: '14px',
+                                display: 'flex',
+                                position: 'relative'
+                            }}>
+                                <div className="skeleton-pulse" style={{
+                                    position: 'absolute', inset: 0, borderRadius: '14px',
+                                    background: 'var(--success)', opacity: 0.25, zIndex: 0
+                                }}></div>
+                                <Activity size={24} color="var(--success)" style={{ zIndex: 1 }} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Live Capacity</div>
+                                <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{
+                                        width: '8px', height: '8px', borderRadius: '50%',
+                                        background: 'var(--success)',
+                                        boxShadow: '0 0 10px var(--success)'
+                                    }}></span>
+                                    Slots Available
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>For Selected Day</div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                    {totalRemainingForDay}
+                                </span>
+                                <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                    / {TIME_SLOTS.length * totalSlotsPerTime}
+                                </span>
+                            </div>
+                        </div>
                     </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                        {totalSlotsPerTime} total slots per time
+
+                    <div style={{
+                        position: 'absolute', bottom: 0, left: 0, height: '4px',
+                        background: 'var(--glass-border)', width: '100%'
+                    }}>
+                        <div style={{
+                            height: '100%',
+                            background: 'var(--success)',
+                            width: `${Math.max(2, (totalRemainingForDay / Math.max(1, TIME_SLOTS.length * totalSlotsPerTime)) * 100)}%`,
+                            transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                            boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)'
+                        }}></div>
                     </div>
                 </div>
             )}
