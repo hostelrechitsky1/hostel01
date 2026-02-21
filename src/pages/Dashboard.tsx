@@ -160,7 +160,11 @@ export default function Dashboard() {
         : getBelarusWeekStart(getBelarusDate());
     const actionWeekId = getBelarusWeekId(actionWeekStart);
     const hasUpcomingBooking = upcomingBookings.some((booking) => booking.weekId === actionWeekId);
-    const primaryUpcomingBooking = upcomingBookings[0] || null;
+    const actionWeekUpcomingBooking = upcomingBookings.find((booking) => booking.weekId === actionWeekId) || null;
+    const primaryUpcomingBooking = actionWeekUpcomingBooking || upcomingBookings[0] || null;
+    const secondaryUpcomingBookings = primaryUpcomingBooking
+        ? upcomingBookings.filter((booking) => booking.id !== primaryUpcomingBooking.id)
+        : [];
     const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
     const mainActionSubtitle = isSystemClosed
         ? 'Bookings are currently closed'
@@ -493,7 +497,7 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        {upcomingBookings.length > 1 && (
+                        {secondaryUpcomingBookings.length > 0 && (
                             <div
                                 className="glass-panel"
                                 style={{
@@ -505,7 +509,7 @@ export default function Dashboard() {
                             >
                                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Also upcoming</div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {upcomingBookings.slice(1, 3).map((booking) => (
+                                    {secondaryUpcomingBookings.slice(0, 2).map((booking) => (
                                         <div key={booking.id} style={{ fontSize: '13px' }}>
                                             {format(new Date(booking.date), 'EEE, MMM d')} • {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
                                         </div>
