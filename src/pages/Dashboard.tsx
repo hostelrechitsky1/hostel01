@@ -47,8 +47,22 @@ export default function Dashboard() {
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
-        window.scrollTo(0, 0);
+        if ('scrollRestoration' in window.history) {
+            window.history.scrollRestoration = 'manual';
+        }
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
     }, []);
+
+    useEffect(() => {
+        if (loading) return;
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        });
+    }, [loading]);
 
     useEffect(() => {
         if (!user) {
@@ -153,6 +167,84 @@ export default function Dashboard() {
 
     const formatUtcForIcs = (date: Date) => {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    };
+
+    const getBookingMachineName = (booking: Booking) => {
+        return machines.find(m => m.id === booking.machineId)?.name || 'Machine';
+    };
+
+    const openGoogleCalendar = (booking: Booking) => {
+        const start = new Date(`${booking.date}T${booking.startTime}`);
+        const end = addMinutes(start, SLOT_DURATION_MINUTES);
+        const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, '').slice(0, 15) + 'Z';
+
+        const url = `https://www.google.com/calendar/render?action=TEMPLATE`
+            + `&text=${encodeURIComponent(`Hostel Laundry: ${getBookingMachineName(booking)}`)}`
+            + `&dates=${formatGCal(start)}/${formatGCal(end)}`
+            + `&details=${encodeURIComponent(`Don't forget your laundry slot! Reminder target: ${reminderMinutes} minutes before. Remember to clear the machine when done.`)}`
+            + `&location=${encodeURIComponent('Laundry Room')}`
+            + '&sprop=&sprop=name:';
+
+        window.open(url, '_blank');
+    };
+
+    const downloadCalendarFile = async (booking: Booking) => {
+        const startDate = new Date(`${booking.date}T${booking.startTime}`);
+        const endDate = addMinutes(startDate, SLOT_DURATION_MINUTES);
+        const uid = `${booking.id || Date.now()}@hostel-wash`;
+
+        const icsContent = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Hostel Wash//Booking Reminder//EN',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTAMP:${formatUtcForIcs(new Date())}`,
+            `DTSTART:${formatUtcForIcs(startDate)}`,
+            `DTEND:${formatUtcForIcs(endDate)}`,
+            `SUMMARY:Hostel Laundry - ${getBookingMachineName(booking)}`,
+            'DESCRIPTION:Remember to empty the machine on time!',
+            'LOCATION:Laundry Room',
+            'BEGIN:VALARM',
+            `TRIGGER:-PT${reminderMinutes}M`,
+            'ACTION:DISPLAY',
+            'DESCRIPTION:Laundry Reminder',
+            'END:VALARM',
+            'END:VEVENT',
+            'END:VCALENDAR'
+        ].join('\r\n');
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const file = new File([blob], 'laundry-booking.ics', { type: 'text/calendar' });
+
+        try {
+            if (navigator.share && (navigator as any).canShare?.({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'Laundry Booking Reminder'
+                });
+                return;
+            }
+        } catch {
+            // If share is cancelled/unsupported, fallback to download.
+        }
+
+        const url = window.URL.createObjectURL(blob);
+        const openedWindow = window.open(url, '_blank');
+        if (openedWindow) {
+            setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            return;
+        }
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'laundry-booking.ics');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
     };
 
     const actionWeekStart = isNextWeekOpen
@@ -370,13 +462,14 @@ export default function Dashboard() {
                     marginBottom: '32px',
                     background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%)',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    gap: '14px'
                 }}
             >
-                <div>
+                <div style={{ width: '100%' }}>
                     <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.35, maxWidth: '520px' }}>
                         {mainActionSubtitle}
                     </p>
                 </div>
@@ -388,7 +481,9 @@ export default function Dashboard() {
                         borderRadius: '12px',
                         background: isSystemClosed ? '#ef4444' : hasUpcomingBooking ? '#10b981' : 'var(--primary)',
                         opacity: 1,
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        alignSelf: 'flex-start',
+                        minWidth: '160px'
                     }}
                 >
                     {mainActionLabel}
@@ -507,20 +602,40 @@ export default function Dashboard() {
                                             border: '1px solid rgba(99,102,241,0.35)',
                                             background: 'rgba(99,102,241,0.08)',
                                             display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '12px'
+                                            flexDirection: 'column',
+                                            gap: '10px'
                                         }}
                                     >
-                                        <div style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '8px', borderRadius: '10px' }}>
-                                            <Calendar size={18} color="#818cf8" />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '8px', borderRadius: '10px' }}>
+                                                <Calendar size={18} color="#818cf8" />
+                                            </div>
+                                            <div>
+                                                <p style={{ margin: 0, fontWeight: 600, fontSize: '15px' }}>
+                                                    {format(new Date(booking.date), 'EEEE, MMM d')}
+                                                </p>
+                                                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                                                    {booking.startTime} • {getBookingMachineName(booking)}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p style={{ margin: 0, fontWeight: 600, fontSize: '15px' }}>
-                                                {format(new Date(booking.date), 'EEEE, MMM d')}
-                                            </p>
-                                            <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-                                                {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
-                                            </p>
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                            <button
+                                                onClick={() => openGoogleCalendar(booking)}
+                                                className="glass-button"
+                                                style={{ padding: '9px 12px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '120px', justifyContent: 'center' }}
+                                            >
+                                                <Calendar size={16} />
+                                                <span style={{ fontSize: '12px', fontWeight: 500 }}>Google Cal</span>
+                                            </button>
+                                            <button
+                                                onClick={() => downloadCalendarFile(booking)}
+                                                className="glass-button"
+                                                style={{ padding: '9px 12px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '120px', justifyContent: 'center' }}
+                                            >
+                                                <Download size={16} />
+                                                <span style={{ fontSize: '12px', fontWeight: 500 }}>Apple/Outlook</span>
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
@@ -551,19 +666,7 @@ export default function Dashboard() {
                             <button
                                 onClick={() => {
                                     if (!primaryUpcomingBooking) return;
-                                    const start = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
-                                    const end = addMinutes(start, 90);
-
-                                    const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, "").slice(0, 15) + 'Z';
-
-                                    const url = `https://www.google.com/calendar/render?action=TEMPLATE` +
-                                        `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || "Machine"))}` +
-                                        `&dates=${formatGCal(start)}/${formatGCal(end)}` +
-                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: " + reminderMinutes + " minutes before. Remember to clear the machine when done.")}` +
-                                        `&location=${encodeURIComponent("Laundry Room")}` +
-                                        `&sprop=&sprop=name:`;
-
-                                    window.open(url, '_blank');
+                                    openGoogleCalendar(primaryUpcomingBooking);
                                 }}
                                 className="glass-button"
                                 style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
@@ -576,65 +679,7 @@ export default function Dashboard() {
                             <button
                                 onClick={async () => {
                                     if (!primaryUpcomingBooking) return;
-
-                                    const startDate = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
-                                    const endDate = addMinutes(startDate, 90);
-                                    const uid = `${primaryUpcomingBooking.id || Date.now()}@hostel-wash`;
-
-                                    const icsContent = [
-                                        'BEGIN:VCALENDAR',
-                                        'VERSION:2.0',
-                                        'PRODID:-//Hostel Wash//Booking Reminder//EN',
-                                        'CALSCALE:GREGORIAN',
-                                        'METHOD:PUBLISH',
-                                        'BEGIN:VEVENT',
-                                        `UID:${uid}`,
-                                        `DTSTAMP:${formatUtcForIcs(new Date())}`,
-                                        `DTSTART:${formatUtcForIcs(startDate)}`,
-                                        `DTEND:${formatUtcForIcs(endDate)}`,
-                                        `SUMMARY:Hostel Laundry - ${machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}`,
-                                        'DESCRIPTION:Remember to empty the machine on time!',
-                                        'LOCATION:Laundry Room',
-                                        'BEGIN:VALARM',
-                                        `TRIGGER:-PT${reminderMinutes}M`,
-                                        'ACTION:DISPLAY',
-                                        'DESCRIPTION:Laundry Reminder',
-                                        'END:VALARM',
-                                        'END:VEVENT',
-                                        'END:VCALENDAR'
-                                    ].join('\r\n');
-
-                                    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-                                    const file = new File([blob], 'laundry-booking.ics', { type: 'text/calendar' });
-
-                                    try {
-                                        if (navigator.share && (navigator as any).canShare?.({ files: [file] })) {
-                                            await navigator.share({
-                                                files: [file],
-                                                title: 'Laundry Booking Reminder'
-                                            });
-                                            return;
-                                        }
-                                    } catch {
-                                        // If share is cancelled/unsupported, fallback to download.
-                                    }
-
-                                    const url = window.URL.createObjectURL(blob);
-
-                                    // iOS/Safari compatibility: attempt open in a new tab first, then fall back to explicit download.
-                                    const openedWindow = window.open(url, '_blank');
-                                    if (openedWindow) {
-                                        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-                                        return;
-                                    }
-
-                                    const link = document.createElement('a');
-                                    link.href = url;
-                                    link.setAttribute('download', 'laundry-booking.ics');
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                    window.URL.revokeObjectURL(url);
+                                    await downloadCalendarFile(primaryUpcomingBooking);
                                 }}
                                 className="glass-button"
                                 style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
