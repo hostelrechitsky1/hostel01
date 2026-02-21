@@ -160,11 +160,8 @@ export default function Dashboard() {
         : getBelarusWeekStart(getBelarusDate());
     const actionWeekId = getBelarusWeekId(actionWeekStart);
     const hasUpcomingBooking = upcomingBookings.some((booking) => booking.weekId === actionWeekId);
-    const actionWeekUpcomingBooking = upcomingBookings.find((booking) => booking.weekId === actionWeekId) || null;
-    const primaryUpcomingBooking = actionWeekUpcomingBooking || upcomingBookings[0] || null;
-    const secondaryUpcomingBookings = primaryUpcomingBooking
-        ? upcomingBookings.filter((booking) => booking.id !== primaryUpcomingBooking.id)
-        : [];
+    const primaryUpcomingBooking = upcomingBookings[0] || null;
+    const secondaryUpcomingBookings = upcomingBookings.slice(1, 3);
     const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
     const mainActionSubtitle = isSystemClosed
         ? 'Bookings are currently closed'
@@ -498,23 +495,35 @@ export default function Dashboard() {
                         </div>
 
                         {secondaryUpcomingBookings.length > 0 && (
-                            <div
-                                className="glass-panel"
-                                style={{
-                                    padding: '10px 12px',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(99,102,241,0.35)',
-                                    background: 'rgba(99,102,241,0.08)'
-                                }}
-                            >
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Also upcoming</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {secondaryUpcomingBookings.slice(0, 2).map((booking) => (
-                                        <div key={booking.id} style={{ fontSize: '13px' }}>
-                                            {format(new Date(booking.date), 'EEE, MMM d')} • {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Next upcoming slots</div>
+                                {secondaryUpcomingBookings.map((booking) => (
+                                    <div
+                                        key={booking.id}
+                                        className="glass-panel"
+                                        style={{
+                                            padding: '12px',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(99,102,241,0.35)',
+                                            background: 'rgba(99,102,241,0.08)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px'
+                                        }}
+                                    >
+                                        <div style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '8px', borderRadius: '10px' }}>
+                                            <Calendar size={18} color="#818cf8" />
                                         </div>
-                                    ))}
-                                </div>
+                                        <div>
+                                            <p style={{ margin: 0, fontWeight: 600, fontSize: '15px' }}>
+                                                {format(new Date(booking.date), 'EEEE, MMM d')}
+                                            </p>
+                                            <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                                                {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
 
