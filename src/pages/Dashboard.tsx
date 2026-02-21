@@ -790,7 +790,7 @@ export default function Dashboard() {
                                     padding: '10px 12px',
                                     borderRadius: '10px',
                                     fontSize: '13px',
-                                    color: quickBookModalMessage.type === 'success' ? '#a7f3d0' : '#fecaca',
+                                    color: quickBookModalMessage.type === 'success' ? 'var(--success)' : 'var(--error)',
                                     border: quickBookModalMessage.type === 'success'
                                         ? '1px solid rgba(16,185,129,0.4)'
                                         : '1px solid rgba(239,68,68,0.4)',
