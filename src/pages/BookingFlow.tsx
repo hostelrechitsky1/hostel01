@@ -83,7 +83,7 @@ export default function BookingFlow() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [user, navigate]);
+    }, [user?.id, navigate]);
 
     const isNextWeekOpen = useMemo(() => {
         if (settings.forceShowNextWeek) return true;

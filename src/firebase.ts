@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,6 +13,17 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const analytics = getAnalytics(app);
 
-export { db, analytics };
+// Analytics is optional - only initialize if we're in a browser and have a measurementId
+try {
+    if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
+        import("firebase/analytics").then(({ getAnalytics }) => {
+            getAnalytics(app);
+        }).catch(() => {/* analytics load failed silently */ });
+    }
+} catch {
+    // analytics is non-critical, ignore errors
+}
+
+export { db };
+

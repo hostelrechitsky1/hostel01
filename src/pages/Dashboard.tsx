@@ -96,7 +96,7 @@ export default function Dashboard() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [user, navigate]);
+    }, [user?.id, navigate]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
 
