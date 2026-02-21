@@ -7,7 +7,7 @@
   /* Indigo 500 */
   --primary-glow: rgba(99, 102, 241, 0.5);
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-muted: #cbd5e1; /* Increased contrast from #94a3b8 */
   --success: #10b981;
   --error: #ef4444;
   --floating-bar-bg: rgba(15, 23, 42, 0.95);
@@ -76,6 +76,19 @@ button {
 
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes modalOverlayIn {

@@ -41,46 +41,58 @@ export default function Dashboard() {
             return;
         }
 
+        let unsubscribeBookings = () => { };
+        let unsubscribeMachines = () => { };
+
         const loadData = async () => {
             try {
-                const [fetchedMachines, fetchedBookings, fetchedSettings, fetchedBanners] = await Promise.all([
-                    firestoreService.getMachines(),
-                    firestoreService.getBookings(),
+                const [fetchedSettings, fetchedBanners] = await Promise.all([
                     firestoreService.getSettings(),
                     firestoreService.getBanners()
                 ]);
 
-                setMachines(fetchedMachines);
-                setAllBookings(fetchedBookings);
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
 
-                const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
-                const chronological = [...myBookings].sort((a, b) =>
-                    new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-                );
-
-                const now = new Date();
-                const futureBookings = chronological.filter(b => {
-                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
-                    return end > now;
+                unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
+                    setMachines(machines);
                 });
 
-                const pastBookings = chronological.filter(b => {
-                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
-                    return end <= now;
-                }).reverse();
+                unsubscribeBookings = firestoreService.subscribeToBookings((bookings) => {
+                    setAllBookings(bookings);
+                    const myBookings = bookings.filter(b => b.studentId === user.id);
+                    const chronological = [...myBookings].sort((a, b) =>
+                        new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
+                    );
 
-                setUpcomingBookings(futureBookings);
-                setHistory(pastBookings);
+                    const now = new Date();
+                    const futureBookings = chronological.filter(b => {
+                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
+                        return end > now;
+                    });
+
+                    const pastBookings = chronological.filter(b => {
+                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
+                        return end <= now;
+                    }).reverse();
+
+                    setUpcomingBookings(futureBookings);
+                    setHistory(pastBookings);
+                    setLoading(false);
+                });
+
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
-            } finally {
                 setLoading(false);
             }
         };
 
         loadData();
+
+        return () => {
+            unsubscribeBookings();
+            unsubscribeMachines();
+        };
     }, [user, navigate]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
@@ -234,7 +246,7 @@ export default function Dashboard() {
                 const detailedError = result.error?.includes('Slot already booked by another student')
                     ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'
                     : result.error?.includes('already booked a slot for this week')
-                        ? 'You already have a booking for this week (including bookings made via Book Now page).' 
+                        ? 'You already have a booking for this week (including bookings made via Book Now page).'
                         : result.error || 'Quick booking failed. Please try again.';
                 setQuickBookModalMessage({ type: 'error', text: detailedError });
                 return;
@@ -263,7 +275,22 @@ export default function Dashboard() {
     };
 
 
-    if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
+    if (loading) {
+        return (
+            <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
+                <header style={{ marginBottom: '32px', marginTop: '16px' }}>
+                    <div style={{ height: '32px', width: '200px', background: 'var(--glass-border)', borderRadius: '8px', marginBottom: '8px' }} className="skeleton-pulse"></div>
+                    <div style={{ height: '20px', width: '100px', background: 'var(--glass-border)', borderRadius: '8px' }} className="skeleton-pulse"></div>
+                </header>
+                <div style={{ height: '140px', background: 'var(--glass-border)', borderRadius: '20px', marginBottom: '32px' }} className="skeleton-pulse"></div>
+                <div className="grid-cols-2">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} style={{ height: '120px', background: 'var(--glass-border)', borderRadius: '16px' }} className="skeleton-pulse"></div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
     if (!user) return null;
 
     const quickBookTargetDate = quickBookModalBooking

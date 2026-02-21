@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
@@ -13,7 +13,16 @@ export default function LoginScreen() {
     const [roommates, setRoommates] = useState<Student[]>([]);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [availableRooms, setAvailableRooms] = useState<string[]>([]);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        firestoreService.getAllStudents().then(students => {
+            const rawRooms = Array.from(new Set(students.map(s => s.roomNumber)));
+            // Simple sort, assumes format like 101, 52-2
+            setAvailableRooms(rawRooms.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
+        }).catch(err => console.error('Failed to load rooms for autocomplete:', err));
+    }, []);
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,6 +115,8 @@ export default function LoginScreen() {
                                     value={room}
                                     onChange={(e) => setRoom(e.target.value)}
                                     placeholder="e.g. 101, 52-2"
+                                    list="room-suggestions"
+                                    autoComplete="off"
                                     autoFocus
                                     style={{
                                         width: '100%',
@@ -119,6 +130,9 @@ export default function LoginScreen() {
                                         boxSizing: 'border-box'
                                     }}
                                 />
+                                <datalist id="room-suggestions">
+                                    {availableRooms.map(r => <option key={r} value={r} />)}
+                                </datalist>
                                 {error && <p style={{ color: 'var(--error)', fontSize: '14px', marginTop: '8px' }}>{error}</p>}
                             </div>
 
@@ -152,7 +166,7 @@ export default function LoginScreen() {
                             <p style={{ textAlign: 'center', marginBottom: '16px' }}>Enter Room PIN</p>
                             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
                                 <input
-                                    type="text" // Using text to avoid scrolling
+                                    type="password"
                                     inputMode="numeric"
                                     maxLength={3}
                                     value={pin}

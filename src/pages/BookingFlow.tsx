@@ -6,8 +6,9 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
-import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Clock, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
+import { motion } from 'framer-motion';
 import {
     addBelarusDays,
     formatBelarusDate,
@@ -46,24 +47,34 @@ export default function BookingFlow() {
             navigate('/login');
             return;
         }
+        let unsubscribeBookings = () => { };
+        let unsubscribeMachines = () => { };
+
         const load = async () => {
             try {
-                const [ms, bs, st] = await Promise.all([
-                    firestoreService.getMachines(),
-                    firestoreService.getBookings(),
-                    firestoreService.getSettings()
-                ]);
-                setMachines(ms);
-                setBookings(bs);
+                const st = await firestoreService.getSettings();
                 setSettings(st);
+
+                unsubscribeMachines = firestoreService.subscribeToMachines((ms) => {
+                    setMachines(ms);
+                });
+
+                unsubscribeBookings = firestoreService.subscribeToBookings((bs) => {
+                    setBookings(bs);
+                    setLoading(false);
+                });
             } catch (e) {
                 console.error("Failed to load booking data", e);
                 setError("Failed to load data. Please refresh.");
-            } finally {
                 setLoading(false);
             }
         };
         load();
+
+        return () => {
+            unsubscribeBookings();
+            unsubscribeMachines();
+        };
     }, [user, navigate]);
 
     const isNextWeekOpen = useMemo(() => {
@@ -225,8 +236,21 @@ export default function BookingFlow() {
     // --- RENDER ---
     if (loading) {
         return (
-            <div className="flex-center" style={{ height: '100vh', color: 'var(--text-main)' }}>
-                <div>Loading...</div>
+            <div className="container animate-fade-in" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                    <div style={{ width: '150px', height: '28px', borderRadius: '8px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} style={{ minWidth: '80px', height: '80px', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} style={{ width: '100%', height: '80px', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -345,86 +369,86 @@ export default function BookingFlow() {
                     {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => {
                         const remainingSlots = Math.max(totalSlotsPerTime - bookedMachineIds.length, 0);
                         return (
-                        <div key={time}>
-                            <button
-                                disabled={isFull || isPassed}
-                                onClick={() => {
-                                    if (!isFull && !isPassed) {
-                                        if (selectedSlot === time) {
-                                            setSelectedSlot(null);
-                                        } else {
-                                            setSelectedSlot(time);
-                                            setSelectedMachine(null);
+                            <div key={time}>
+                                <button
+                                    disabled={isFull || isPassed}
+                                    onClick={() => {
+                                        if (!isFull && !isPassed) {
+                                            if (selectedSlot === time) {
+                                                setSelectedSlot(null);
+                                            } else {
+                                                setSelectedSlot(time);
+                                                setSelectedMachine(null);
+                                            }
                                         }
-                                    }
-                                }}
-                                className="glass-panel"
-                                style={{
-                                    width: '100%',
-                                    padding: '20px',
-                                    borderRadius: '16px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    textAlign: 'left',
-                                    opacity: (isFull || isPassed) ? 0.5 : 1,
-                                    border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                                    cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
-                                    <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)', fontWeight: 600 }}>
-                                        {isPassed ? 'Passed' : isFull ? 'Full' : 'Open'}
+                                    }}
+                                    className="glass-panel"
+                                    style={{
+                                        width: '100%',
+                                        padding: '20px',
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        textAlign: 'left',
+                                        opacity: (isFull || isPassed) ? 0.5 : 1,
+                                        border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                                        cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
+                                        <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
                                     </div>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                        Remaining {remainingSlots}/{totalSlotsPerTime}
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)', fontWeight: 600 }}>
+                                            {isPassed ? 'Passed' : isFull ? 'Full' : 'Open'}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                            Remaining {remainingSlots}/{totalSlotsPerTime}
+                                        </div>
                                     </div>
-                                </div>
-                            </button>
+                                </button>
 
-                            {/* Machines */}
-                            {selectedSlot === time && (
-                                <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
-                                    {activeMachines.map(m => {
-                                        const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
-                                        const isBooked = Boolean(bookingForMachine);
-                                        const isBookedByUser = bookingForMachine?.studentId === user?.id;
-                                        return (
-                                            <button
-                                                key={m.id}
-                                                disabled={isBooked}
-                                                onClick={() => {
-                                                    if (!isBooked) {
-                                                        setSelectedMachine(m);
-                                                        setShowConfirmModal(true);
-                                                    }
-                                                }}
-                                                style={{
-                                                    minWidth: '100px',
-                                                    padding: '12px',
-                                                    borderRadius: '12px',
-                                                    background: isBooked
-                                                        ? 'var(--glass-bg)'
-                                                        : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
-                                                    border: isBookedByUser ? '1px solid rgba(16, 185, 129, 0.5)' : isBooked ? '1px solid var(--glass-border)' : 'none',
-                                                    color: isBookedByUser ? '#a7f3d0' : isBooked ? 'var(--text-muted)' : 'var(--text-main)',
-                                                    cursor: isBooked ? 'not-allowed' : 'pointer',
-                                                    opacity: isBooked ? 0.75 : 1,
-                                                    position: 'relative'
-                                                }}
-                                            >
-                                                {m.name}
-                                                {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                                {/* Machines */}
+                                {selectedSlot === time && (
+                                    <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
+                                        {activeMachines.map(m => {
+                                            const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
+                                            const isBooked = Boolean(bookingForMachine);
+                                            const isBookedByUser = bookingForMachine?.studentId === user?.id;
+                                            return (
+                                                <button
+                                                    key={m.id}
+                                                    disabled={isBooked}
+                                                    onClick={() => {
+                                                        if (!isBooked) {
+                                                            setSelectedMachine(m);
+                                                            setShowConfirmModal(true);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        minWidth: '100px',
+                                                        padding: '12px',
+                                                        borderRadius: '12px',
+                                                        background: isBooked
+                                                            ? 'var(--glass-bg)'
+                                                            : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
+                                                        border: isBookedByUser ? '1px solid rgba(16, 185, 129, 0.5)' : isBooked ? '1px solid var(--glass-border)' : 'none',
+                                                        color: isBookedByUser ? '#a7f3d0' : isBooked ? 'var(--text-muted)' : 'var(--text-main)',
+                                                        cursor: isBooked ? 'not-allowed' : 'pointer',
+                                                        opacity: isBooked ? 0.75 : 1,
+                                                        position: 'relative'
+                                                    }}
+                                                >
+                                                    {m.name}
+                                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
@@ -479,12 +503,29 @@ export default function BookingFlow() {
                     {showConfirmation && (
                         <div className="modal-overlay modal-overlay--success">
                             <div className="glass-panel modal-card modal-card--success">
-                                <div style={{
-                                    background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
-                                }}>
-                                    <CheckCircle size={40} color="#10b981" />
-                                </div>
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', delay: 0.1, damping: 20, stiffness: 250 }}
+                                    style={{
+                                        background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+                                    }}
+                                >
+                                    <svg viewBox="0 0 50 50" width="40" height="40">
+                                        <motion.path
+                                            fill="none"
+                                            stroke="#10b981"
+                                            strokeWidth="5"
+                                            d="M 14.1 27.2 l 7.1 7.2 16.7-16.8"
+                                            initial={{ pathLength: 0 }}
+                                            animate={{ pathLength: 1 }}
+                                            transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                </motion.div>
                                 <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
                                 <p style={{ color: 'var(--text-muted)' }}>Slot booked. You can continue browsing other available slots.</p>
                             </div>
