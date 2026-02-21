@@ -5,7 +5,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -329,7 +329,7 @@ export default function Dashboard() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        color: 'white',
+                        color: 'var(--text-main)',
                         boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
                         borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
                         textShadow: '0 1px 2px rgba(0,0,0,0.1)'
@@ -410,28 +410,86 @@ export default function Dashboard() {
             </div>
 
             {/* Machine Status - Live View */}
-            <h3 style={{ marginBottom: '10px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    Status
+                    <span style={{
+                        fontSize: '12px',
+                        fontWeight: 'normal',
+                        background: 'var(--glass-button-bg)',
+                        border: '1px solid var(--glass-border)',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        color: 'var(--text-muted)'
+                    }}>
+                        {format(new Date(), 'h:mm a')}
+                    </span>
+                </h3>
+            </div>
+
             <div className="glass-panel" style={{
-                marginBottom: '16px',
-                padding: '14px 16px',
-                borderRadius: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.24) 0%, rgba(99, 102, 241, 0.12) 100%)',
-                border: '1px solid rgba(99, 102, 241, 0.45)'
+                marginBottom: '20px',
+                padding: '20px',
+                borderRadius: '16px',
+                position: 'relative',
+                overflow: 'hidden',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.2)'
             }}>
-                <div>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Total Slots</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
-                        {slotCapacity.totalSlots}
+                <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            padding: '12px',
+                            borderRadius: '14px',
+                            display: 'flex',
+                            position: 'relative'
+                        }}>
+                            {/* Pulse effect */}
+                            <div className="skeleton-pulse" style={{
+                                position: 'absolute', inset: 0, borderRadius: '14px',
+                                background: 'var(--primary)', opacity: 0.25, zIndex: 0
+                            }}></div>
+                            <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{
+                                    width: '8px', height: '8px', borderRadius: '50%',
+                                    background: isSystemClosed ? 'var(--error)' : 'var(--success)',
+                                    boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
+                                }}></span>
+                                {isSystemClosed ? 'Closed' : 'Active'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                            <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                {slotCapacity.remainingSlots}
+                            </span>
+                            <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                / {slotCapacity.totalSlots}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Week Remaining</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
-                        {slotCapacity.remainingSlots}
-                    </div>
+
+                {/* Progress Bar background effect */}
+                <div style={{
+                    position: 'absolute', bottom: 0, left: 0, height: '4px',
+                    background: 'var(--glass-border)', width: '100%'
+                }}>
+                    <div style={{
+                        height: '100%',
+                        background: 'var(--primary)',
+                        width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
+                        transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: '0 0 12px var(--primary-glow)'
+                    }}></div>
                 </div>
             </div>
             <div className="grid-cols-2">
