@@ -75,7 +75,7 @@ export const firestoreService = {
         return machines.sort((a, b) => a.id.localeCompare(b.id)); // Ensure order
     },
 
-    subscribeToMachines(callback: (machines: Machine[]) => void): () => void {
+    subscribeToMachines(callback: (machines: Machine[]) => void, onError?: (error: any) => void): () => void {
         const q = collection(db, MACHINES_COL);
         return onSnapshot(q, (snapshot) => {
             let machines = snapshot.docs.map(doc => doc.data() as Machine);
@@ -83,6 +83,7 @@ export const firestoreService = {
             callback(machines);
         }, (error) => {
             console.error("Error subscribing to machines:", error);
+            if (onError) onError(error);
         });
     },
 
@@ -106,13 +107,14 @@ export const firestoreService = {
         return snapshot.docs.map(doc => doc.data() as Booking);
     },
 
-    subscribeToBookings(callback: (bookings: Booking[]) => void): () => void {
+    subscribeToBookings(callback: (bookings: Booking[]) => void, onError?: (error: any) => void): () => void {
         const q = collection(db, BOOKINGS_COL);
         return onSnapshot(q, (snapshot) => {
             const bookings = snapshot.docs.map(doc => doc.data() as Booking);
             callback(bookings);
         }, (error) => {
             console.error("Error subscribing to bookings:", error);
+            if (onError) onError(error);
         });
     },
 

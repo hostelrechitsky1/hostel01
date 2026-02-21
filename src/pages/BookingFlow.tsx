@@ -57,10 +57,18 @@ export default function BookingFlow() {
 
                 unsubscribeMachines = firestoreService.subscribeToMachines((ms) => {
                     setMachines(ms);
+                }, (err) => {
+                    console.error("Machine fetching error:", err);
+                    setError("Failed to subscribe to machines.");
+                    setLoading(false);
                 });
 
                 unsubscribeBookings = firestoreService.subscribeToBookings((bs) => {
                     setBookings(bs);
+                    setLoading(false);
+                }, (err) => {
+                    console.error("Booking streaming error:", err);
+                    setError("Failed to get live booking data. Please check connection.");
                     setLoading(false);
                 });
             } catch (e) {

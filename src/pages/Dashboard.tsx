@@ -79,6 +79,9 @@ export default function Dashboard() {
                     setUpcomingBookings(futureBookings);
                     setHistory(pastBookings);
                     setLoading(false);
+                }, (error) => {
+                    console.error("Dashboard bookings subscription error:", error);
+                    setLoading(false);
                 });
 
             } catch (err) {
