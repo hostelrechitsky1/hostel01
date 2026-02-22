@@ -432,15 +432,33 @@ export default function Dashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    position: 'relative'
+                    position: 'relative',
+                    overflow: 'hidden',
+                    animation: 'float 6s ease-in-out infinite'
                 }}>
-                    <BookOpen size={24} color="#a855f7" />
-                    <div className="skeleton-pulse" style={{
-                        position: 'absolute', inset: 0, borderRadius: '16px',
-                        background: '#a855f7', opacity: 0.2, zIndex: 0
+                    <BookOpen size={24} color="#a855f7" style={{ position: 'relative', zIndex: 1 }} />
+                    <div style={{
+                        position: 'absolute',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                        backgroundSize: '200% 200%',
+                        animation: 'shimmer 3s infinite linear',
+                        zIndex: 0
                     }}></div>
                 </div>
                 <div style={{ flex: 1 }}>
+                    <style>
+                        {`
+                            @keyframes float {
+                                0%, 100% { transform: translateY(0px); }
+                                50% { transform: translateY(-4px); }
+                            }
+                            @keyframes shimmer {
+                                0% { background-position: 200% center; }
+                                100% { background-position: -200% center; }
+                            }
+                        `}
+                    </style>
                     <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Premium Study Hub
                         <span style={{
