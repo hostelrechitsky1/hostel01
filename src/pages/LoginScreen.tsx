@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import { Building, ArrowRight, User } from 'lucide-react';
+import { Building, ArrowRight, User, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Student } from '../types';
 
@@ -11,18 +11,10 @@ export default function LoginScreen() {
     const [room, setRoom] = useState('');
     const [pin, setPin] = useState('');
     const [roommates, setRoommates] = useState<Student[]>([]);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [availableRooms, setAvailableRooms] = useState<string[]>([]);
     const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    useEffect(() => {
-        firestoreService.getAllStudents().then(students => {
-            const rawRooms = Array.from(new Set(students.map(s => s.roomNumber)));
-            // Simple sort, assumes format like 101, 52-2
-            setAvailableRooms(rawRooms.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
-        }).catch(err => console.error('Failed to load rooms for autocomplete:', err));
-    }, []);
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -115,7 +107,6 @@ export default function LoginScreen() {
                                     value={room}
                                     onChange={(e) => setRoom(e.target.value)}
                                     placeholder="e.g. 101, 52-2"
-                                    list="room-suggestions"
                                     autoComplete="off"
                                     autoFocus
                                     style={{
@@ -130,9 +121,6 @@ export default function LoginScreen() {
                                         boxSizing: 'border-box'
                                     }}
                                 />
-                                <datalist id="room-suggestions">
-                                    {availableRooms.map(r => <option key={r} value={r} />)}
-                                </datalist>
                                 {error && <p style={{ color: 'var(--error)', fontSize: '14px', marginTop: '8px' }}>{error}</p>}
                             </div>
 
@@ -248,6 +236,69 @@ export default function LoginScreen() {
                 <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', marginTop: '24px' }}>
                     Strictly for Hostel Residents Only
                 </p>
+            </motion.div>
+
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                onClick={() => navigate('/study')}
+                className="glass-panel"
+                style={{
+                    padding: '16px',
+                    width: '100%',
+                    maxWidth: '400px',
+                    borderRadius: '20px',
+                    marginTop: '24px',
+                    cursor: 'pointer',
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(168, 85, 247, 0.05) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    border: '1px solid rgba(168, 85, 247, 0.2)'
+                }}
+            >
+                <div style={{
+                    background: 'rgba(168, 85, 247, 0.2)',
+                    padding: '12px',
+                    borderRadius: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    animation: 'float 6s ease-in-out infinite'
+                }}>
+                    <BookOpen size={24} color="#a855f7" style={{ position: 'relative', zIndex: 1 }} />
+                    <div style={{
+                        position: 'absolute',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                        backgroundSize: '200% 200%',
+                        animation: 'shimmer 3s infinite linear',
+                        zIndex: 0
+                    }}></div>
+                </div>
+                <div style={{ flex: 1 }}>
+                    <style>
+                        {`
+                            @keyframes float {
+                                0%, 100% { transform: translateY(0px); }
+                                50% { transform: translateY(-4px); }
+                            }
+                            @keyframes shimmer {
+                                0% { background-position: 200% center; }
+                                100% { background-position: -200% center; }
+                            }
+                        `}
+                    </style>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Premium Study Hub
+                    </h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '12px' }}>
+                        Access notes and past papers without logging in.
+                    </p>
+                </div>
             </motion.div>
 
         </div >

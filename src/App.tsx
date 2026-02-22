@@ -36,22 +36,13 @@ function App() {
           </PrivateRoute>
         } />
 
-        import StudyMaterials from './pages/StudyMaterials';
-
-        // ... (in App.tsx before the component)
-
         <Route path="/book" element={
           <PrivateRoute>
             <BookingFlow />
           </PrivateRoute>
         } />
 
-        <Route path="/study" element={
-          <PrivateRoute>
-            <StudyMaterials />
-          </PrivateRoute>
-        } />
-
+        <Route path="/study" element={<StudyMaterials />} />
         <Route path="/manager/login" element={<ManagerLogin />} />
         <Route path="/manager" element={<ManagerPanel />} />
         <Route path="/manager/print-schedule" element={<PrintSchedule />} />
