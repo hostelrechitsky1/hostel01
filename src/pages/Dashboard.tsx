@@ -5,7 +5,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, BookOpen } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, BookOpen, CheckCircle, ArrowRight } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -26,7 +26,6 @@ export default function Dashboard() {
         maintenanceDay: 3,
         topAlert: { message: '', isActive: false, type: 'info' }
     });
-    const [reminderMinutes, setReminderMinutes] = useState(30);
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
@@ -65,14 +64,15 @@ export default function Dashboard() {
                         new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
                     );
 
-                    const now = new Date();
+                    const now = getBelarusNow();
                     const futureBookings = chronological.filter(b => {
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
+                        // Parse as UTC+3 (Belarus time) by appending +03:00
+                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
                         return end > now;
                     });
 
                     const pastBookings = chronological.filter(b => {
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
+                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
                         return end <= now;
                     }).reverse();
 
@@ -606,73 +606,97 @@ export default function Dashboard() {
 
             {/* Your Bookings */}
             <div style={{ marginTop: '32px' }}>
-                <h3 style={{ marginBottom: '16px' }}>Your Upcoming Booking</h3>
+                <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={20} /> Your Upcoming Booking
+                </h3>
                 {primaryUpcomingBooking ? (
                     <div
                         className="glass-panel"
                         style={{
-                            padding: '20px',
-                            borderRadius: '16px',
+                            padding: '24px',
+                            borderRadius: '20px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '16px',
-                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%)',
-                            border: '1px solid rgba(16, 185, 129, 0.2)'
+                            gap: '20px',
+                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.05)'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '12px', borderRadius: '12px' }}>
-                                <Calendar size={24} color="#10b981" />
+                        {/* Decorative accent */}
+                        <div style={{
+                            position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
+                            background: 'linear-gradient(90deg, var(--success) 0%, #34d399 100%)'
+                        }} />
+
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+                            <div style={{
+                                width: '64px',
+                                height: '64px',
+                                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%)',
+                                borderRadius: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                                flexShrink: 0
+                            }}>
+                                <Washer size={32} color="var(--success)" />
                             </div>
-                            <div>
-                                <p style={{ margin: 0, fontWeight: 600, fontSize: '18px' }}>
-                                    {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMM d')}
-                                </p>
-                                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                                    {primaryUpcomingBooking.startTime} • {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
-                                </p>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+                                            {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMMM d')}
+                                        </h4>
+                                        <p style={{ margin: '4px 0 0', fontSize: '15px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{primaryUpcomingBooking.startTime}</span>
+                                            <span>•</span>
+                                            {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
+                                        </p>
+                                    </div>
+                                    <div style={{
+                                        background: 'rgba(16, 185, 129, 0.1)',
+                                        color: 'var(--success)',
+                                        padding: '4px 10px',
+                                        borderRadius: '12px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Activity size={12} /> Confirmed
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {upcomingBookings.length > 1 && (
                             <div
-                                className="glass-panel"
                                 style={{
-                                    padding: '10px 12px',
+                                    padding: '12px 16px',
                                     borderRadius: '12px',
-                                    border: '1px solid rgba(99,102,241,0.35)',
-                                    background: 'rgba(99,102,241,0.08)'
+                                    border: '1px dashed rgba(99,102,241,0.3)',
+                                    background: 'rgba(99,102,241,0.03)',
+                                    marginTop: '-4px'
                                 }}
                             >
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Also upcoming</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Also upcoming ({upcomingBookings.length - 1})
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     {upcomingBookings.slice(1, 3).map((booking) => (
-                                        <div key={booking.id} style={{ fontSize: '13px' }}>
-                                            {format(new Date(booking.date), 'EEE, MMM d')} • {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
+                                        <div key={booking.id} style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', color: 'var(--text-main)' }}>
+                                            <span>{format(new Date(booking.date), 'EEE, MMM d')} • <span style={{ fontWeight: 500 }}>{booking.startTime}</span></span>
+                                            <span style={{ color: 'var(--text-muted)' }}>{machines.find(m => m.id === booking.machineId)?.name || 'Machine'}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Reminder</span>
-                            <select
-                                value={reminderMinutes}
-                                onChange={(e) => setReminderMinutes(Number(e.target.value))}
-                                style={{
-                                    padding: '8px 10px',
-                                    borderRadius: '10px',
-                                    background: 'rgba(0,0,0,0.2)',
-                                    border: '1px solid var(--glass-border)',
-                                    color: 'var(--text-main)'
-                                }}
-                            >
-                                <option value={10}>10 min before</option>
-                                <option value={30}>30 min before</option>
-                                <option value={60}>1 hour before</option>
-                            </select>
-                        </div>
 
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
                             {/* Google Calendar Button */}
@@ -687,7 +711,7 @@ export default function Dashboard() {
                                     const url = `https://www.google.com/calendar/render?action=TEMPLATE` +
                                         `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || "Machine"))}` +
                                         `&dates=${formatGCal(start)}/${formatGCal(end)}` +
-                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: " + reminderMinutes + " minutes before. Remember to clear the machine when done.")}` +
+                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: 30 minutes before. Remember to clear the machine when done.")}` +
                                         `&location=${encodeURIComponent("Laundry Room")}` +
                                         `&sprop=&sprop=name:`;
 
@@ -724,7 +748,7 @@ export default function Dashboard() {
                                         'DESCRIPTION:Remember to empty the machine on time!',
                                         'LOCATION:Laundry Room',
                                         'BEGIN:VALARM',
-                                        `TRIGGER:-PT${reminderMinutes}M`,
+                                        `TRIGGER:-PT30M`,
                                         'ACTION:DISPLAY',
                                         'DESCRIPTION:Laundry Reminder',
                                         'END:VALARM',
@@ -765,10 +789,10 @@ export default function Dashboard() {
                                     window.URL.revokeObjectURL(url);
                                 }}
                                 className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
+                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
                             >
                                 <Download size={18} />
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple/Outlook</span>
+                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple / Outlook</span>
                             </button>
                         </div>
                     </div>
@@ -796,45 +820,112 @@ export default function Dashboard() {
                         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <History size={20} /> Past Bookings
                         </h3>
-                        <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-                            {history.slice(0, 5).map((booking, i, arr) => (
-                                <div
-                                    key={booking.id}
-                                    style={{
-                                        padding: '16px',
-                                        borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--glass-border)',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        gap: '12px'
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'EEE, MMM d, yyyy')}</div>
-                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.startTime}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <button
-                                            onClick={() => handleQuickBookFromHistory(booking)}
-                                            className="glass-button"
-                                            disabled={quickBookingId === booking.id}
-                                            style={{
-                                                padding: '8px 12px',
-                                                borderRadius: '10px',
-                                                fontSize: '12px',
-                                                fontWeight: 600,
-                                                opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
-                                            }}
-                                        >
-                                            {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
-                                        </button>
-                                        <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                            Done
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {history.slice(0, 5).map((booking) => {
+                                const machine = machines.find((m) => m.id === booking.machineId);
+                                const machineLabel = machine?.name || `Machine ${booking.machineId}`;
+                                return (
+                                    <div
+                                        key={booking.id}
+                                        className="glass-panel hover-card"
+                                        style={{
+                                            padding: '20px',
+                                            borderRadius: '16px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: '16px',
+                                            border: '1px solid rgba(168, 85, 247, 0.2)',
+                                            background: 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                                            transition: 'transform 0.2s, background 0.2s',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)';
+                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.4)';
+                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)';
+                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.2)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'absolute', top: 0, left: 0, bottom: 0, width: '4px',
+                                            background: 'linear-gradient(to bottom, var(--success) 0%, #10b98188 100%)'
+                                        }} />
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
+                                            <div style={{
+                                                width: '48px',
+                                                height: '48px',
+                                                borderRadius: '12px',
+                                                background: 'rgba(168, 85, 247, 0.1)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#a855f7',
+                                                flexShrink: 0
+                                            }}>
+                                                <History size={24} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>
+                                                    {machineLabel} <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '4px' }}>• {booking.startTime}</span>
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <CheckCircle size={14} color="var(--success)" />
+                                                    {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
+                                            <button
+                                                onClick={() => handleQuickBookFromHistory(booking)}
+                                                className="glass-button"
+                                                disabled={quickBookingId === booking.id}
+                                                style={{
+                                                    padding: '10px 16px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                                                    color: 'var(--primary)',
+                                                    background: 'rgba(168, 85, 247, 0.05)',
+                                                    opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
+                                                    cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    if (quickBookingId !== booking.id) {
+                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (quickBookingId !== booking.id) {
+                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
+                                                    }
+                                                }}
+                                            >
+                                                {quickBookingId === booking.id ? 'Booking...' : (
+                                                    <>
+                                                        Quick Book
+                                                        <ArrowRight size={14} />
+                                                    </>
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )

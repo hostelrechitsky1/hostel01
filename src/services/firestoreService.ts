@@ -170,18 +170,12 @@ export const firestoreService = {
 
         const data = configDoc.data() as Partial<AppSettings>;
 
-        // DEBUG: Log raw Firestore data
-        console.log('[firestoreService DEBUG] Raw Firestore settings data:', JSON.stringify(data));
-        console.log('[firestoreService DEBUG] data.maintenanceDay:', data.maintenanceDay, 'type:', typeof data.maintenanceDay);
-
         const result = {
             ...defaultSettings,
             ...data,
-            // Force number type to prevent "3" string vs 3 number issues
             maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay
         };
 
-        console.log('[firestoreService DEBUG] Returning maintenanceDay:', result.maintenanceDay);
         return result;
     },
 

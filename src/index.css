@@ -25,8 +25,6 @@
 html {
   background-color: var(--bg-solid);
   min-height: 100%;
-  overscroll-behavior-y: auto;
-  overflow-x: hidden;
 }
 
 body {
@@ -34,12 +32,12 @@ body {
   font-family: var(--font-family);
   background: var(--bg-gradient);
   background-color: var(--bg-solid);
-  background-attachment: scroll;
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: auto;
-  overflow-x: hidden;
+  overscroll-behavior-y: none;
   touch-action: pan-y;
 }
 
@@ -56,10 +54,9 @@ button {
   max-width: 100%;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  overscroll-behavior-y: auto;
-  overflow-x: clip;
 }
 
 /* Animations */
@@ -281,6 +278,7 @@ button {
 .text-gradient {
   background: linear-gradient(to right, #818cf8, #c7d2fe);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -335,6 +333,13 @@ button {
   .glass-button:hover {
     background: rgba(255, 255, 255, 0.8);
   }
+
+  .text-gradient {
+    background: linear-gradient(to right, #4f46e5, #6366f1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 /* Print Overrides (Always Light) */
@@ -359,6 +364,7 @@ button {
     display: block;
   }
 }
+
 /* Login Split Layout */
 .login-split {
   display: flex;
@@ -388,6 +394,7 @@ button {
   .login-split {
     flex-direction: row;
   }
+
   .login-right {
     background: linear-gradient(135deg, rgba(168, 85, 247, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
     border-left: 1px solid var(--glass-border);

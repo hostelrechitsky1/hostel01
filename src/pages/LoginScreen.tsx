@@ -71,7 +71,16 @@ export default function LoginScreen() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="glass-panel"
-                    style={{ padding: '40px', width: '100%', maxWidth: '400px', borderRadius: '24px' }}
+                    style={{
+                        padding: '48px',
+                        width: '100%',
+                        maxWidth: '460px',
+                        minHeight: '520px',
+                        borderRadius: '32px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                    }}
                 >
                     <div style={{ textAlign: 'center', marginBottom: '30px' }}>
                         <div style={{
@@ -262,7 +271,8 @@ export default function LoginScreen() {
                     style={{
                         padding: '48px',
                         width: '100%',
-                        maxWidth: '480px',
+                        maxWidth: '460px',
+                        minHeight: '520px',
                         borderRadius: '32px',
                         cursor: 'pointer',
                         background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%)',
@@ -310,13 +320,14 @@ export default function LoginScreen() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            border: '1px solid rgba(168, 85, 247, 0.3)',
                             boxShadow: 'inset 0 2px 20px rgba(255,255,255,0.1)',
                             position: 'relative',
                             zIndex: 1,
-                            animation: 'float 6s ease-in-out infinite'
+                            animation: 'float 6s ease-in-out infinite',
+                            color: 'var(--primary)'
                         }}>
-                            <BookOpen size={48} color="#fff" />
+                            <BookOpen size={48} color="currentColor" />
                             <div style={{
                                 position: 'absolute',
                                 top: '-10px',
@@ -336,8 +347,9 @@ export default function LoginScreen() {
                         fontWeight: 800,
                         marginBottom: '16px',
                         letterSpacing: '-0.02em',
-                        background: 'linear-gradient(135deg, #fff 0%, #a855f7 100%)',
+                        background: 'linear-gradient(135deg, var(--text-main) 0%, #a855f7 100%)',
                         WebkitBackgroundClip: 'text',
+                        backgroundClip: 'text',
                         WebkitTextFillColor: 'transparent'
                     }}>
                         The Future of Learning

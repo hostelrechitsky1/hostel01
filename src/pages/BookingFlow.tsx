@@ -197,6 +197,11 @@ export default function BookingFlow() {
         if (!selectedSlot || !selectedMachine || !user || submitting) return;
         setSubmitting(true);
 
+        const startTime = selectedSlot;
+        const [h, m] = startTime.split(':').map(Number);
+        const endMinutes = h * 60 + m + 90;
+        const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
         const bookingData: Booking = {
             id: Date.now().toString(),
             machineId: selectedMachine.id,
@@ -204,8 +209,8 @@ export default function BookingFlow() {
             studentName: user.name,
             roomNumber: user.roomNumber,
             date: formatBelarusDate(selectedDate),
-            startTime: selectedSlot,
-            endTime: selectedSlot,
+            startTime,
+            endTime,
             weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now()
         };
@@ -232,12 +237,7 @@ export default function BookingFlow() {
         }
     };
 
-    // Use setting or default to 3 (Wednesday)
     const maintenanceDay = typeof settings.maintenanceDay === 'number' ? settings.maintenanceDay : 3;
-
-    // DEBUG: Log the settings to verify correct value is being used
-    console.log('[BookingFlow DEBUG] settings.maintenanceDay:', settings.maintenanceDay, '| computed maintenanceDay:', maintenanceDay);
-
     const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
 
