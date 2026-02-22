@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import { Building, ArrowRight, User, BookOpen } from 'lucide-react';
+import { Building, ArrowRight, User, BookOpen, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Student } from '../types';
 
@@ -240,15 +240,27 @@ export default function LoginScreen() {
                 </motion.div>
             </div>
 
-            <div className="login-right">
+            <div className="login-right" style={{ position: 'relative', overflow: 'hidden' }}>
+                {/* Background decorative elements for the right side */}
+                <div style={{
+                    position: 'absolute', top: '10%', right: '20%', width: '300px', height: '300px',
+                    background: 'rgba(168, 85, 247, 0.15)', filter: 'blur(80px)', borderRadius: '50%',
+                    animation: 'blob-float 15s infinite alternate ease-in-out', zIndex: 0
+                }} />
+                <div style={{
+                    position: 'absolute', bottom: '10%', left: '10%', width: '250px', height: '250px',
+                    background: 'rgba(56, 189, 248, 0.1)', filter: 'blur(80px)', borderRadius: '50%',
+                    animation: 'blob-float 20s infinite alternate-reverse ease-in-out', zIndex: 0
+                }} />
+
                 <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2, type: 'spring', stiffness: 100, damping: 20 }}
                     onClick={() => navigate('/study')}
                     className="glass-panel"
                     style={{
-                        padding: '40px',
+                        padding: '48px',
                         width: '100%',
                         maxWidth: '480px',
                         borderRadius: '32px',
@@ -259,71 +271,109 @@ export default function LoginScreen() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         textAlign: 'center',
-                        border: '1px solid rgba(168, 85, 247, 0.2)',
-                        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.2), inset 0 2px 20px rgba(255,255,255,0.05)',
+                        position: 'relative',
+                        zIndex: 1,
+                        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                        e.currentTarget.style.boxShadow = '0 30px 60px rgba(0,0,0,0.3), inset 0 2px 20px rgba(255,255,255,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.2), inset 0 2px 20px rgba(255,255,255,0.05)';
                     }}
                 >
-                    <div style={{ position: 'relative', marginBottom: '32px' }}>
+                    <div style={{ position: 'relative', marginBottom: '40px' }}>
                         {/* Glowing background ring */}
                         <div style={{
                             position: 'absolute',
                             top: '50%',
                             left: '50%',
                             transform: 'translate(-50%, -50%)',
-                            width: '120px',
-                            height: '120px',
-                            background: 'linear-gradient(135deg, var(--primary) 0%, #a855f7 100%)',
+                            width: '140px',
+                            height: '140px',
+                            background: 'linear-gradient(135deg, var(--primary) 0%, #ec4899 100%)',
                             borderRadius: '50%',
-                            opacity: 0.2,
-                            filter: 'blur(20px)',
+                            opacity: 0.25,
+                            filter: 'blur(30px)',
                             animation: 'glow-pulse 4s ease-in-out infinite'
                         }} />
 
                         <div className="glass-panel" style={{
-                            width: '80px',
-                            height: '80px',
-                            borderRadius: '24px',
+                            width: '100px',
+                            height: '100px',
+                            borderRadius: '28px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)',
-                            border: '1px solid rgba(168, 85, 247, 0.4)',
+                            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            boxShadow: 'inset 0 2px 20px rgba(255,255,255,0.1)',
                             position: 'relative',
                             zIndex: 1,
                             animation: 'float 6s ease-in-out infinite'
                         }}>
-                            <BookOpen size={40} color="#a855f7" />
+                            <BookOpen size={48} color="#fff" />
+                            <div style={{
+                                position: 'absolute',
+                                top: '-10px',
+                                right: '-10px',
+                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                                borderRadius: '50%',
+                                padding: '8px',
+                                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)'
+                            }}>
+                                <Sparkles size={16} color="#fff" />
+                            </div>
                         </div>
                     </div>
 
-                    <h2 style={{ fontSize: '28px', marginBottom: '16px', background: 'linear-gradient(135deg, var(--text-main) 0%, #a855f7 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        Premium Study Hub
+                    <h2 style={{
+                        fontSize: '32px',
+                        fontWeight: 800,
+                        marginBottom: '16px',
+                        letterSpacing: '-0.02em',
+                        background: 'linear-gradient(135deg, #fff 0%, #a855f7 100%)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent'
+                    }}>
+                        The Future of Learning
                     </h2>
 
-                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', marginBottom: '32px' }}>
-                        Access notes, past papers, and study materials without needing to log in. Prepared by students, for students.
+                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.6', marginBottom: '40px' }}>
+                        Access curated notes, past papers, and study materials from previous semesters without needing to log in.
                     </p>
 
                     <button className="primary-button" style={{
-                        padding: '16px 32px',
+                        padding: '16px 36px',
                         borderRadius: '16px',
                         fontSize: '16px',
+                        fontWeight: 600,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px'
+                        gap: '12px',
+                        background: 'linear-gradient(135deg, var(--primary) 0%, #a855f7 100%)',
+                        boxShadow: '0 8px 20px rgba(168, 85, 247, 0.3)'
                     }}>
-                        Enter Study Hub <ArrowRight size={18} />
+                        Explore Study Hub <ArrowRight size={20} />
                     </button>
 
                     <style>
                         {`
+                            @keyframes blob-float {
+                                0% { transform: translate(0, 0) scale(1); }
+                                100% { transform: translate(30px, 50px) scale(1.1); }
+                            }
                             @keyframes float {
                                 0%, 100% { transform: translateY(0px); }
-                                50% { transform: translateY(-8px); }
+                                50% { transform: translateY(-10px); }
                             }
                             @keyframes glow-pulse {
-                                0%, 100% { opacity: 0.15; transform: translate(-50%, -50%) scale(1); }
-                                50% { opacity: 0.3; transform: translate(-50%, -50%) scale(1.15); }
+                                0%, 100% { opacity: 0.2; transform: translate(-50%, -50%) scale(1); }
+                                50% { opacity: 0.4; transform: translate(-50%, -50%) scale(1.1); }
                             }
                         `}
                     </style>
