@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
-import { WashingMachine, ArrowRight, User } from 'lucide-react';
+import { Building, ArrowRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Student } from '../types';
 
@@ -91,10 +91,10 @@ export default function LoginScreen() {
                         justifyContent: 'center',
                         margin: '0 auto 20px auto'
                     }}>
-                        <WashingMachine size={40} color="#818cf8" />
+                        <Building size={40} color="#818cf8" />
                     </div>
-                    <h1 className="text-gradient" style={{ margin: 0, fontSize: '28px' }}>Hostel Wash</h1>
-                    <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Book your laundry slot</p>
+                    <h1 className="text-gradient" style={{ margin: 0, fontSize: '28px' }}>Hostel Portal</h1>
+                    <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Access laundry & study materials</p>
                 </div>
 
                 <AnimatePresence mode="wait">
