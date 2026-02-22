@@ -9,9 +9,8 @@ import PrintSchedule from './pages/PrintSchedule';
 import PrintCredentials from './pages/PrintCredentials';
 import HostelAdminLogin from './pages/HostelAdminLogin';
 import HostelAdminDashboard from './pages/HostelAdminDashboard';
+import StudyMaterials from './pages/StudyMaterials';
 import { PrivateRoute } from './components/PrivateRoute';
-
-
 function ScrollToTopOnRouteChange() {
   const { pathname } = useLocation();
 
@@ -37,9 +36,19 @@ function App() {
           </PrivateRoute>
         } />
 
+        import StudyMaterials from './pages/StudyMaterials';
+
+        // ... (in App.tsx before the component)
+
         <Route path="/book" element={
           <PrivateRoute>
             <BookingFlow />
+          </PrivateRoute>
+        } />
+
+        <Route path="/study" element={
+          <PrivateRoute>
+            <StudyMaterials />
           </PrivateRoute>
         } />
 
