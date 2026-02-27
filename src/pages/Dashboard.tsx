@@ -401,15 +401,14 @@ export default function Dashboard() {
             <div
                 className="glass-panel main-action-layout"
                 style={{
-                    padding: '24px',
-                    borderRadius: '20px',
-                    marginBottom: '32px',
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%)'
+                    padding: '20px 24px',
+                    borderRadius: '16px',
+                    marginBottom: '32px'
                 }}
             >
                 <div>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>Need to wash?</h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
                         {mainActionSubtitle}
                     </p>
                 </div>
@@ -417,11 +416,20 @@ export default function Dashboard() {
                     onClick={() => navigate('/book')}
                     className="primary-button"
                     style={{
-                        padding: '12px 24px',
-                        borderRadius: '12px',
-                        background: isSystemClosed ? '#ef4444' : hasUpcomingBooking ? '#10b981' : 'var(--primary)',
-                        opacity: 1,
-                        cursor: 'pointer'
+                        padding: '10px 24px',
+                        borderRadius: '10px',
+                        background: isSystemClosed ? 'var(--error)' : hasUpcomingBooking ? 'var(--success)' : 'var(--primary)',
+                        boxShadow: isSystemClosed
+                            ? '0 0 15px rgba(239, 68, 68, 0.3)'
+                            : hasUpcomingBooking
+                                ? '0 0 15px rgba(16, 185, 129, 0.3)'
+                                : '0 0 15px var(--primary-glow)',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        border: 'none',
+                        color: 'white',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
                     }}
                 >
                     {mainActionLabel}
