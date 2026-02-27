@@ -5,7 +5,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, BookOpen, CheckCircle, ArrowRight } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -409,73 +409,6 @@ export default function Dashboard() {
                 </button>
             </div>
 
-            {/* Study Hub Banner */}
-            <div
-                onClick={() => navigate('/study')}
-                className="glass-panel"
-                style={{
-                    padding: '20px',
-                    borderRadius: '20px',
-                    marginBottom: '32px',
-                    cursor: 'pointer',
-                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(168, 85, 247, 0.05) 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '16px',
-                    border: '1px solid rgba(168, 85, 247, 0.2)'
-                }}
-            >
-                <div style={{
-                    background: 'rgba(168, 85, 247, 0.2)',
-                    padding: '12px',
-                    borderRadius: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    animation: 'float 6s ease-in-out infinite'
-                }}>
-                    <BookOpen size={24} color="#a855f7" style={{ position: 'relative', zIndex: 1 }} />
-                    <div style={{
-                        position: 'absolute',
-                        top: 0, left: 0, right: 0, bottom: 0,
-                        background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
-                        backgroundSize: '200% 200%',
-                        animation: 'shimmer 3s infinite linear',
-                        zIndex: 0
-                    }}></div>
-                </div>
-                <div style={{ flex: 1 }}>
-                    <style>
-                        {`
-                            @keyframes float {
-                                0%, 100% { transform: translateY(0px); }
-                                50% { transform: translateY(-4px); }
-                            }
-                            @keyframes shimmer {
-                                0% { background-position: 200% center; }
-                                100% { background-position: -200% center; }
-                            }
-                        `}
-                    </style>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Premium Study Hub
-                        <span style={{
-                            fontSize: '10px',
-                            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                            color: 'white',
-                            padding: '2px 6px',
-                            borderRadius: '8px',
-                            fontWeight: 'bold',
-                            letterSpacing: '0.05em'
-                        }}>NEW</span>
-                    </h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-                        Past papers, short notes, and study materials.
-                    </p>
-                </div>
-            </div>
 
             {/* Machine Status - Live View */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
