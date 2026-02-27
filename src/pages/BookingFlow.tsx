@@ -264,29 +264,141 @@ export default function BookingFlow() {
     }
 
     if (settings.forceCloseBookings || !isNextWeekOpen) {
+        const getNextSaturday1600 = () => {
+            const now = getBelarusNow();
+            const currentDay = now.getDay();
+            let daysUntilSaturday = 6 - currentDay;
+
+            // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
+            if (currentDay === 6 && now.getHours() >= 16) daysUntilSaturday += 7;
+            if (currentDay === 0) daysUntilSaturday = 6;
+
+            const nextSat = new Date(now);
+            nextSat.setDate(now.getDate() + daysUntilSaturday);
+            nextSat.setHours(16, 0, 0, 0);
+            return nextSat.getTime();
+        };
+
+        const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+        useEffect(() => {
+            if (settings.forceCloseBookings) return;
+
+            const targetTime = getNextSaturday1600();
+
+            const calculateTimeLeft = () => {
+                const now = getBelarusNow().getTime();
+                const difference = targetTime - now;
+
+                if (difference > 0) {
+                    setTimeLeft({
+                        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+                        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+                        minutes: Math.floor((difference / 1000 / 60) % 60),
+                        seconds: Math.floor((difference / 1000) % 60)
+                    });
+                }
+            };
+
+            calculateTimeLeft();
+            const timer = setInterval(calculateTimeLeft, 1000);
+            return () => clearInterval(timer);
+        }, [settings.forceCloseBookings]);
+
         return (
             <div className="container flex-center" style={{
-                height: '80vh',
+                minHeight: '80vh',
                 flexDirection: 'column',
                 textAlign: 'center',
-                color: 'var(--text-main)'
+                color: 'var(--text-main)',
+                padding: '20px'
             }}>
-                <div style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    padding: '32px',
-                    borderRadius: '50%',
-                    marginBottom: '24px',
-                    border: '1px solid rgba(239, 68, 68, 0.2)'
-                }}>
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.4, type: 'spring' }}
+                    style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        padding: '32px',
+                        borderRadius: '50%',
+                        marginBottom: '24px',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}>
                     <AlertCircle size={48} color="#ef4444" />
-                </div>
-                <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>
-                    {settings.forceCloseBookings ? 'Bookings Are Closed' : 'Bookings Are Currently Closed'}
+                </motion.div>
+
+                <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
+                    {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
                 </h2>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-                    {settings.forceCloseBookings ? 'Paused by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
+                <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
+                    {settings.forceCloseBookings ? 'Temporarily disabled by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
                 </p>
-                <button onClick={() => navigate('/')} className="primary-button" style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                {!settings.forceCloseBookings && (
+                    <motion.div
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        style={{
+                            display: 'flex',
+                            gap: '16px',
+                            marginBottom: '48px',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        {[
+                            { label: 'Days', value: timeLeft.days },
+                            { label: 'Hours', value: timeLeft.hours },
+                            { label: 'Minutes', value: timeLeft.minutes },
+                            { label: 'Seconds', value: timeLeft.seconds }
+                        ].map((item, index) => (
+                            <div key={index} style={{
+                                background: 'var(--glass-bg)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '16px',
+                                padding: '16px 20px',
+                                minWidth: '80px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                            }}>
+                                <span style={{
+                                    fontSize: '32px',
+                                    fontWeight: 800,
+                                    color: 'var(--primary)',
+                                    lineHeight: 1,
+                                    marginBottom: '8px',
+                                    fontVariantNumeric: 'tabular-nums'
+                                }}>
+                                    {String(item.value).padStart(2, '0')}
+                                </span>
+                                <span style={{
+                                    fontSize: '12px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em',
+                                    color: 'var(--text-muted)'
+                                }}>
+                                    {item.label}
+                                </span>
+                            </div>
+                        ))}
+                    </motion.div>
+                )}
+
+                <button
+                    onClick={() => navigate('/')}
+                    className="primary-button"
+                    style={{
+                        padding: '16px 32px',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        fontSize: '16px',
+                        fontWeight: 600
+                    }}
+                >
                     <ChevronLeft size={20} /> Back to Dashboard
                 </button>
             </div>
