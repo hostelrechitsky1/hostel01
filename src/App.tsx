@@ -23,20 +23,18 @@ function ScrollToTopOnRouteChange() {
   return null;
 }
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const pageTransition = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -10 },
-  transition: { duration: 0.2 }
+  transition: { duration: 0.15, ease: 'easeOut' }
 };
 
 const PageWrapper = ({ children }: { children: React.ReactNode }) => (
   <motion.div
     initial="initial"
     animate="animate"
-    exit="exit"
     variants={pageTransition}
     style={{ width: '100%', height: '100%' }}
   >
@@ -48,33 +46,31 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
+    <Routes location={location} key={location.pathname}>
+      <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
 
-        <Route path="/" element={
-          <PrivateRoute>
-            <PageWrapper><Dashboard /></PageWrapper>
-          </PrivateRoute>
-        } />
+      <Route path="/" element={
+        <PrivateRoute>
+          <PageWrapper><Dashboard /></PageWrapper>
+        </PrivateRoute>
+      } />
 
-        <Route path="/book" element={
-          <PrivateRoute>
-            <PageWrapper><BookingFlow /></PageWrapper>
-          </PrivateRoute>
-        } />
+      <Route path="/book" element={
+        <PrivateRoute>
+          <PageWrapper><BookingFlow /></PageWrapper>
+        </PrivateRoute>
+      } />
 
-        <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
-        <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
-        <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
-        <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
+      <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
+      <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
+      <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
+      <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
 
-        <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
-        <Route path="/hostel-admin/dashboard" element={<PageWrapper><HostelAdminDashboard /></PageWrapper>} />
+      <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
+      <Route path="/hostel-admin/dashboard" element={<PageWrapper><HostelAdminDashboard /></PageWrapper>} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AnimatePresence>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

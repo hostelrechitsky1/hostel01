@@ -366,11 +366,13 @@ export default function BookingFlow() {
                             }}>
                                 <div style={{
                                     height: '32px',
+                                    width: '100%',
                                     overflow: 'hidden',
                                     position: 'relative',
                                     marginBottom: '8px',
                                     display: 'flex',
-                                    justifyContent: 'center'
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
                                 }}>
                                     <AnimatePresence mode="popLayout">
                                         <motion.span
@@ -390,7 +392,6 @@ export default function BookingFlow() {
                                                 color: 'var(--primary)',
                                                 lineHeight: 1,
                                                 fontVariantNumeric: 'tabular-nums',
-                                                position: 'absolute'
                                             }}
                                         >
                                             {String(item.value).padStart(2, '0')}
