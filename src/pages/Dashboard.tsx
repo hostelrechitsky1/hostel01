@@ -6,6 +6,7 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -268,7 +269,13 @@ export default function Dashboard() {
 
             setUpcomingBookings(futureBookings);
             setHistory(pastBookings);
-            setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+            setQuickBookModalMessage({ type: 'info', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+
+            // Auto close on success
+            setTimeout(() => {
+                setQuickBookModalBooking(null);
+                setQuickBookModalMessage(null);
+            }, 2000);
         } catch (error) {
             console.error('Quick booking failed', error);
             setQuickBookModalMessage({ type: 'error', text: 'Quick booking failed due to a system error.' });
@@ -893,56 +900,77 @@ export default function Dashboard() {
             {modalRoot && quickBookModalBooking && createPortal(
                 <div className="modal-overlay" onClick={() => setQuickBookModalBooking(null)}>
                     <div className="glass-panel modal-card" onClick={(e) => e.stopPropagation()}>
-                        <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
-                        <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                            {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
-                        </p>
-                        <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
-                            Machine: {quickBookMachineLabel}
-                        </p>
 
-                        {quickBookModalMessage && (
-                            <div
-                                style={{
-                                    marginBottom: '14px',
-                                    padding: '10px 12px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    color: quickBookModalMessage.type === 'success' ? 'var(--success)' : 'var(--error)',
-                                    border: quickBookModalMessage.type === 'success'
-                                        ? '1px solid rgba(16,185,129,0.4)'
-                                        : '1px solid rgba(239,68,68,0.4)',
-                                    background: quickBookModalMessage.type === 'success'
-                                        ? 'rgba(16,185,129,0.12)'
-                                        : 'rgba(239,68,68,0.12)'
-                                }}
-                            >
-                                {quickBookModalMessage.text}
+                        {quickBookModalMessage?.type === 'success' ? (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', damping: 20, stiffness: 250 }}
+                                    style={{
+                                        background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                                    }}
+                                >
+                                    <CheckCircle size={32} color="var(--success)" />
+                                </motion.div>
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Confirmed!</h3>
+                                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{quickBookModalMessage.text}</p>
                             </div>
-                        )}
+                        ) : (
+                            <>
+                                <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
+                                <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
+                                    {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
+                                </p>
+                                <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
+                                    Machine: {quickBookMachineLabel}
+                                </p>
 
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                            <button
-                                onClick={() => setQuickBookModalBooking(null)}
-                                className="glass-button"
-                                style={{ padding: '10px 18px', borderRadius: '10px' }}
-                            >
-                                Close
-                            </button>
-                            <button
-                                onClick={handleConfirmQuickBook}
-                                disabled={quickBookingId === quickBookModalBooking.id}
-                                className="primary-button"
-                                style={{
-                                    padding: '10px 18px',
-                                    borderRadius: '10px',
-                                    opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
-                                    cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
-                            </button>
-                        </div>
+                                {quickBookModalMessage && (
+                                    <div
+                                        style={{
+                                            marginBottom: '14px',
+                                            padding: '10px 12px',
+                                            borderRadius: '10px',
+                                            fontSize: '13px',
+                                            color: quickBookModalMessage.type === 'info' ? 'var(--text-main)' : 'var(--error)',
+                                            border: quickBookModalMessage.type === 'info'
+                                                ? '1px solid rgba(16,185,129,0.4)'
+                                                : '1px solid rgba(239,68,68,0.4)',
+                                            background: quickBookModalMessage.type === 'info'
+                                                ? 'rgba(16,185,129,0.12)'
+                                                : 'rgba(239,68,68,0.12)'
+                                        }}
+                                    >
+                                        {quickBookModalMessage.text}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                    <button
+                                        onClick={() => setQuickBookModalBooking(null)}
+                                        className="glass-button"
+                                        style={{ padding: '10px 18px', borderRadius: '10px' }}
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={handleConfirmQuickBook}
+                                        disabled={quickBookingId === quickBookModalBooking.id}
+                                        className="primary-button"
+                                        style={{
+                                            padding: '10px 18px',
+                                            borderRadius: '10px',
+                                            opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
+                                            cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>,
                 modalRoot

@@ -697,15 +697,16 @@ export default function BookingFlow() {
                     {/* Success Modal */}
                     {showConfirmation && (
                         <div className="modal-overlay modal-overlay--success">
-                            <Confetti
-                                width={width}
-                                height={height}
-                                recycle={false}
-                                numberOfPieces={400}
-                                gravity={0.15}
-                                style={{ zIndex: 9999, position: 'fixed', top: 0, left: 0 }}
-                                colors={['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']}
-                            />
+                            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: 'none' }}>
+                                <Confetti
+                                    width={width}
+                                    height={height}
+                                    recycle={false}
+                                    numberOfPieces={400}
+                                    gravity={0.15}
+                                    colors={['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']}
+                                />
+                            </div>
                             <div className="glass-panel modal-card modal-card--success" style={{ zIndex: 100 }}>
                                 <motion.div
                                     initial={{ scale: 0 }}
