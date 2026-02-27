@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { firestoreService } from '../services/firestoreService';
 import { bookingService } from '../services/bookingService';
 import { Send, MessageSquare } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function DashboardFeedback() {
     const [text, setText] = useState('');
@@ -25,9 +26,10 @@ export default function DashboardFeedback() {
             });
             setSuccess(true);
             setText('');
+            toast.success('Feedback sent!');
             setTimeout(() => setSuccess(false), 3000);
         } catch (error) {
-            alert('Failed to send feedback.');
+            toast.error('Failed to send feedback.');
         } finally {
             setLoading(false);
         }

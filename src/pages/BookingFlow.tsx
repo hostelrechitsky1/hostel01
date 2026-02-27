@@ -6,8 +6,12 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
-import { ChevronLeft, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
+import { motion, AnimatePresence } from 'framer-motion';
+import Confetti from 'react-confetti';
+import { toast } from 'sonner';
+import { useWindowSize } from 'react-use';
 import {
     addBelarusDays,
     formatBelarusDate,
@@ -25,6 +29,7 @@ import {
 export default function BookingFlow() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
+    const { width, height } = useWindowSize();
 
     // Hooks must be called unconditionally
     const [selectedDate, setSelectedDate] = useState(getBelarusDate());
@@ -32,7 +37,6 @@ export default function BookingFlow() {
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [settings, setSettings] = useState<Partial<AppSettings>>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3 });
@@ -46,25 +50,43 @@ export default function BookingFlow() {
             navigate('/login');
             return;
         }
+        let unsubscribeBookings = () => { };
+        let unsubscribeMachines = () => { };
+
         const load = async () => {
             try {
-                const [ms, bs, st] = await Promise.all([
-                    firestoreService.getMachines(),
-                    firestoreService.getBookings(),
-                    firestoreService.getSettings()
-                ]);
-                setMachines(ms);
-                setBookings(bs);
+                const st = await firestoreService.getSettings();
                 setSettings(st);
+
+                unsubscribeMachines = firestoreService.subscribeToMachines((ms) => {
+                    setMachines(ms);
+                }, (err) => {
+                    console.error("Machine fetching error:", err);
+                    toast.error("Failed to subscribe to machines.");
+                    setLoading(false);
+                });
+
+                unsubscribeBookings = firestoreService.subscribeToBookings((bs) => {
+                    setBookings(bs);
+                    setLoading(false);
+                }, (err) => {
+                    console.error("Booking streaming error:", err);
+                    toast.error("Failed to get live booking data. Please check connection.");
+                    setLoading(false);
+                });
             } catch (e) {
                 console.error("Failed to load booking data", e);
-                setError("Failed to load data. Please refresh.");
-            } finally {
+                toast.error("Failed to load data. Please refresh.");
                 setLoading(false);
             }
         };
         load();
-    }, [user, navigate]);
+
+        return () => {
+            unsubscribeBookings();
+            unsubscribeMachines();
+        };
+    }, [user?.id, navigate]);
 
     const isNextWeekOpen = useMemo(() => {
         if (settings.forceShowNextWeek) return true;
@@ -178,6 +200,11 @@ export default function BookingFlow() {
         if (!selectedSlot || !selectedMachine || !user || submitting) return;
         setSubmitting(true);
 
+        const startTime = selectedSlot;
+        const [h, m] = startTime.split(':').map(Number);
+        const endMinutes = h * 60 + m + 90;
+        const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
         const bookingData: Booking = {
             id: Date.now().toString(),
             machineId: selectedMachine.id,
@@ -185,8 +212,8 @@ export default function BookingFlow() {
             studentName: user.name,
             roomNumber: user.roomNumber,
             date: formatBelarusDate(selectedDate),
-            startTime: selectedSlot,
-            endTime: selectedSlot,
+            startTime,
+            endTime,
             weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now()
         };
@@ -201,32 +228,81 @@ export default function BookingFlow() {
                 setShowConfirmation(true);
                 setSelectedMachine(null);
             } else {
-                setError(result.error || 'Booking failed');
-                setTimeout(() => setError(''), 3000);
+                toast.error(result.error || 'Booking failed');
             }
         } catch (e: any) {
             console.error('Booking transaction failed:', e);
             console.error('Error details:', e.message, e.code);
-            setError(`System error: ${e.message || 'Please try again.'}`);
+            toast.error(`System error: ${e.message || 'Please try again.'}`);
         } finally {
             setSubmitting(false);
         }
     };
 
-    // Use setting or default to 3 (Wednesday)
     const maintenanceDay = typeof settings.maintenanceDay === 'number' ? settings.maintenanceDay : 3;
-
-    // DEBUG: Log the settings to verify correct value is being used
-    console.log('[BookingFlow DEBUG] settings.maintenanceDay:', settings.maintenanceDay, '| computed maintenanceDay:', maintenanceDay);
-
     const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
 
     // --- RENDER ---
+    const getNextSaturday1600 = () => {
+        const now = getBelarusNow();
+        const currentDay = now.getDay();
+        let daysUntilSaturday = 6 - currentDay;
+
+        // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
+        if (currentDay === 6 && now.getHours() >= 16) daysUntilSaturday += 7;
+        if (currentDay === 0) daysUntilSaturday = 6;
+
+        const nextSat = new Date(now);
+        nextSat.setDate(now.getDate() + daysUntilSaturday);
+        nextSat.setHours(16, 0, 0, 0);
+        return nextSat.getTime();
+    };
+
+    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+    useEffect(() => {
+        if (!settings) return;
+        if (settings.forceCloseBookings) return;
+
+        const targetTime = getNextSaturday1600();
+
+        const calculateTimeLeft = () => {
+            const now = getBelarusNow().getTime();
+            const difference = targetTime - now;
+
+            if (difference > 0) {
+                setTimeLeft({
+                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+                    minutes: Math.floor((difference / 1000 / 60) % 60),
+                    seconds: Math.floor((difference / 1000) % 60)
+                });
+            }
+        };
+
+        calculateTimeLeft();
+        const timer = setInterval(calculateTimeLeft, 1000);
+        return () => clearInterval(timer);
+    }, [settings?.forceCloseBookings]);
+
     if (loading) {
         return (
-            <div className="flex-center" style={{ height: '100vh', color: 'var(--text-main)' }}>
-                <div>Loading...</div>
+            <div className="container animate-fade-in" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                    <div style={{ width: '150px', height: '28px', borderRadius: '8px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} style={{ minWidth: '80px', height: '80px', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} style={{ width: '100%', height: '80px', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -234,27 +310,125 @@ export default function BookingFlow() {
     if (settings.forceCloseBookings || !isNextWeekOpen) {
         return (
             <div className="container flex-center" style={{
-                height: '80vh',
+                minHeight: '80vh',
                 flexDirection: 'column',
                 textAlign: 'center',
-                color: 'var(--text-main)'
+                color: 'var(--text-main)',
+                padding: '20px'
             }}>
-                <div style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    padding: '32px',
-                    borderRadius: '50%',
-                    marginBottom: '24px',
-                    border: '1px solid rgba(239, 68, 68, 0.2)'
-                }}>
+                <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.4, type: 'spring' }}
+                    style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        padding: '32px',
+                        borderRadius: '50%',
+                        marginBottom: '24px',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}>
                     <AlertCircle size={48} color="#ef4444" />
-                </div>
-                <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>
-                    {settings.forceCloseBookings ? 'Bookings Are Closed' : 'Bookings Are Currently Closed'}
+                </motion.div>
+
+                <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
+                    {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
                 </h2>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-                    {settings.forceCloseBookings ? 'Paused by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
+                <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
+                    {settings.forceCloseBookings ? 'Temporarily disabled by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
                 </p>
-                <button onClick={() => navigate('/')} className="primary-button" style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                {!settings.forceCloseBookings && (
+                    <motion.div
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '12px',
+                            marginBottom: '48px',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        {[
+                            { label: 'Days', value: timeLeft.days },
+                            { label: 'Hours', value: timeLeft.hours },
+                            { label: 'Minutes', value: timeLeft.minutes },
+                            { label: 'Seconds', value: timeLeft.seconds }
+                        ].map((item, index) => (
+                            <div key={index} style={{
+                                background: 'var(--glass-bg)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '16px',
+                                padding: '12px 16px',
+                                minWidth: '70px',
+                                flex: '1 1 auto',
+                                maxWidth: '90px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                            }}>
+                                <div style={{
+                                    height: '32px',
+                                    width: '100%',
+                                    overflow: 'hidden',
+                                    position: 'relative',
+                                    marginBottom: '8px',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                }}>
+                                    <AnimatePresence mode="popLayout">
+                                        <motion.span
+                                            key={item.value}
+                                            initial={{ y: 20, opacity: 0, filter: 'blur(4px)' }}
+                                            animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+                                            exit={{ y: -20, opacity: 0, filter: 'blur(4px)' }}
+                                            transition={{
+                                                type: 'spring',
+                                                stiffness: 300,
+                                                damping: 25,
+                                                mass: 0.8
+                                            }}
+                                            style={{
+                                                fontSize: '32px',
+                                                fontWeight: 800,
+                                                color: 'var(--primary)',
+                                                lineHeight: 1,
+                                                fontVariantNumeric: 'tabular-nums',
+                                            }}
+                                        >
+                                            {String(item.value).padStart(2, '0')}
+                                        </motion.span>
+                                    </AnimatePresence>
+                                </div>
+                                <span style={{
+                                    fontSize: '12px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em',
+                                    color: 'var(--text-muted)'
+                                }}>
+                                    {item.label}
+                                </span>
+                            </div>
+                        ))}
+                    </motion.div>
+                )}
+
+                <button
+                    onClick={() => navigate('/')}
+                    className="primary-button"
+                    style={{
+                        padding: '16px 32px',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        fontSize: '16px',
+                        fontWeight: 600
+                    }}
+                >
                     <ChevronLeft size={20} /> Back to Dashboard
                 </button>
             </div>
@@ -312,22 +486,66 @@ export default function BookingFlow() {
 
             {!isMaintenanceDay && (
                 <div className="glass-panel" style={{
-                    marginBottom: '14px',
-                    padding: '14px 16px',
-                    borderRadius: '14px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '10px',
-                    flexWrap: 'wrap',
-                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%)'
+                    marginBottom: '20px',
+                    padding: '20px',
+                    borderRadius: '16px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)',
+                    border: '1px solid rgba(16, 185, 129, 0.2)'
                 }}>
-                    <div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Live Slot Capacity</div>
-                        <div style={{ fontSize: '18px', fontWeight: 700 }}>{totalRemainingForDay} slots remaining for selected day</div>
+                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{
+                                background: 'rgba(16, 185, 129, 0.15)',
+                                padding: '12px',
+                                borderRadius: '14px',
+                                display: 'flex',
+                                position: 'relative'
+                            }}>
+                                <div className="skeleton-pulse" style={{
+                                    position: 'absolute', inset: 0, borderRadius: '14px',
+                                    background: 'var(--success)', opacity: 0.25, zIndex: 0
+                                }}></div>
+                                <Activity size={24} color="var(--success)" style={{ zIndex: 1 }} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Live Capacity</div>
+                                <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{
+                                        width: '8px', height: '8px', borderRadius: '50%',
+                                        background: 'var(--success)',
+                                        boxShadow: '0 0 10px var(--success)'
+                                    }}></span>
+                                    Slots Available
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>For Selected Day</div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                    {totalRemainingForDay}
+                                </span>
+                                <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                    / {TIME_SLOTS.length * totalSlotsPerTime}
+                                </span>
+                            </div>
+                        </div>
                     </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                        {totalSlotsPerTime} total slots per time
+
+                    <div style={{
+                        position: 'absolute', bottom: 0, left: 0, height: '4px',
+                        background: 'var(--glass-border)', width: '100%'
+                    }}>
+                        <div style={{
+                            height: '100%',
+                            background: 'var(--success)',
+                            width: `${Math.max(2, (totalRemainingForDay / Math.max(1, TIME_SLOTS.length * totalSlotsPerTime)) * 100)}%`,
+                            transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                            boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)'
+                        }}></div>
                     </div>
                 </div>
             )}
@@ -345,86 +563,86 @@ export default function BookingFlow() {
                     {availability.map(({ time, bookedMachineIds, isFull, isPassed }) => {
                         const remainingSlots = Math.max(totalSlotsPerTime - bookedMachineIds.length, 0);
                         return (
-                        <div key={time}>
-                            <button
-                                disabled={isFull || isPassed}
-                                onClick={() => {
-                                    if (!isFull && !isPassed) {
-                                        if (selectedSlot === time) {
-                                            setSelectedSlot(null);
-                                        } else {
-                                            setSelectedSlot(time);
-                                            setSelectedMachine(null);
+                            <div key={time}>
+                                <button
+                                    disabled={isFull || isPassed}
+                                    onClick={() => {
+                                        if (!isFull && !isPassed) {
+                                            if (selectedSlot === time) {
+                                                setSelectedSlot(null);
+                                            } else {
+                                                setSelectedSlot(time);
+                                                setSelectedMachine(null);
+                                            }
                                         }
-                                    }
-                                }}
-                                className="glass-panel"
-                                style={{
-                                    width: '100%',
-                                    padding: '20px',
-                                    borderRadius: '16px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    textAlign: 'left',
-                                    opacity: (isFull || isPassed) ? 0.5 : 1,
-                                    border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                                    cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
-                                    <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)', fontWeight: 600 }}>
-                                        {isPassed ? 'Passed' : isFull ? 'Full' : 'Open'}
+                                    }}
+                                    className="glass-panel"
+                                    style={{
+                                        width: '100%',
+                                        padding: '20px',
+                                        borderRadius: '16px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        textAlign: 'left',
+                                        opacity: (isFull || isPassed) ? 0.5 : 1,
+                                        border: selectedSlot === time ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                                        cursor: (isFull || isPassed) ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <Clock size={20} color={selectedSlot === time ? 'var(--primary)' : 'var(--text-muted)'} />
+                                        <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', textDecoration: isPassed ? 'line-through' : 'none' }}>{time}</span>
                                     </div>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                        Remaining {remainingSlots}/{totalSlotsPerTime}
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '14px', color: isFull ? 'var(--error)' : 'var(--success)', fontWeight: 600 }}>
+                                            {isPassed ? 'Passed' : isFull ? 'Full' : 'Open'}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                            Remaining {remainingSlots}/{totalSlotsPerTime}
+                                        </div>
                                     </div>
-                                </div>
-                            </button>
+                                </button>
 
-                            {/* Machines */}
-                            {selectedSlot === time && (
-                                <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
-                                    {activeMachines.map(m => {
-                                        const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
-                                        const isBooked = Boolean(bookingForMachine);
-                                        const isBookedByUser = bookingForMachine?.studentId === user?.id;
-                                        return (
-                                            <button
-                                                key={m.id}
-                                                disabled={isBooked}
-                                                onClick={() => {
-                                                    if (!isBooked) {
-                                                        setSelectedMachine(m);
-                                                        setShowConfirmModal(true);
-                                                    }
-                                                }}
-                                                style={{
-                                                    minWidth: '100px',
-                                                    padding: '12px',
-                                                    borderRadius: '12px',
-                                                    background: isBooked
-                                                        ? 'var(--glass-bg)'
-                                                        : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
-                                                    border: isBookedByUser ? '1px solid rgba(16, 185, 129, 0.5)' : isBooked ? '1px solid var(--glass-border)' : 'none',
-                                                    color: isBookedByUser ? '#a7f3d0' : isBooked ? 'var(--text-muted)' : 'var(--text-main)',
-                                                    cursor: isBooked ? 'not-allowed' : 'pointer',
-                                                    opacity: isBooked ? 0.75 : 1,
-                                                    position: 'relative'
-                                                }}
-                                            >
-                                                {m.name}
-                                                {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                                {/* Machines */}
+                                {selectedSlot === time && (
+                                    <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
+                                        {activeMachines.map(m => {
+                                            const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
+                                            const isBooked = Boolean(bookingForMachine);
+                                            const isBookedByUser = bookingForMachine?.studentId === user?.id;
+                                            return (
+                                                <button
+                                                    key={m.id}
+                                                    disabled={isBooked}
+                                                    onClick={() => {
+                                                        if (!isBooked) {
+                                                            setSelectedMachine(m);
+                                                            setShowConfirmModal(true);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        minWidth: '100px',
+                                                        padding: '12px',
+                                                        borderRadius: '12px',
+                                                        background: isBooked
+                                                            ? 'var(--glass-bg)'
+                                                            : selectedMachine?.id === m.id ? 'var(--primary)' : 'var(--glass-button-bg)',
+                                                        border: isBookedByUser ? '1px solid rgba(16, 185, 129, 0.5)' : isBooked ? '1px solid var(--glass-border)' : 'none',
+                                                        color: isBookedByUser ? '#a7f3d0' : isBooked ? 'var(--text-muted)' : 'var(--text-main)',
+                                                        cursor: isBooked ? 'not-allowed' : 'pointer',
+                                                        opacity: isBooked ? 0.75 : 1,
+                                                        position: 'relative'
+                                                    }}
+                                                >
+                                                    {m.name}
+                                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
@@ -441,11 +659,7 @@ export default function BookingFlow() {
                                     {formatBelarusWeekdayLabel(selectedDate)}, {formatBelarusMonthDayLabel(selectedDate)} at {selectedSlot}
                                 </p>
                                 <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
-                                {error && (
-                                    <div style={{ color: 'var(--error)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                        <AlertCircle size={16} /> {error}
-                                    </div>
-                                )}
+
                                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                                     <button
                                         onClick={() => setShowConfirmModal(false)}
@@ -478,13 +692,40 @@ export default function BookingFlow() {
                     {/* Success Modal */}
                     {showConfirmation && (
                         <div className="modal-overlay modal-overlay--success">
-                            <div className="glass-panel modal-card modal-card--success">
-                                <div style={{
-                                    background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
-                                }}>
-                                    <CheckCircle size={40} color="#10b981" />
-                                </div>
+                            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: 'none' }}>
+                                <Confetti
+                                    width={width}
+                                    height={height}
+                                    recycle={false}
+                                    numberOfPieces={400}
+                                    gravity={0.15}
+                                    colors={['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']}
+                                />
+                            </div>
+                            <div className="glass-panel modal-card modal-card--success" style={{ zIndex: 100 }}>
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', delay: 0.1, damping: 20, stiffness: 250 }}
+                                    style={{
+                                        background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+                                    }}
+                                >
+                                    <svg viewBox="0 0 50 50" width="40" height="40">
+                                        <motion.path
+                                            fill="none"
+                                            stroke="#10b981"
+                                            strokeWidth="5"
+                                            d="M 14.1 27.2 l 7.1 7.2 16.7-16.8"
+                                            initial={{ pathLength: 0 }}
+                                            animate={{ pathLength: 1 }}
+                                            transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                </motion.div>
                                 <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
                                 <p style={{ color: 'var(--text-muted)' }}>Slot booked. You can continue browsing other available slots.</p>
                             </div>

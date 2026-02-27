@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
 import type { Student, Machine, Booking, AppSettings } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
@@ -75,6 +75,18 @@ export const firestoreService = {
         return machines.sort((a, b) => a.id.localeCompare(b.id)); // Ensure order
     },
 
+    subscribeToMachines(callback: (machines: Machine[]) => void, onError?: (error: any) => void): () => void {
+        const q = collection(db, MACHINES_COL);
+        return onSnapshot(q, (snapshot) => {
+            let machines = snapshot.docs.map(doc => doc.data() as Machine);
+            machines = machines.sort((a, b) => a.id.localeCompare(b.id));
+            callback(machines);
+        }, (error) => {
+            console.error("Error subscribing to machines:", error);
+            if (onError) onError(error);
+        });
+    },
+
     async updateMachineStatus(id: string, status: 'available' | 'maintenance') {
         await updateDoc(doc(db, MACHINES_COL, id), { status });
     },
@@ -93,6 +105,17 @@ export const firestoreService = {
     async getBookings(): Promise<Booking[]> {
         const snapshot = await getDocs(collection(db, BOOKINGS_COL));
         return snapshot.docs.map(doc => doc.data() as Booking);
+    },
+
+    subscribeToBookings(callback: (bookings: Booking[]) => void, onError?: (error: any) => void): () => void {
+        const q = collection(db, BOOKINGS_COL);
+        return onSnapshot(q, (snapshot) => {
+            const bookings = snapshot.docs.map(doc => doc.data() as Booking);
+            callback(bookings);
+        }, (error) => {
+            console.error("Error subscribing to bookings:", error);
+            if (onError) onError(error);
+        });
     },
 
     async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
@@ -147,18 +170,12 @@ export const firestoreService = {
 
         const data = configDoc.data() as Partial<AppSettings>;
 
-        // DEBUG: Log raw Firestore data
-        console.log('[firestoreService DEBUG] Raw Firestore settings data:', JSON.stringify(data));
-        console.log('[firestoreService DEBUG] data.maintenanceDay:', data.maintenanceDay, 'type:', typeof data.maintenanceDay);
-
         const result = {
             ...defaultSettings,
             ...data,
-            // Force number type to prevent "3" string vs 3 number issues
             maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay
         };
 
-        console.log('[firestoreService DEBUG] Returning maintenanceDay:', result.maintenanceDay);
         return result;
     },
 

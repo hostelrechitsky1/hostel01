@@ -5,7 +5,8 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -26,9 +27,8 @@ export default function Dashboard() {
         maintenanceDay: 3,
         topAlert: { message: '', isActive: false, type: 'info' }
     });
-    const [reminderMinutes, setReminderMinutes] = useState(30);
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
-    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -41,47 +41,63 @@ export default function Dashboard() {
             return;
         }
 
+        let unsubscribeBookings = () => { };
+        let unsubscribeMachines = () => { };
+
         const loadData = async () => {
             try {
-                const [fetchedMachines, fetchedBookings, fetchedSettings, fetchedBanners] = await Promise.all([
-                    firestoreService.getMachines(),
-                    firestoreService.getBookings(),
+                const [fetchedSettings, fetchedBanners] = await Promise.all([
                     firestoreService.getSettings(),
                     firestoreService.getBanners()
                 ]);
 
-                setMachines(fetchedMachines);
-                setAllBookings(fetchedBookings);
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
 
-                const myBookings = fetchedBookings.filter(b => b.studentId === user.id);
-                const chronological = [...myBookings].sort((a, b) =>
-                    new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-                );
-
-                const now = new Date();
-                const futureBookings = chronological.filter(b => {
-                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
-                    return end > now;
+                unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
+                    setMachines(machines);
                 });
 
-                const pastBookings = chronological.filter(b => {
-                    const end = addMinutes(parseISO(b.date + 'T' + b.startTime), 90);
-                    return end <= now;
-                }).reverse();
+                unsubscribeBookings = firestoreService.subscribeToBookings((bookings) => {
+                    setAllBookings(bookings);
+                    const myBookings = bookings.filter(b => b.studentId === user.id);
+                    const chronological = [...myBookings].sort((a, b) =>
+                        new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
+                    );
 
-                setUpcomingBookings(futureBookings);
-                setHistory(pastBookings);
+                    const now = getBelarusNow();
+                    const futureBookings = chronological.filter(b => {
+                        // Parse as UTC+3 (Belarus time) by appending +03:00
+                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
+                        return end > now;
+                    });
+
+                    const pastBookings = chronological.filter(b => {
+                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
+                        return end <= now;
+                    }).reverse();
+
+                    setUpcomingBookings(futureBookings);
+                    setHistory(pastBookings.slice(0, 3));
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Dashboard bookings subscription error:", error);
+                    setLoading(false);
+                });
+
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
-            } finally {
                 setLoading(false);
             }
         };
 
         loadData();
-    }, [user, navigate]);
+
+        return () => {
+            unsubscribeBookings();
+            unsubscribeMachines();
+        };
+    }, [user?.id, navigate]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
 
@@ -147,14 +163,26 @@ export default function Dashboard() {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
 
-    const hasUpcomingBooking = upcomingBookings.length > 0;
+    const today = getBelarusDate();
+    const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
+    const nextWeekId = getBelarusWeekId(nextWeekStart);
+
+    // Check if the user has a booking specifically for the *upcoming* week (next week slots)
+    const hasBookedForNextWeek = user ? allBookings.some(b => b.studentId === user.id && b.weekId === nextWeekId) : false;
+
+
     const primaryUpcomingBooking = upcomingBookings[0] || null;
-    const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
-    const mainActionSubtitle = isSystemClosed
-        ? 'Bookings are currently closed'
-        : hasUpcomingBooking
-            ? 'You already booked. You can still open slots page to browse remaining slots'
-            : 'Book your slot for next week';
+
+    let mainActionLabel = 'Book Now';
+    let mainActionSubtitle = 'Book your slot for next week';
+
+    if (isSystemClosed) {
+        mainActionLabel = 'Check Status';
+        mainActionSubtitle = 'Bookings are currently closed';
+    } else if (hasBookedForNextWeek) {
+        mainActionLabel = 'Booked';
+        mainActionSubtitle = 'You already booked. You can still open slots page to browse remaining slots';
+    }
 
     const getUpcomingDateForWeekday = (weekday: number) => {
         const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
@@ -234,7 +262,7 @@ export default function Dashboard() {
                 const detailedError = result.error?.includes('Slot already booked by another student')
                     ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'
                     : result.error?.includes('already booked a slot for this week')
-                        ? 'You already have a booking for this week (including bookings made via Book Now page).' 
+                        ? 'You already have a booking for this week (including bookings made via Book Now page).'
                         : result.error || 'Quick booking failed. Please try again.';
                 setQuickBookModalMessage({ type: 'error', text: detailedError });
                 return;
@@ -254,6 +282,12 @@ export default function Dashboard() {
             setUpcomingBookings(futureBookings);
             setHistory(pastBookings);
             setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+
+            // Auto close on success
+            setTimeout(() => {
+                setQuickBookModalBooking(null);
+                setQuickBookModalMessage(null);
+            }, 2000);
         } catch (error) {
             console.error('Quick booking failed', error);
             setQuickBookModalMessage({ type: 'error', text: 'Quick booking failed due to a system error.' });
@@ -263,7 +297,22 @@ export default function Dashboard() {
     };
 
 
-    if (loading) return <div className="flex-center" style={{ height: '100vh' }}>Loading...</div>;
+    if (loading) {
+        return (
+            <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
+                <header style={{ marginBottom: '32px', marginTop: '16px' }}>
+                    <div style={{ height: '32px', width: '200px', background: 'var(--glass-border)', borderRadius: '8px', marginBottom: '8px' }} className="skeleton-pulse"></div>
+                    <div style={{ height: '20px', width: '100px', background: 'var(--glass-border)', borderRadius: '8px' }} className="skeleton-pulse"></div>
+                </header>
+                <div style={{ height: '140px', background: 'var(--glass-border)', borderRadius: '20px', marginBottom: '32px' }} className="skeleton-pulse"></div>
+                <div className="grid-cols-2">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} style={{ height: '120px', background: 'var(--glass-border)', borderRadius: '16px' }} className="skeleton-pulse"></div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
     if (!user) return null;
 
     const quickBookTargetDate = quickBookModalBooking
@@ -299,7 +348,7 @@ export default function Dashboard() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px',
-                        color: 'white',
+                        color: 'var(--text-main)',
                         boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
                         borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
                         textShadow: '0 1px 2px rgba(0,0,0,0.1)'
@@ -350,20 +399,16 @@ export default function Dashboard() {
 
             {/* Main Action */}
             <div
-                className="glass-panel"
+                className="glass-panel main-action-layout"
                 style={{
-                    padding: '24px',
-                    borderRadius: '20px',
-                    marginBottom: '32px',
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
+                    padding: '20px 24px',
+                    borderRadius: '16px',
+                    marginBottom: '32px'
                 }}
             >
                 <div>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Need to wash?</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>Need to wash?</h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
                         {mainActionSubtitle}
                     </p>
                 </div>
@@ -371,40 +416,108 @@ export default function Dashboard() {
                     onClick={() => navigate('/book')}
                     className="primary-button"
                     style={{
-                        padding: '12px 24px',
-                        borderRadius: '12px',
-                        background: isSystemClosed ? '#ef4444' : hasUpcomingBooking ? '#10b981' : 'var(--primary)',
-                        opacity: 1,
-                        cursor: 'pointer'
+                        padding: '10px 24px',
+                        borderRadius: '10px',
+                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--success)' : 'var(--primary)',
+                        boxShadow: isSystemClosed
+                            ? '0 0 15px rgba(239, 68, 68, 0.3)'
+                            : hasBookedForNextWeek
+                                ? '0 0 15px rgba(16, 185, 129, 0.3)'
+                                : '0 0 15px var(--primary-glow)',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        border: 'none',
+                        color: 'white',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
                     }}
                 >
                     {mainActionLabel}
                 </button>
             </div>
 
+
             {/* Machine Status - Live View */}
-            <h3 style={{ marginBottom: '10px' }}>Status ({format(new Date(), 'h:mm a')})</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    Status
+                    <span style={{
+                        fontSize: '12px',
+                        fontWeight: 'normal',
+                        background: 'var(--glass-button-bg)',
+                        border: '1px solid var(--glass-border)',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        color: 'var(--text-muted)'
+                    }}>
+                        {format(new Date(), 'h:mm a')}
+                    </span>
+                </h3>
+            </div>
+
             <div className="glass-panel" style={{
-                marginBottom: '16px',
-                padding: '14px 16px',
-                borderRadius: '12px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.24) 0%, rgba(99, 102, 241, 0.12) 100%)',
-                border: '1px solid rgba(99, 102, 241, 0.45)'
+                marginBottom: '20px',
+                padding: '20px',
+                borderRadius: '16px',
+                position: 'relative',
+                overflow: 'hidden',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.2)'
             }}>
-                <div>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Total Slots</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
-                        {slotCapacity.totalSlots}
+                <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            padding: '12px',
+                            borderRadius: '14px',
+                            display: 'flex',
+                            position: 'relative'
+                        }}>
+                            {/* Pulse effect */}
+                            <div className="skeleton-pulse" style={{
+                                position: 'absolute', inset: 0, borderRadius: '14px',
+                                background: 'var(--primary)', opacity: 0.25, zIndex: 0
+                            }}></div>
+                            <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{
+                                    width: '8px', height: '8px', borderRadius: '50%',
+                                    background: isSystemClosed ? 'var(--error)' : 'var(--success)',
+                                    boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
+                                }}></span>
+                                {isSystemClosed ? 'Closed' : 'Active'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                            <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                {slotCapacity.remainingSlots}
+                            </span>
+                            <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                / {slotCapacity.totalSlots}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)' }}>Week Remaining</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, lineHeight: 1.1 }}>
-                        {slotCapacity.remainingSlots}
-                    </div>
+
+                {/* Progress Bar background effect */}
+                <div style={{
+                    position: 'absolute', bottom: 0, left: 0, height: '4px',
+                    background: 'var(--glass-border)', width: '100%'
+                }}>
+                    <div style={{
+                        height: '100%',
+                        background: 'var(--primary)',
+                        width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
+                        transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: '0 0 12px var(--primary-glow)'
+                    }}></div>
                 </div>
             </div>
             <div className="grid-cols-2">
@@ -453,73 +566,123 @@ export default function Dashboard() {
 
             {/* Your Bookings */}
             <div style={{ marginTop: '32px' }}>
-                <h3 style={{ marginBottom: '16px' }}>Your Upcoming Booking</h3>
+                <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={20} /> Your Upcoming Booking
+                </h3>
                 {primaryUpcomingBooking ? (
                     <div
                         className="glass-panel"
                         style={{
-                            padding: '20px',
-                            borderRadius: '16px',
+                            padding: '24px',
+                            borderRadius: '20px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '16px',
-                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%)',
-                            border: '1px solid rgba(16, 185, 129, 0.2)'
+                            gap: '20px',
+                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.05)'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '12px', borderRadius: '12px' }}>
-                                <Calendar size={24} color="#10b981" />
+                        {/* Decorative accent */}
+                        <div style={{
+                            position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
+                            background: 'linear-gradient(90deg, var(--success) 0%, #34d399 100%)'
+                        }} />
+
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
+                            <div style={{
+                                width: '64px',
+                                height: '64px',
+                                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%)',
+                                borderRadius: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                                flexShrink: 0
+                            }}>
+                                <Washer size={32} color="var(--success)" />
                             </div>
-                            <div>
-                                <p style={{ margin: 0, fontWeight: 600, fontSize: '18px' }}>
-                                    {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMM d')}
-                                </p>
-                                <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                                    {primaryUpcomingBooking.startTime} • {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
-                                </p>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+                                            {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMMM d')}
+                                        </h4>
+                                        <p style={{ margin: '4px 0 0', fontSize: '15px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{primaryUpcomingBooking.startTime}</span>
+                                            <span>•</span>
+                                            {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
+                                        </p>
+                                    </div>
+                                    <div style={{
+                                        background: 'rgba(16, 185, 129, 0.1)',
+                                        color: 'var(--success)',
+                                        padding: '4px 10px',
+                                        borderRadius: '12px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <Activity size={12} /> Confirmed
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {upcomingBookings.length > 1 && (
-                            <div
-                                className="glass-panel"
-                                style={{
-                                    padding: '10px 12px',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(99,102,241,0.35)',
-                                    background: 'rgba(99,102,241,0.08)'
-                                }}
-                            >
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Also upcoming</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {upcomingBookings.slice(1, 3).map((booking) => (
-                                        <div key={booking.id} style={{ fontSize: '13px' }}>
-                                            {format(new Date(booking.date), 'EEE, MMM d')} • {booking.startTime} • {machines.find(m => m.id === booking.machineId)?.name || 'Machine'}
-                                        </div>
-                                    ))}
+                            <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: '4px' }}>
+                                    Also upcoming ({upcomingBookings.length - 1})
                                 </div>
+                                {upcomingBookings.slice(1, 3).map((booking) => (
+                                    <div
+                                        key={booking.id}
+                                        style={{
+                                            padding: '16px',
+                                            borderRadius: '16px',
+                                            background: 'var(--glass-bg)',
+                                            border: '1px solid var(--glass-border)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+                                            background: 'var(--primary)',
+                                            opacity: 0.8
+                                        }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: '4px' }}>
+                                            <div style={{
+                                                background: 'rgba(99, 102, 241, 0.1)',
+                                                padding: '10px',
+                                                borderRadius: '12px'
+                                            }}>
+                                                <Calendar size={18} color="var(--primary)" />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '2px' }}>
+                                                    {format(new Date(booking.date), 'EEEE, MMM d')}
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{booking.startTime}</span>
+                                                    <span>•</span>
+                                                    <span>{machines.find(m => m.id === booking.machineId)?.name || 'Machine'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Reminder</span>
-                            <select
-                                value={reminderMinutes}
-                                onChange={(e) => setReminderMinutes(Number(e.target.value))}
-                                style={{
-                                    padding: '8px 10px',
-                                    borderRadius: '10px',
-                                    background: 'rgba(0,0,0,0.2)',
-                                    border: '1px solid var(--glass-border)',
-                                    color: 'var(--text-main)'
-                                }}
-                            >
-                                <option value={10}>10 min before</option>
-                                <option value={30}>30 min before</option>
-                                <option value={60}>1 hour before</option>
-                            </select>
-                        </div>
 
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
                             {/* Google Calendar Button */}
@@ -534,7 +697,7 @@ export default function Dashboard() {
                                     const url = `https://www.google.com/calendar/render?action=TEMPLATE` +
                                         `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || "Machine"))}` +
                                         `&dates=${formatGCal(start)}/${formatGCal(end)}` +
-                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: " + reminderMinutes + " minutes before. Remember to clear the machine when done.")}` +
+                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: 30 minutes before. Remember to clear the machine when done.")}` +
                                         `&location=${encodeURIComponent("Laundry Room")}` +
                                         `&sprop=&sprop=name:`;
 
@@ -571,7 +734,7 @@ export default function Dashboard() {
                                         'DESCRIPTION:Remember to empty the machine on time!',
                                         'LOCATION:Laundry Room',
                                         'BEGIN:VALARM',
-                                        `TRIGGER:-PT${reminderMinutes}M`,
+                                        `TRIGGER:-PT30M`,
                                         'ACTION:DISPLAY',
                                         'DESCRIPTION:Laundry Reminder',
                                         'END:VALARM',
@@ -612,10 +775,10 @@ export default function Dashboard() {
                                     window.URL.revokeObjectURL(url);
                                 }}
                                 className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
+                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
                             >
                                 <Download size={18} />
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple/Outlook</span>
+                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple / Outlook</span>
                             </button>
                         </div>
                     </div>
@@ -643,45 +806,112 @@ export default function Dashboard() {
                         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <History size={20} /> Past Bookings
                         </h3>
-                        <div className="glass-panel" style={{ borderRadius: '16px', overflow: 'hidden' }}>
-                            {history.slice(0, 5).map((booking, i, arr) => (
-                                <div
-                                    key={booking.id}
-                                    style={{
-                                        padding: '16px',
-                                        borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--glass-border)',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        gap: '12px'
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ fontWeight: 500 }}>{format(new Date(booking.date), 'EEE, MMM d, yyyy')}</div>
-                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.startTime}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <button
-                                            onClick={() => handleQuickBookFromHistory(booking)}
-                                            className="glass-button"
-                                            disabled={quickBookingId === booking.id}
-                                            style={{
-                                                padding: '8px 12px',
-                                                borderRadius: '10px',
-                                                fontSize: '12px',
-                                                fontWeight: 600,
-                                                opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer'
-                                            }}
-                                        >
-                                            {quickBookingId === booking.id ? 'Booking...' : 'Quick Book'}
-                                        </button>
-                                        <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                            Done
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {history.slice(0, 5).map((booking) => {
+                                const machine = machines.find((m) => m.id === booking.machineId);
+                                const machineLabel = machine?.name || `Machine ${booking.machineId}`;
+                                return (
+                                    <div
+                                        key={booking.id}
+                                        className="glass-panel hover-card"
+                                        style={{
+                                            padding: '20px',
+                                            borderRadius: '16px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: '16px',
+                                            border: '1px solid rgba(168, 85, 247, 0.2)',
+                                            background: 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                                            transition: 'transform 0.2s, background 0.2s',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)';
+                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.4)';
+                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)';
+                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.2)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'absolute', top: 0, left: 0, bottom: 0, width: '4px',
+                                            background: 'linear-gradient(to bottom, var(--success) 0%, #10b98188 100%)'
+                                        }} />
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
+                                            <div style={{
+                                                width: '48px',
+                                                height: '48px',
+                                                borderRadius: '12px',
+                                                background: 'rgba(168, 85, 247, 0.1)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#a855f7',
+                                                flexShrink: 0
+                                            }}>
+                                                <History size={24} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>
+                                                    {machineLabel} <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '4px' }}>• {booking.startTime}</span>
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <CheckCircle size={14} color="var(--success)" />
+                                                    {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
+                                            <button
+                                                onClick={() => handleQuickBookFromHistory(booking)}
+                                                className="glass-button"
+                                                disabled={quickBookingId === booking.id}
+                                                style={{
+                                                    padding: '10px 16px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                                                    color: 'var(--primary)',
+                                                    background: 'rgba(168, 85, 247, 0.05)',
+                                                    opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
+                                                    cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    if (quickBookingId !== booking.id) {
+                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (quickBookingId !== booking.id) {
+                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
+                                                    }
+                                                }}
+                                            >
+                                                {quickBookingId === booking.id ? 'Booking...' : (
+                                                    <>
+                                                        Quick Book
+                                                        <ArrowRight size={14} />
+                                                    </>
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )
@@ -690,56 +920,77 @@ export default function Dashboard() {
             {modalRoot && quickBookModalBooking && createPortal(
                 <div className="modal-overlay" onClick={() => setQuickBookModalBooking(null)}>
                     <div className="glass-panel modal-card" onClick={(e) => e.stopPropagation()}>
-                        <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
-                        <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                            {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
-                        </p>
-                        <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
-                            Machine: {quickBookMachineLabel}
-                        </p>
 
-                        {quickBookModalMessage && (
-                            <div
-                                style={{
-                                    marginBottom: '14px',
-                                    padding: '10px 12px',
-                                    borderRadius: '10px',
-                                    fontSize: '13px',
-                                    color: quickBookModalMessage.type === 'success' ? '#a7f3d0' : '#fecaca',
-                                    border: quickBookModalMessage.type === 'success'
-                                        ? '1px solid rgba(16,185,129,0.4)'
-                                        : '1px solid rgba(239,68,68,0.4)',
-                                    background: quickBookModalMessage.type === 'success'
-                                        ? 'rgba(16,185,129,0.12)'
-                                        : 'rgba(239,68,68,0.12)'
-                                }}
-                            >
-                                {quickBookModalMessage.text}
+                        {quickBookModalMessage?.type === 'success' ? (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', damping: 20, stiffness: 250 }}
+                                    style={{
+                                        background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                                    }}
+                                >
+                                    <CheckCircle size={32} color="var(--success)" />
+                                </motion.div>
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Confirmed!</h3>
+                                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{quickBookModalMessage.text}</p>
                             </div>
-                        )}
+                        ) : (
+                            <>
+                                <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
+                                <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
+                                    {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
+                                </p>
+                                <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
+                                    Machine: {quickBookMachineLabel}
+                                </p>
 
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                            <button
-                                onClick={() => setQuickBookModalBooking(null)}
-                                className="glass-button"
-                                style={{ padding: '10px 18px', borderRadius: '10px' }}
-                            >
-                                Close
-                            </button>
-                            <button
-                                onClick={handleConfirmQuickBook}
-                                disabled={quickBookingId === quickBookModalBooking.id}
-                                className="primary-button"
-                                style={{
-                                    padding: '10px 18px',
-                                    borderRadius: '10px',
-                                    opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
-                                    cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
-                            </button>
-                        </div>
+                                {quickBookModalMessage && (
+                                    <div
+                                        style={{
+                                            marginBottom: '14px',
+                                            padding: '10px 12px',
+                                            borderRadius: '10px',
+                                            fontSize: '13px',
+                                            color: quickBookModalMessage.type === 'info' ? 'var(--text-main)' : 'var(--error)',
+                                            border: quickBookModalMessage.type === 'info'
+                                                ? '1px solid rgba(16,185,129,0.4)'
+                                                : '1px solid rgba(239,68,68,0.4)',
+                                            background: quickBookModalMessage.type === 'info'
+                                                ? 'rgba(16,185,129,0.12)'
+                                                : 'rgba(239,68,68,0.12)'
+                                        }}
+                                    >
+                                        {quickBookModalMessage.text}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                    <button
+                                        onClick={() => setQuickBookModalBooking(null)}
+                                        className="glass-button"
+                                        style={{ padding: '10px 18px', borderRadius: '10px' }}
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={handleConfirmQuickBook}
+                                        disabled={quickBookingId === quickBookModalBooking.id}
+                                        className="primary-button"
+                                        style={{
+                                            padding: '10px 18px',
+                                            borderRadius: '10px',
+                                            opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
+                                            cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>,
                 modalRoot

@@ -7,7 +7,8 @@
   /* Indigo 500 */
   --primary-glow: rgba(99, 102, 241, 0.5);
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-muted: #cbd5e1;
+  /* Increased contrast from #94a3b8 */
   --success: #10b981;
   --error: #ef4444;
   --floating-bar-bg: rgba(15, 23, 42, 0.95);
@@ -24,8 +25,6 @@
 html {
   background-color: var(--bg-solid);
   min-height: 100%;
-  overscroll-behavior-y: auto;
-  overflow-x: hidden;
 }
 
 body {
@@ -33,12 +32,12 @@ body {
   font-family: var(--font-family);
   background: var(--bg-gradient);
   background-color: var(--bg-solid);
-  background-attachment: scroll;
+  background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: auto;
-  overflow-x: hidden;
+  overscroll-behavior-y: none;
   touch-action: pan-y;
 }
 
@@ -55,10 +54,9 @@ button {
   max-width: 100%;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  overscroll-behavior-y: auto;
-  overflow-x: clip;
 }
 
 /* Animations */
@@ -76,6 +74,22 @@ button {
 
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes modalOverlayIn {
@@ -172,6 +186,26 @@ button {
 }
 
 /* Glassmorphism Utilities */
+.main-action-layout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .main-action-layout {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    gap: 16px;
+  }
+
+  .main-action-layout button {
+    width: 100%;
+  }
+}
+
 .glass-panel {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
@@ -244,6 +278,7 @@ button {
 .text-gradient {
   background: linear-gradient(to right, #818cf8, #c7d2fe);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -298,6 +333,13 @@ button {
   .glass-button:hover {
     background: rgba(255, 255, 255, 0.8);
   }
+
+  .text-gradient {
+    background: linear-gradient(to right, #4f46e5, #6366f1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 /* Print Overrides (Always Light) */
@@ -320,5 +362,41 @@ button {
 
   .print-content {
     display: block;
+  }
+}
+
+/* Login Split Layout */
+.login-split {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.login-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+@media (min-width: 768px) {
+  .login-split {
+    flex-direction: row;
+  }
+
+  .login-right {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
+    border-left: 1px solid var(--glass-border);
   }
 }
