@@ -242,6 +242,48 @@ export default function BookingFlow() {
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
 
     // --- RENDER ---
+    const getNextSaturday1600 = () => {
+        const now = getBelarusNow();
+        const currentDay = now.getDay();
+        let daysUntilSaturday = 6 - currentDay;
+
+        // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
+        if (currentDay === 6 && now.getHours() >= 16) daysUntilSaturday += 7;
+        if (currentDay === 0) daysUntilSaturday = 6;
+
+        const nextSat = new Date(now);
+        nextSat.setDate(now.getDate() + daysUntilSaturday);
+        nextSat.setHours(16, 0, 0, 0);
+        return nextSat.getTime();
+    };
+
+    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+    useEffect(() => {
+        if (!settings) return;
+        if (settings.forceCloseBookings) return;
+
+        const targetTime = getNextSaturday1600();
+
+        const calculateTimeLeft = () => {
+            const now = getBelarusNow().getTime();
+            const difference = targetTime - now;
+
+            if (difference > 0) {
+                setTimeLeft({
+                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+                    minutes: Math.floor((difference / 1000 / 60) % 60),
+                    seconds: Math.floor((difference / 1000) % 60)
+                });
+            }
+        };
+
+        calculateTimeLeft();
+        const timer = setInterval(calculateTimeLeft, 1000);
+        return () => clearInterval(timer);
+    }, [settings?.forceCloseBookings]);
+
     if (loading) {
         return (
             <div className="container animate-fade-in" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -264,47 +306,6 @@ export default function BookingFlow() {
     }
 
     if (settings.forceCloseBookings || !isNextWeekOpen) {
-        const getNextSaturday1600 = () => {
-            const now = getBelarusNow();
-            const currentDay = now.getDay();
-            let daysUntilSaturday = 6 - currentDay;
-
-            // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
-            if (currentDay === 6 && now.getHours() >= 16) daysUntilSaturday += 7;
-            if (currentDay === 0) daysUntilSaturday = 6;
-
-            const nextSat = new Date(now);
-            nextSat.setDate(now.getDate() + daysUntilSaturday);
-            nextSat.setHours(16, 0, 0, 0);
-            return nextSat.getTime();
-        };
-
-        const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-        useEffect(() => {
-            if (settings.forceCloseBookings) return;
-
-            const targetTime = getNextSaturday1600();
-
-            const calculateTimeLeft = () => {
-                const now = getBelarusNow().getTime();
-                const difference = targetTime - now;
-
-                if (difference > 0) {
-                    setTimeLeft({
-                        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-                        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-                        minutes: Math.floor((difference / 1000 / 60) % 60),
-                        seconds: Math.floor((difference / 1000) % 60)
-                    });
-                }
-            };
-
-            calculateTimeLeft();
-            const timer = setInterval(calculateTimeLeft, 1000);
-            return () => clearInterval(timer);
-        }, [settings.forceCloseBookings]);
-
         return (
             <div className="container flex-center" style={{
                 minHeight: '80vh',
