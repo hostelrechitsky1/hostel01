@@ -608,26 +608,52 @@ export default function Dashboard() {
                         </div>
 
                         {upcomingBookings.length > 1 && (
-                            <div
-                                style={{
-                                    padding: '12px 16px',
-                                    borderRadius: '12px',
-                                    border: '1px dashed rgba(99,102,241,0.3)',
-                                    background: 'rgba(99,102,241,0.03)',
-                                    marginTop: '-4px'
-                                }}
-                            >
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: '4px' }}>
                                     Also upcoming ({upcomingBookings.length - 1})
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {upcomingBookings.slice(1, 3).map((booking) => (
-                                        <div key={booking.id} style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', color: 'var(--text-main)' }}>
-                                            <span>{format(new Date(booking.date), 'EEE, MMM d')} • <span style={{ fontWeight: 500 }}>{booking.startTime}</span></span>
-                                            <span style={{ color: 'var(--text-muted)' }}>{machines.find(m => m.id === booking.machineId)?.name || 'Machine'}</span>
+                                {upcomingBookings.slice(1, 3).map((booking) => (
+                                    <div
+                                        key={booking.id}
+                                        style={{
+                                            padding: '16px',
+                                            borderRadius: '16px',
+                                            background: 'var(--glass-bg)',
+                                            border: '1px solid var(--glass-border)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+                                            background: 'var(--primary)',
+                                            opacity: 0.8
+                                        }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: '4px' }}>
+                                            <div style={{
+                                                background: 'rgba(99, 102, 241, 0.1)',
+                                                padding: '10px',
+                                                borderRadius: '12px'
+                                            }}>
+                                                <Calendar size={18} color="var(--primary)" />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '2px' }}>
+                                                    {format(new Date(booking.date), 'EEEE, MMM d')}
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{booking.startTime}</span>
+                                                    <span>•</span>
+                                                    <span>{machines.find(m => m.id === booking.machineId)?.name || 'Machine'}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
 
