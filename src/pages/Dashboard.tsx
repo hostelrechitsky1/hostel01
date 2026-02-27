@@ -78,7 +78,7 @@ export default function Dashboard() {
                     }).reverse();
 
                     setUpcomingBookings(futureBookings);
-                    setHistory(pastBookings);
+                    setHistory(pastBookings.slice(0, 3));
                     setLoading(false);
                 }, (error) => {
                     console.error("Dashboard bookings subscription error:", error);
@@ -163,14 +163,26 @@ export default function Dashboard() {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
 
+    const today = getBelarusDate();
+    const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
+    const nextWeekId = getBelarusWeekId(nextWeekStart);
+
+    // Check if the user has a booking specifically for the *upcoming* week (next week slots)
+    const hasBookedForNextWeek = user ? allBookings.some(b => b.studentId === user.id && b.weekId === nextWeekId) : false;
+
     const hasUpcomingBooking = upcomingBookings.length > 0;
     const primaryUpcomingBooking = upcomingBookings[0] || null;
-    const mainActionLabel = isSystemClosed ? 'Check Status' : hasUpcomingBooking ? 'Booked' : 'Book Now';
-    const mainActionSubtitle = isSystemClosed
-        ? 'Bookings are currently closed'
-        : hasUpcomingBooking
-            ? 'You already booked. You can still open slots page to browse remaining slots'
-            : 'Book your slot for next week';
+
+    let mainActionLabel = 'Book Now';
+    let mainActionSubtitle = 'Book your slot for next week';
+
+    if (isSystemClosed) {
+        mainActionLabel = 'Check Status';
+        mainActionSubtitle = 'Bookings are currently closed';
+    } else if (hasBookedForNextWeek) {
+        mainActionLabel = 'Booked';
+        mainActionSubtitle = 'You already booked. You can still open slots page to browse remaining slots';
+    }
 
     const getUpcomingDateForWeekday = (weekday: number) => {
         const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
@@ -934,11 +946,11 @@ export default function Dashboard() {
                                             padding: '10px 12px',
                                             borderRadius: '10px',
                                             fontSize: '13px',
-                                            color: quickBookModalMessage.type === 'info' ? 'var(--text-main)' : 'var(--error)',
-                                            border: quickBookModalMessage.type === 'info'
+                                            color: quickBookModalMessage.type === 'success' ? 'var(--success)' : 'var(--error)',
+                                            border: quickBookModalMessage.type === 'success'
                                                 ? '1px solid rgba(16,185,129,0.4)'
                                                 : '1px solid rgba(239,68,68,0.4)',
-                                            background: quickBookModalMessage.type === 'info'
+                                            background: quickBookModalMessage.type === 'success'
                                                 ? 'rgba(16,185,129,0.12)'
                                                 : 'rgba(239,68,68,0.12)'
                                         }}
