@@ -265,30 +265,112 @@ export default function BookingFlow() {
 
     if (settings.forceCloseBookings || !isNextWeekOpen) {
         return (
-            <div className="container flex-center" style={{
+            <div className="container" style={{
                 height: '80vh',
+                display: 'flex',
                 flexDirection: 'column',
-                textAlign: 'center',
-                color: 'var(--text-main)'
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '20px'
             }}>
-                <div style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    padding: '32px',
-                    borderRadius: '50%',
-                    marginBottom: '24px',
-                    border: '1px solid rgba(239, 68, 68, 0.2)'
-                }}>
-                    <AlertCircle size={48} color="#ef4444" />
-                </div>
-                <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>
-                    {settings.forceCloseBookings ? 'Bookings Are Closed' : 'Bookings Are Currently Closed'}
-                </h2>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>
-                    {settings.forceCloseBookings ? 'Paused by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
-                </p>
-                <button onClick={() => navigate('/')} className="primary-button" style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ChevronLeft size={20} /> Back to Dashboard
-                </button>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                    className="glass-panel"
+                    style={{
+                        maxWidth: '400px',
+                        width: '100%',
+                        borderRadius: '24px',
+                        overflow: 'hidden',
+                        textAlign: 'center',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+                    }}
+                >
+                    {/* Header Banner */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.05) 100%)',
+                        padding: '32px 20px',
+                        borderBottom: '1px solid rgba(239, 68, 68, 0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{
+                            background: 'rgba(239, 68, 68, 0.2)',
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: '16px',
+                            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                        }}>
+                            <AlertCircle size={32} color="#ef4444" />
+                        </div>
+                        <h2 style={{ fontSize: '22px', margin: 0, color: 'var(--text-main)', fontWeight: 700 }}>
+                            {settings.forceCloseBookings ? 'Bookings Offline' : 'Window Closed'}
+                        </h2>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{ padding: '32px 24px' }}>
+                        <div style={{
+                            background: 'var(--glass-bg)',
+                            padding: '16px',
+                            borderRadius: '16px',
+                            border: '1px solid var(--glass-border)',
+                            marginBottom: '24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            textAlign: 'left'
+                        }}>
+                            <Clock size={24} color="var(--primary)" style={{ flexShrink: 0 }} />
+                            <div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                                    Next Opening
+                                </div>
+                                <div style={{ fontSize: '15px', color: 'var(--text-main)', fontWeight: 500 }}>
+                                    {settings.forceCloseBookings ? 'Pending Admin Notice' : 'Sat 16:00 - Sun 20:00'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.6', marginBottom: '32px' }}>
+                            {settings.forceCloseBookings
+                                ? 'The admin has temporarily paused bookings. Please check back later or read the latest announcements on your dashboard.'
+                                : 'Laundry slots open every Saturday afternoon for the upcoming week. Set an alarm!'}
+                        </p>
+
+                        <button
+                            onClick={() => navigate('/')}
+                            className="glass-button"
+                            style={{
+                                width: '100%',
+                                padding: '16px',
+                                borderRadius: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                fontWeight: 600
+                            }}
+                        >
+                            <ChevronLeft size={20} /> Return to Dashboard
+                        </button>
+                    </div>
+                </motion.div>
+                <style>
+                    {`
+                        @keyframes pulse {
+                            0%, 100% { opacity: 1; transform: scale(1); }
+                            50% { opacity: 0.8; transform: scale(0.95); }
+                        }
+                    `}
+                </style>
             </div>
         );
     }
