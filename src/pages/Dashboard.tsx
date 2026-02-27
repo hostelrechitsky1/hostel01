@@ -6,7 +6,7 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -28,7 +28,7 @@ export default function Dashboard() {
         topAlert: { message: '', isActive: false, type: 'info' }
     });
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
-    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -281,7 +281,7 @@ export default function Dashboard() {
 
             setUpcomingBookings(futureBookings);
             setHistory(pastBookings);
-            setQuickBookModalMessage({ type: 'info', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+            setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
 
             // Auto close on success
             setTimeout(() => {
@@ -946,11 +946,11 @@ export default function Dashboard() {
                                             padding: '10px 12px',
                                             borderRadius: '10px',
                                             fontSize: '13px',
-                                            color: quickBookModalMessage.type === 'success' ? 'var(--success)' : 'var(--error)',
-                                            border: quickBookModalMessage.type === 'success'
+                                            color: quickBookModalMessage.type === 'info' ? 'var(--text-main)' : 'var(--error)',
+                                            border: quickBookModalMessage.type === 'info'
                                                 ? '1px solid rgba(16,185,129,0.4)'
                                                 : '1px solid rgba(239,68,68,0.4)',
-                                            background: quickBookModalMessage.type === 'success'
+                                            background: quickBookModalMessage.type === 'info'
                                                 ? 'rgba(16,185,129,0.12)'
                                                 : 'rgba(239,68,68,0.12)'
                                         }}
