@@ -9,6 +9,8 @@ import { isAfter } from 'date-fns';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import Confetti from 'react-confetti';
+import { useWindowSize } from 'react-use';
 import {
     addBelarusDays,
     formatBelarusDate,
@@ -26,6 +28,7 @@ import {
 export default function BookingFlow() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
+    const { width, height } = useWindowSize();
 
     // Hooks must be called unconditionally
     const [selectedDate, setSelectedDate] = useState(getBelarusDate());
@@ -691,7 +694,16 @@ export default function BookingFlow() {
                     {/* Success Modal */}
                     {showConfirmation && (
                         <div className="modal-overlay modal-overlay--success">
-                            <div className="glass-panel modal-card modal-card--success">
+                            <Confetti
+                                width={width}
+                                height={height}
+                                recycle={false}
+                                numberOfPieces={400}
+                                gravity={0.15}
+                                style={{ zIndex: 9999, position: 'fixed', top: 0, left: 0 }}
+                                colors={['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']}
+                            />
+                            <div className="glass-panel modal-card modal-card--success" style={{ zIndex: 100 }}>
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
