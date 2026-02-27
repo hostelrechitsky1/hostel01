@@ -8,7 +8,7 @@ import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     addBelarusDays,
     formatBelarusDate,
@@ -364,16 +364,39 @@ export default function BookingFlow() {
                                 alignItems: 'center',
                                 boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
                             }}>
-                                <span style={{
-                                    fontSize: '32px',
-                                    fontWeight: 800,
-                                    color: 'var(--primary)',
-                                    lineHeight: 1,
+                                <div style={{
+                                    height: '32px',
+                                    overflow: 'hidden',
+                                    position: 'relative',
                                     marginBottom: '8px',
-                                    fontVariantNumeric: 'tabular-nums'
+                                    display: 'flex',
+                                    justifyContent: 'center'
                                 }}>
-                                    {String(item.value).padStart(2, '0')}
-                                </span>
+                                    <AnimatePresence mode="popLayout">
+                                        <motion.span
+                                            key={item.value}
+                                            initial={{ y: 20, opacity: 0, filter: 'blur(4px)' }}
+                                            animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+                                            exit={{ y: -20, opacity: 0, filter: 'blur(4px)' }}
+                                            transition={{
+                                                type: 'spring',
+                                                stiffness: 300,
+                                                damping: 25,
+                                                mass: 0.8
+                                            }}
+                                            style={{
+                                                fontSize: '32px',
+                                                fontWeight: 800,
+                                                color: 'var(--primary)',
+                                                lineHeight: 1,
+                                                fontVariantNumeric: 'tabular-nums',
+                                                position: 'absolute'
+                                            }}
+                                        >
+                                            {String(item.value).padStart(2, '0')}
+                                        </motion.span>
+                                    </AnimatePresence>
+                                </div>
                                 <span style={{
                                     fontSize: '12px',
                                     textTransform: 'uppercase',
