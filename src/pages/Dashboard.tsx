@@ -170,7 +170,7 @@ export default function Dashboard() {
     // Check if the user has a booking specifically for the *upcoming* week (next week slots)
     const hasBookedForNextWeek = user ? allBookings.some(b => b.studentId === user.id && b.weekId === nextWeekId) : false;
 
-    const hasUpcomingBooking = upcomingBookings.length > 0;
+
     const primaryUpcomingBooking = upcomingBookings[0] || null;
 
     let mainActionLabel = 'Book Now';
@@ -418,10 +418,10 @@ export default function Dashboard() {
                     style={{
                         padding: '10px 24px',
                         borderRadius: '10px',
-                        background: isSystemClosed ? 'var(--error)' : hasUpcomingBooking ? 'var(--success)' : 'var(--primary)',
+                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--success)' : 'var(--primary)',
                         boxShadow: isSystemClosed
                             ? '0 0 15px rgba(239, 68, 68, 0.3)'
-                            : hasUpcomingBooking
+                            : hasBookedForNextWeek
                                 ? '0 0 15px rgba(16, 185, 129, 0.3)'
                                 : '0 0 15px var(--primary-glow)',
                         fontSize: '14px',

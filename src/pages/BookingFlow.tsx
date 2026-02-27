@@ -10,6 +10,7 @@ import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import Confetti from 'react-confetti';
+import { toast } from 'sonner';
 import { useWindowSize } from 'react-use';
 import {
     addBelarusDays,
@@ -36,7 +37,6 @@ export default function BookingFlow() {
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [settings, setSettings] = useState<Partial<AppSettings>>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3 });
@@ -62,7 +62,7 @@ export default function BookingFlow() {
                     setMachines(ms);
                 }, (err) => {
                     console.error("Machine fetching error:", err);
-                    setError("Failed to subscribe to machines.");
+                    toast.error("Failed to subscribe to machines.");
                     setLoading(false);
                 });
 
@@ -71,12 +71,12 @@ export default function BookingFlow() {
                     setLoading(false);
                 }, (err) => {
                     console.error("Booking streaming error:", err);
-                    setError("Failed to get live booking data. Please check connection.");
+                    toast.error("Failed to get live booking data. Please check connection.");
                     setLoading(false);
                 });
             } catch (e) {
                 console.error("Failed to load booking data", e);
-                setError("Failed to load data. Please refresh.");
+                toast.error("Failed to load data. Please refresh.");
                 setLoading(false);
             }
         };
@@ -228,13 +228,12 @@ export default function BookingFlow() {
                 setShowConfirmation(true);
                 setSelectedMachine(null);
             } else {
-                setError(result.error || 'Booking failed');
-                setTimeout(() => setError(''), 3000);
+                toast.error(result.error || 'Booking failed');
             }
         } catch (e: any) {
             console.error('Booking transaction failed:', e);
             console.error('Error details:', e.message, e.code);
-            setError(`System error: ${e.message || 'Please try again.'}`);
+            toast.error(`System error: ${e.message || 'Please try again.'}`);
         } finally {
             setSubmitting(false);
         }
@@ -660,11 +659,7 @@ export default function BookingFlow() {
                                     {formatBelarusWeekdayLabel(selectedDate)}, {formatBelarusMonthDayLabel(selectedDate)} at {selectedSlot}
                                 </p>
                                 <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
-                                {error && (
-                                    <div style={{ color: 'var(--error)', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                        <AlertCircle size={16} /> {error}
-                                    </div>
-                                )}
+
                                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                                     <button
                                         onClick={() => setShowConfirmModal(false)}

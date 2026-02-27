@@ -4,6 +4,7 @@ import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import { Building, ArrowRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import type { Student } from '../types';
 
 export default function LoginScreen() {
@@ -13,13 +14,11 @@ export default function LoginScreen() {
     const [roommates, setRoommates] = useState<Student[]>([]);
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
 
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setError('');
 
         try {
             const allStudents = await firestoreService.getAllStudents();
@@ -35,11 +34,11 @@ export default function LoginScreen() {
                     setStep(2); // Legacy/Unprotected flow
                 }
             } else {
-                setError('Room not found. Please check the number (e.g. 101, 52-2).');
+                toast.error('Room not found. Please check the number (e.g. 101, 52-2).');
             }
         } catch (err) {
             console.error(err);
-            setError('Failed to connect to database.');
+            toast.error('Failed to connect to database.');
         } finally {
             setLoading(false);
         }
@@ -51,7 +50,7 @@ export default function LoginScreen() {
         if (pin === correctPin) {
             setStep(2);
         } else {
-            setError('Incorrect Room PIN.');
+            toast.error('Incorrect Room PIN.');
         }
     };
 
@@ -131,7 +130,6 @@ export default function LoginScreen() {
                                             boxSizing: 'border-box'
                                         }}
                                     />
-                                    {error && <p style={{ color: 'var(--error)', fontSize: '14px', marginTop: '8px' }}>{error}</p>}
                                 </div>
 
                                 <button
@@ -185,7 +183,6 @@ export default function LoginScreen() {
                                         }}
                                     />
                                 </div>
-                                {error && <p style={{ color: 'var(--error)', fontSize: '14px', textAlign: 'center', marginBottom: '16px' }}>{error}</p>}
 
                                 <button
                                     type="submit"

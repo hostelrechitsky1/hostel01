@@ -10,6 +10,8 @@ import PrintCredentials from './pages/PrintCredentials';
 import HostelAdminLogin from './pages/HostelAdminLogin';
 import HostelAdminDashboard from './pages/HostelAdminDashboard';
 import { PrivateRoute } from './components/PrivateRoute';
+import { Toaster } from 'sonner';
+
 function ScrollToTopOnRouteChange() {
   const { pathname } = useLocation();
 
@@ -79,6 +81,7 @@ function App() {
     <Router>
       <ScrollToTopOnRouteChange />
       <AnimatedRoutes />
+      <Toaster position="top-center" richColors />
     </Router>
   );
 }
