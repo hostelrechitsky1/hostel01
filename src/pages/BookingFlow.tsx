@@ -345,7 +345,8 @@ export default function BookingFlow() {
                         transition={{ delay: 0.2 }}
                         style={{
                             display: 'flex',
-                            gap: '16px',
+                            flexWrap: 'wrap',
+                            gap: '12px',
                             marginBottom: '48px',
                             justifyContent: 'center'
                         }}
@@ -360,8 +361,10 @@ export default function BookingFlow() {
                                 background: 'var(--glass-bg)',
                                 border: '1px solid var(--glass-border)',
                                 borderRadius: '16px',
-                                padding: '16px 20px',
-                                minWidth: '80px',
+                                padding: '12px 16px',
+                                minWidth: '70px',
+                                flex: '1 1 auto',
+                                maxWidth: '90px',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 alignItems: 'center',
