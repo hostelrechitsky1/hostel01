@@ -89,10 +89,7 @@ export default function BookingFlow() {
         };
     }, [user?.id, navigate]);
 
-    const isNextWeekOpen = useMemo(() => {
-        if (settings.forceShowNextWeek) return true;
-        return isAutoBookingWindowOpen();
-    }, [settings.forceShowNextWeek]);
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
@@ -116,7 +113,7 @@ export default function BookingFlow() {
             current = addBelarusDays(current, 1);
         }
         return dates;
-    }, [isNextWeekOpen]);
+    }, [settings.forceShowNextWeek]); // Updated dependencies
 
     useEffect(() => {
         if (dateOptions.length > 0) {
@@ -202,6 +199,18 @@ export default function BookingFlow() {
         setSubmitting(true);
 
         const startTime = selectedSlot;
+
+        // Stale Tab Validation: Prevent booking past slots if UI was left open
+        if (isSameBelarusDay(selectedDate, getBelarusDate())) {
+            const now = getBelarusNow();
+            const [h, m] = startTime.split(':').map(Number);
+            if (h < now.getUTCHours() || (h === now.getUTCHours() && m < now.getUTCMinutes())) {
+                toast.error('This slot has already passed. Please refresh.');
+                setSubmitting(false);
+                return;
+            }
+        }
+
         const [h, m] = startTime.split(':').map(Number);
         const endMinutes = h * 60 + m + 90;
         const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
