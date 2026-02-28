@@ -81,7 +81,19 @@ function App() {
     <Router>
       <ScrollToTopOnRouteChange />
       <AnimatedRoutes />
-      <Toaster position="top-center" richColors />
+      <Toaster
+        position="top-center"
+        richColors
+        theme="system"
+        toastOptions={{
+          style: {
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid var(--glass-border)',
+          },
+          className: 'glass-panel'
+        }}
+      />
     </Router>
   );
 }

@@ -66,3 +66,20 @@ export const isAutoBookingWindowOpen = (now: Date = new Date()) => {
     if (day === 0 && hour < 20) return true;
     return false;
 };
+
+export const getNextSaturday1600 = (now: Date = new Date()) => {
+    const belarusNow = getBelarusNow(now);
+    const currentDay = belarusNow.getUTCDay();
+    const currentHour = belarusNow.getUTCHours();
+    let daysUntilSaturday = 6 - currentDay;
+
+    // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
+    if (currentDay === 6 && currentHour >= 16) daysUntilSaturday += 7;
+    if (currentDay === 0) daysUntilSaturday = 6;
+
+    const nextSatBelarusTime = new Date(belarusNow.getTime());
+    nextSatBelarusTime.setUTCDate(belarusNow.getUTCDate() + daysUntilSaturday);
+    nextSatBelarusTime.setUTCHours(16, 0, 0, 0);
+
+    return new Date(nextSatBelarusTime.getTime() - (BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000));
+};
