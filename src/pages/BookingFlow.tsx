@@ -23,7 +23,8 @@ import {
     getBelarusWeekday,
     getBelarusWeekId,
     isAutoBookingWindowOpen,
-    isSameBelarusDay
+    isSameBelarusDay,
+    getNextSaturday1600
 } from '../utils/time';
 
 export default function BookingFlow() {
@@ -88,10 +89,7 @@ export default function BookingFlow() {
         };
     }, [user?.id, navigate]);
 
-    const isNextWeekOpen = useMemo(() => {
-        if (settings.forceShowNextWeek) return true;
-        return isAutoBookingWindowOpen();
-    }, [settings.forceShowNextWeek]);
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
@@ -115,7 +113,7 @@ export default function BookingFlow() {
             current = addBelarusDays(current, 1);
         }
         return dates;
-    }, [isNextWeekOpen]);
+    }, [settings.forceShowNextWeek]); // Updated dependencies
 
     useEffect(() => {
         if (dateOptions.length > 0) {
@@ -201,6 +199,18 @@ export default function BookingFlow() {
         setSubmitting(true);
 
         const startTime = selectedSlot;
+
+        // Stale Tab Validation: Prevent booking past slots if UI was left open
+        if (isSameBelarusDay(selectedDate, getBelarusDate())) {
+            const now = getBelarusNow();
+            const [h, m] = startTime.split(':').map(Number);
+            if (h < now.getUTCHours() || (h === now.getUTCHours() && m < now.getUTCMinutes())) {
+                toast.error('This slot has already passed. Please refresh.');
+                setSubmitting(false);
+                return;
+            }
+        }
+
         const [h, m] = startTime.split(':').map(Number);
         const endMinutes = h * 60 + m + 90;
         const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
@@ -244,31 +254,16 @@ export default function BookingFlow() {
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
 
     // --- RENDER ---
-    const getNextSaturday1600 = () => {
-        const now = getBelarusNow();
-        const currentDay = now.getDay();
-        let daysUntilSaturday = 6 - currentDay;
-
-        // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
-        if (currentDay === 6 && now.getHours() >= 16) daysUntilSaturday += 7;
-        if (currentDay === 0) daysUntilSaturday = 6;
-
-        const nextSat = new Date(now);
-        nextSat.setDate(now.getDate() + daysUntilSaturday);
-        nextSat.setHours(16, 0, 0, 0);
-        return nextSat.getTime();
-    };
-
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
     useEffect(() => {
         if (!settings) return;
         if (settings.forceCloseBookings) return;
 
-        const targetTime = getNextSaturday1600();
+        const targetTime = getNextSaturday1600().getTime();
 
         const calculateTimeLeft = () => {
-            const now = getBelarusNow().getTime();
+            const now = new Date().getTime(); // use real local epoch time
             const difference = targetTime - now;
 
             if (difference > 0) {
@@ -278,6 +273,8 @@ export default function BookingFlow() {
                     minutes: Math.floor((difference / 1000 / 60) % 60),
                     seconds: Math.floor((difference / 1000) % 60)
                 });
+            } else {
+                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
             }
         };
 
