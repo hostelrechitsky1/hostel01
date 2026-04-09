@@ -77,6 +77,16 @@ export interface TopAlert {
   type: 'info' | 'warning' | 'urgent';
 }
 
+export interface VipRecurringRule {
+  id: string;
+  studentId: string;
+  machineId: string;
+  weekday: number; // 0=Sun, 1=Mon ... 6=Sat
+  startTime: string; // HH:mm
+  isActive: boolean;
+  createdAt: number;
+}
+
 export interface AppSettings {
   forceShowNextWeek: boolean;
   forceCloseBookings: boolean;

@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
-import type { Student, Machine, Booking, AppSettings } from '../types';
+import type { Student, Machine, Booking, AppSettings, VipRecurringRule } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
 
@@ -8,6 +8,7 @@ const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
 const BOOKING_LIMITS_COL = 'bookingLimits';
+const VIP_RULES_COL = 'vipRecurringRules';
 
 export const firestoreService = {
     // --- Students ---
@@ -244,6 +245,26 @@ export const firestoreService = {
 
     async toggleBannerStatus(id: string, isActive: boolean) {
         await updateDoc(doc(db, 'banners', id), { isActive });
+    },
+
+    // --- VIP Recurring Rules ---
+    async getVipRecurringRules(): Promise<VipRecurringRule[]> {
+        const snapshot = await getDocs(collection(db, VIP_RULES_COL));
+        return snapshot.docs
+            .map(doc => doc.data() as VipRecurringRule)
+            .sort((a, b) => b.createdAt - a.createdAt);
+    },
+
+    async addVipRecurringRule(rule: VipRecurringRule) {
+        await setDoc(doc(db, VIP_RULES_COL, rule.id), rule);
+    },
+
+    async toggleVipRecurringRule(id: string, isActive: boolean) {
+        await updateDoc(doc(db, VIP_RULES_COL, id), { isActive });
+    },
+
+    async deleteVipRecurringRule(id: string) {
+        await deleteDoc(doc(db, VIP_RULES_COL, id));
     },
 
     // --- Auth Sync ---
