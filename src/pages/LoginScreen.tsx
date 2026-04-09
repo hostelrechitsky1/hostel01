@@ -73,6 +73,12 @@ export default function LoginScreen() {
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
 
+        // Warm up the two most common post-login routes for instant navigation.
+        void Promise.all([
+            import('./Dashboard'),
+            import('./BookingFlow')
+        ]);
+
         requestAnimationFrame(() => {
             navigate('/', { replace: true });
         });

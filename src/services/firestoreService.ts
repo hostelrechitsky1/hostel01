@@ -9,6 +9,8 @@ const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
 const BOOKING_LIMITS_COL = 'bookingLimits';
 const VIP_RULES_COL = 'vipRecurringRules';
+const ROOM_STUDENTS_CACHE_TTL_MS = 30_000;
+const roomStudentsCache = new Map<string, { timestamp: number; students: Student[] }>();
 
 export const firestoreService = {
     // --- Students ---
@@ -21,9 +23,16 @@ export const firestoreService = {
         const normalizedRoom = roomNumber.trim();
         if (!normalizedRoom) return [];
 
+        const cached = roomStudentsCache.get(normalizedRoom);
+        if (cached && Date.now() - cached.timestamp < ROOM_STUDENTS_CACHE_TTL_MS) {
+            return cached.students;
+        }
+
         const roomQuery = query(collection(db, STUDENTS_COL), where('roomNumber', '==', normalizedRoom));
         const snapshot = await getDocs(roomQuery);
-        return snapshot.docs.map(doc => doc.data() as Student);
+        const students = snapshot.docs.map(doc => doc.data() as Student);
+        roomStudentsCache.set(normalizedRoom, { timestamp: Date.now(), students });
+        return students;
     },
 
     async seedStudents(rawData: string) {

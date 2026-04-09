@@ -1,16 +1,16 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect, useLayoutEffect } from 'react';
-import LoginScreen from './pages/LoginScreen';
-import Dashboard from './pages/Dashboard';
-import BookingFlow from './pages/BookingFlow';
-import ManagerPanel from './pages/ManagerPanel';
-import ManagerLogin from './pages/ManagerLogin';
-import PrintSchedule from './pages/PrintSchedule';
-import PrintCredentials from './pages/PrintCredentials';
-import HostelAdminLogin from './pages/HostelAdminLogin';
-import HostelAdminDashboard from './pages/HostelAdminDashboard';
+import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
 import { PrivateRoute } from './components/PrivateRoute';
 import { Toaster } from 'sonner';
+const LoginScreen = lazy(() => import('./pages/LoginScreen'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const BookingFlow = lazy(() => import('./pages/BookingFlow'));
+const ManagerPanel = lazy(() => import('./pages/ManagerPanel'));
+const ManagerLogin = lazy(() => import('./pages/ManagerLogin'));
+const PrintSchedule = lazy(() => import('./pages/PrintSchedule'));
+const PrintCredentials = lazy(() => import('./pages/PrintCredentials'));
+const HostelAdminLogin = lazy(() => import('./pages/HostelAdminLogin'));
+const HostelAdminDashboard = lazy(() => import('./pages/HostelAdminDashboard'));
 
 function ScrollToTopOnRouteChange() {
   const { pathname, key } = useLocation();
@@ -76,10 +76,8 @@ const PageWrapper = ({ children }: { children: React.ReactNode }) => (
 );
 
 function AnimatedRoutes() {
-  const location = useLocation();
-
   return (
-    <Routes location={location} key={location.pathname}>
+    <Routes>
       <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
 
       <Route path="/" element={
@@ -111,7 +109,9 @@ function App() {
   return (
     <Router>
       <ScrollToTopOnRouteChange />
-      <AnimatedRoutes />
+      <Suspense fallback={<AppShellFallback />}>
+        <AnimatedRoutes />
+      </Suspense>
       <Toaster
         position="top-center"
         richColors
@@ -126,6 +126,22 @@ function App() {
         }}
       />
     </Router>
+  );
+}
+
+function AppShellFallback() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--text-muted)',
+      }}
+    >
+      Loading…
+    </div>
   );
 }
 
