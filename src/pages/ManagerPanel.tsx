@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
 import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
@@ -39,6 +39,8 @@ export default function ManagerPanel() {
         at: number;
     } | null>(null);
     const autoVipInFlightRef = useRef(false);
+    const deferredSearchTerm = useDeferredValue(searchTerm);
+    const deferredVipStudentSearch = useDeferredValue(vipStudentSearch);
     const [settings, setSettings] = useState<AppSettings>({
         forceShowNextWeek: false,
         forceCloseBookings: false,
@@ -87,11 +89,23 @@ export default function ManagerPanel() {
         }
     };
 
+    const studentsById = useMemo(() => {
+        const map = new Map<string, Student>();
+        students.forEach(student => map.set(student.id, student));
+        return map;
+    }, [students]);
+
+    const machinesById = useMemo(() => {
+        const map = new Map<string, Machine>();
+        machines.forEach(machine => map.set(machine.id, machine));
+        return map;
+    }, [machines]);
+
     const filteredBookings = useMemo(() => {
         return bookings.filter(b => {
-            const student = students.find(s => s.id === b.studentId); // Use studentId
-            const machine = machines.find(m => m.id === b.machineId);
-            const searchLower = searchTerm.toLowerCase();
+            const student = studentsById.get(b.studentId); // Use studentId
+            const machine = machinesById.get(b.machineId);
+            const searchLower = deferredSearchTerm.toLowerCase();
 
             return (
                 student?.name.toLowerCase().includes(searchLower) ||
@@ -99,7 +113,7 @@ export default function ManagerPanel() {
                 machine?.name.toLowerCase().includes(searchLower)
             );
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [bookings, students, machines, searchTerm]);
+    }, [bookings, studentsById, machinesById, deferredSearchTerm]);
 
     const BOOKING_ITEMS_PER_PAGE = 12;
     const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKING_ITEMS_PER_PAGE));
@@ -110,14 +124,14 @@ export default function ManagerPanel() {
     }, [filteredBookings, bookingPage]);
 
     const filteredVipStudents = useMemo(() => {
-        const search = vipStudentSearch.trim().toLowerCase();
+        const search = deferredVipStudentSearch.trim().toLowerCase();
         if (!search) return students;
 
         return students.filter(student =>
             student.name.toLowerCase().includes(search) ||
             student.roomNumber.toLowerCase().includes(search)
         );
-    }, [students, vipStudentSearch]);
+    }, [students, deferredVipStudentSearch]);
 
     useEffect(() => {
         setBookingPage(1);
@@ -289,8 +303,8 @@ export default function ManagerPanel() {
             let skipped = 0;
 
             for (const rule of activeRules) {
-                const student = students.find(s => s.id === rule.studentId);
-                const machine = machines.find(m => m.id === rule.machineId);
+                const student = studentsById.get(rule.studentId);
+                const machine = machinesById.get(rule.machineId);
 
                 if (!student || !machine || machine.status === 'maintenance') {
                     skipped += 1;
@@ -507,6 +521,7 @@ export default function ManagerPanel() {
 
     useEffect(() => {
         if (!settings.vipAutoEnabled) return;
+        if (loading) return;
         if (autoVipInFlightRef.current) return;
 
         const activeRules = vipRules.filter(rule => rule.isActive);
@@ -526,7 +541,7 @@ export default function ManagerPanel() {
                 autoVipInFlightRef.current = false;
             }
         })();
-    }, [settings.vipAutoEnabled, settings.vipLastAppliedWeekId, vipRules, students, machines]);
+    }, [settings.vipAutoEnabled, settings.vipLastAppliedWeekId, vipRules, studentsById, machinesById, loading]);
 
     if (loading && bookings.length === 0 && machines.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;

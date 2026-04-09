@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import type { Banner } from '../types';
 
 interface InternalBannerCarouselProps {
@@ -172,7 +172,7 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     );
 };
 
-export default function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselProps) {
+function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselProps) {
     // Filter    // activeBanners filtering is redundant if done inside the component, but good to keep clean
     const activeBanners = banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -436,3 +436,5 @@ export default function BannerCarousel({ banners, isLoading = false }: InternalB
         </div>
     );
 }
+
+export default memo(BannerCarousel);
