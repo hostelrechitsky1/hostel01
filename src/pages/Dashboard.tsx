@@ -6,11 +6,24 @@ import { firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
+
+function ScrollReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.14 }}
+            transition={{ duration: 0.36, ease: 'easeOut', delay }}
+        >
+            {children}
+        </motion.div>
+    );
+}
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -51,6 +64,10 @@ export default function Dashboard() {
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
+    const { scrollYProgress } = useScroll();
+    const headerY = useTransform(scrollYProgress, [0, 1], [0, -18]);
+    const headerOpacity = useTransform(scrollYProgress, [0, 0.25], [1, 0.9]);
+    const ambientOpacity = useTransform(scrollYProgress, [0, 1], [0.3, 0.12]);
 
     useEffect(() => {
         const ensureTop = () => {
@@ -348,7 +365,7 @@ export default function Dashboard() {
 
     if (loading) {
         return (
-            <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
+            <div className="container animate-fade-in" style={{ minHeight: '100dvh', padding: '24px' }}>
                 <header style={{ marginBottom: '32px', marginTop: '16px' }}>
                     <div style={{ height: '32px', width: '200px', background: 'var(--glass-border)', borderRadius: '8px', marginBottom: '8px' }} className="skeleton-pulse"></div>
                     <div style={{ height: '20px', width: '100px', background: 'var(--glass-border)', borderRadius: '8px' }} className="skeleton-pulse"></div>
@@ -374,7 +391,24 @@ export default function Dashboard() {
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
 
     return (
-        <div className="container animate-fade-in">
+        <div className="container animate-fade-in dashboard-shell">
+            <motion.div
+                aria-hidden
+                style={{
+                    opacity: ambientOpacity,
+                    position: 'fixed',
+                    top: '-110px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 'min(110vw, 960px)',
+                    height: '300px',
+                    borderRadius: '999px',
+                    background: 'radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, rgba(99, 102, 241, 0) 72%)',
+                    filter: 'blur(18px)',
+                    pointerEvents: 'none',
+                    zIndex: -1
+                }}
+            />
             {/* Top Alert Banner */}
             {settings.topAlert?.isActive && settings.topAlert.message && (
                 <div
@@ -422,13 +456,15 @@ export default function Dashboard() {
             )}
 
             {/* Header */}
-            <header style={{
+            <motion.header style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 marginBottom: '32px',
                 marginTop: settings.topAlert?.isActive ? '48px' : '16px', // Push down if alert is visible
-                transition: 'margin-top 0.3s ease'
+                transition: 'margin-top 0.3s ease',
+                y: headerY,
+                opacity: headerOpacity
             }}>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '24px' }}>Hello, {user.name.split(' ')[0]} 👋</h2>
@@ -441,51 +477,56 @@ export default function Dashboard() {
                 >
                     <LogOut size={20} />
                 </button>
-            </header>
+            </motion.header>
 
-            {/* Announcements Carousel */}
-            <BannerCarousel banners={banners} isLoading={bannersLoading} />
+            <ScrollReveal>
+                {/* Announcements Carousel */}
+                <BannerCarousel banners={banners} isLoading={bannersLoading} />
+            </ScrollReveal>
 
-            {/* Main Action */}
-            <div
-                className="glass-panel main-action-layout"
-                style={{
-                    padding: '20px 24px',
-                    borderRadius: '16px',
-                    marginBottom: '32px'
-                }}
-            >
-                <div>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>Need to wash?</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-                        {mainActionSubtitle}
-                    </p>
-                </div>
-                <button
-                    onClick={() => navigate('/book')}
-                    className="primary-button"
+            <ScrollReveal delay={0.04}>
+                {/* Main Action */}
+                <div
+                    className="glass-panel main-action-layout"
                     style={{
-                        padding: '10px 24px',
-                        borderRadius: '10px',
-                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--success)' : 'var(--primary)',
-                        boxShadow: isSystemClosed
-                            ? '0 0 15px rgba(239, 68, 68, 0.3)'
-                            : hasBookedForNextWeek
-                                ? '0 0 15px rgba(16, 185, 129, 0.3)'
-                                : '0 0 15px var(--primary-glow)',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        border: 'none',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
+                        padding: '20px 24px',
+                        borderRadius: '16px',
+                        marginBottom: '32px'
                     }}
                 >
-                    {mainActionLabel}
-                </button>
-            </div>
+                    <div>
+                        <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>Need to wash?</h3>
+                        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
+                            {mainActionSubtitle}
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => navigate('/book')}
+                        className="primary-button"
+                        style={{
+                            padding: '10px 24px',
+                            borderRadius: '10px',
+                            background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--success)' : 'var(--primary)',
+                            boxShadow: isSystemClosed
+                                ? '0 0 15px rgba(239, 68, 68, 0.3)'
+                                : hasBookedForNextWeek
+                                    ? '0 0 15px rgba(16, 185, 129, 0.3)'
+                                    : '0 0 15px var(--primary-glow)',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {mainActionLabel}
+                    </button>
+                </div>
+            </ScrollReveal>
 
 
+            <ScrollReveal delay={0.08}>
             {/* Machine Status - Live View */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -612,7 +653,9 @@ export default function Dashboard() {
                     );
                 })}
             </div>
+            </ScrollReveal>
 
+            <ScrollReveal delay={0.1}>
             {/* Your Bookings */}
             <div style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -965,6 +1008,7 @@ export default function Dashboard() {
                     </div>
                 )
             }
+            </ScrollReveal>
 
             {modalRoot && quickBookModalBooking && createPortal(
                 <div className="modal-overlay" onClick={() => setQuickBookModalBooking(null)}>
@@ -1046,7 +1090,9 @@ export default function Dashboard() {
             )}
 
             {/* Inline Feedback Section */}
-            <DashboardFeedback />
+            <ScrollReveal delay={0.12}>
+                <DashboardFeedback />
+            </ScrollReveal>
         </div>
     );
 }
