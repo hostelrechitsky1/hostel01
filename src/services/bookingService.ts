@@ -11,7 +11,15 @@ const STORAGE_KEYS = {
 class BookingService {
     private get<T>(key: string, defaultValue: T): T {
         const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : defaultValue;
+        if (!data) return defaultValue;
+
+        try {
+            return JSON.parse(data) as T;
+        } catch (error) {
+            console.warn(`Corrupted localStorage key "${key}" was reset.`, error);
+            localStorage.removeItem(key);
+            return defaultValue;
+        }
     }
 
     private set(key: string, value: any) {

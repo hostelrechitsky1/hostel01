@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where } from 'firebase/firestore';
 import type { Student, Machine, Booking, AppSettings, VipRecurringRule } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
@@ -14,6 +14,15 @@ export const firestoreService = {
     // --- Students ---
     async getAllStudents(): Promise<Student[]> {
         const snapshot = await getDocs(collection(db, STUDENTS_COL));
+        return snapshot.docs.map(doc => doc.data() as Student);
+    },
+
+    async getStudentsByRoom(roomNumber: string): Promise<Student[]> {
+        const normalizedRoom = roomNumber.trim();
+        if (!normalizedRoom) return [];
+
+        const roomQuery = query(collection(db, STUDENTS_COL), where('roomNumber', '==', normalizedRoom));
+        const snapshot = await getDocs(roomQuery);
         return snapshot.docs.map(doc => doc.data() as Student);
     },
 
