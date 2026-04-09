@@ -26,6 +26,9 @@ export default function Dashboard() {
         forceShowNextWeek: false,
         forceCloseBookings: false,
         maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28,
         topAlert: { message: '', isActive: false, type: 'info' }
     });
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
@@ -120,7 +123,7 @@ export default function Dashboard() {
         };
     }, [user?.id, navigate]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 

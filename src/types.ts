@@ -81,5 +81,8 @@ export interface AppSettings {
   forceShowNextWeek: boolean;
   forceCloseBookings: boolean;
   maintenanceDay: number; // 0=Sun, 1=Mon, ..., 6=Sat
+  autoOpenWeekday: number; // 0=Sun, 1=Mon, ..., 6=Sat
+  autoOpenTime: string; // HH:mm (Belarus local)
+  autoOpenDurationHours: number; // Opening window length
   topAlert?: TopAlert;
 }

@@ -1,6 +1,45 @@
 const BELARUS_UTC_OFFSET_HOURS = 3;
 const BELARUS_TIME_ZONE = 'Europe/Minsk';
 
+interface AutoOpenConfig {
+    autoOpenWeekday?: number;
+    autoOpenTime?: string;
+    autoOpenDurationHours?: number;
+}
+
+const DEFAULT_AUTO_OPEN_WEEKDAY = 6;
+const DEFAULT_AUTO_OPEN_TIME = '16:00';
+const DEFAULT_AUTO_OPEN_DURATION_HOURS = 28;
+
+const normalizeAutoOpenConfig = (config: AutoOpenConfig = {}) => {
+    const weekday = typeof config.autoOpenWeekday === 'number' ? config.autoOpenWeekday : DEFAULT_AUTO_OPEN_WEEKDAY;
+    const time = typeof config.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(config.autoOpenTime)
+        ? config.autoOpenTime
+        : DEFAULT_AUTO_OPEN_TIME;
+    const duration = typeof config.autoOpenDurationHours === 'number' && config.autoOpenDurationHours > 0
+        ? config.autoOpenDurationHours
+        : DEFAULT_AUTO_OPEN_DURATION_HOURS;
+
+    const [hourRaw, minuteRaw] = time.split(':').map(Number);
+    const hour = Number.isFinite(hourRaw) ? Math.min(Math.max(hourRaw, 0), 23) : 16;
+    const minute = Number.isFinite(minuteRaw) ? Math.min(Math.max(minuteRaw, 0), 59) : 0;
+
+    return {
+        weekday: Math.min(Math.max(weekday, 0), 6),
+        hour,
+        minute,
+        durationHours: duration
+    };
+};
+
+const getOpeningForBelarusWeek = (belarusWeekStart: Date, config: ReturnType<typeof normalizeAutoOpenConfig>) => {
+    const offsetFromMonday = config.weekday === 0 ? 6 : config.weekday - 1;
+    const openingDate = addBelarusDays(belarusWeekStart, offsetFromMonday);
+    const openingBelarusTime = new Date(openingDate.getTime());
+    openingBelarusTime.setUTCHours(config.hour, config.minute, 0, 0);
+    return openingBelarusTime;
+};
+
 export const getBelarusNow = (now: Date = new Date()) => {
     return new Date(now.getTime() + BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000);
 };
@@ -57,29 +96,39 @@ export const getBelarusWeekId = (date: Date) => {
     return `${utcDate.getUTCFullYear()}-W${weekNumber}`;
 };
 
-export const isAutoBookingWindowOpen = (now: Date = new Date()) => {
+export const isAutoBookingWindowOpen = (now: Date = new Date(), configInput: AutoOpenConfig = {}) => {
+    const config = normalizeAutoOpenConfig(configInput);
     const belarusNow = getBelarusNow(now);
-    const day = belarusNow.getUTCDay();
-    const hour = belarusNow.getUTCHours();
+    const thisWeekStart = getBelarusWeekStart(belarusNow);
 
-    if (day === 6 && hour >= 16) return true;
-    if (day === 0 && hour < 20) return true;
-    return false;
+    const openingThisWeek = getOpeningForBelarusWeek(thisWeekStart, config);
+    const openingLastWeek = new Date(openingThisWeek.getTime() - (7 * 24 * 60 * 60 * 1000));
+    const windowDurationMs = config.durationHours * 60 * 60 * 1000;
+
+    const isInsideWindow = (opening: Date) => {
+        const closing = new Date(opening.getTime() + windowDurationMs);
+        return belarusNow >= opening && belarusNow < closing;
+    };
+
+    return isInsideWindow(openingThisWeek) || isInsideWindow(openingLastWeek);
+};
+
+export const getNextAutoOpenDate = (now: Date = new Date(), configInput: AutoOpenConfig = {}) => {
+    const config = normalizeAutoOpenConfig(configInput);
+    const belarusNow = getBelarusNow(now);
+    const thisWeekStart = getBelarusWeekStart(belarusNow);
+    const openingThisWeek = getOpeningForBelarusWeek(thisWeekStart, config);
+
+    const nextOpeningBelarus = belarusNow < openingThisWeek
+        ? openingThisWeek
+        : new Date(openingThisWeek.getTime() + (7 * 24 * 60 * 60 * 1000));
+    return new Date(nextOpeningBelarus.getTime() - (BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000));
 };
 
 export const getNextSaturday1600 = (now: Date = new Date()) => {
-    const belarusNow = getBelarusNow(now);
-    const currentDay = belarusNow.getUTCDay();
-    const currentHour = belarusNow.getUTCHours();
-    let daysUntilSaturday = 6 - currentDay;
-
-    // If it's Saturday past 16:00 or Sunday, next opening is *next* Saturday
-    if (currentDay === 6 && currentHour >= 16) daysUntilSaturday += 7;
-    if (currentDay === 0) daysUntilSaturday = 6;
-
-    const nextSatBelarusTime = new Date(belarusNow.getTime());
-    nextSatBelarusTime.setUTCDate(belarusNow.getUTCDate() + daysUntilSaturday);
-    nextSatBelarusTime.setUTCHours(16, 0, 0, 0);
-
-    return new Date(nextSatBelarusTime.getTime() - (BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000));
+    return getNextAutoOpenDate(now, {
+        autoOpenWeekday: DEFAULT_AUTO_OPEN_WEEKDAY,
+        autoOpenTime: DEFAULT_AUTO_OPEN_TIME,
+        autoOpenDurationHours: DEFAULT_AUTO_OPEN_DURATION_HOURS
+    });
 };

@@ -24,7 +24,7 @@ import {
     getBelarusWeekId,
     isAutoBookingWindowOpen,
     isSameBelarusDay,
-    getNextSaturday1600
+    getNextAutoOpenDate
 } from '../utils/time';
 
 export default function BookingFlow() {
@@ -40,7 +40,14 @@ export default function BookingFlow() {
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [settings, setSettings] = useState<Partial<AppSettings>>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3 });
+    const [settings, setSettings] = useState<Partial<AppSettings>>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28
+    });
 
     // Async State
     const [machines, setMachines] = useState<Machine[]>([]);
@@ -89,7 +96,7 @@ export default function BookingFlow() {
         };
     }, [user?.id, navigate]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
@@ -113,7 +120,7 @@ export default function BookingFlow() {
             current = addBelarusDays(current, 1);
         }
         return dates;
-    }, [settings.forceShowNextWeek]); // Updated dependencies
+    }, [isNextWeekOpen]);
 
     useEffect(() => {
         if (dateOptions.length > 0) {
@@ -260,7 +267,7 @@ export default function BookingFlow() {
         if (!settings) return;
         if (settings.forceCloseBookings) return;
 
-        const targetTime = getNextSaturday1600().getTime();
+        const targetTime = getNextAutoOpenDate(new Date(), settings).getTime();
 
         const calculateTimeLeft = () => {
             const now = new Date().getTime(); // use real local epoch time
@@ -281,7 +288,11 @@ export default function BookingFlow() {
         calculateTimeLeft();
         const timer = setInterval(calculateTimeLeft, 1000);
         return () => clearInterval(timer);
-    }, [settings?.forceCloseBookings]);
+    }, [settings]);
+
+    const autoOpenDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][settings.autoOpenWeekday ?? 6];
+    const autoOpenTimeLabel = settings.autoOpenTime || '16:00';
+    const autoOpenDurationLabel = settings.autoOpenDurationHours ?? 28;
 
     if (loading) {
         return (
@@ -331,7 +342,9 @@ export default function BookingFlow() {
                     {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
-                    {settings.forceCloseBookings ? 'Temporarily disabled by admin.' : 'Open Saturday 16:00 - Sunday 20:00.'}
+                    {settings.forceCloseBookings
+                        ? 'Temporarily disabled by admin.'
+                        : `Opens ${autoOpenDayName} ${autoOpenTimeLabel} for ${autoOpenDurationLabel}h.`}
                 </p>
 
                 {!settings.forceCloseBookings && (

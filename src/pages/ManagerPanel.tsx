@@ -19,7 +19,15 @@ export default function ManagerPanel() {
     const [searchTerm, setSearchTerm] = useState('');
     const [bookingPage, setBookingPage] = useState(1);
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState<AppSettings>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3, topAlert: { message: '', isActive: false, type: 'info' } });
+    const [settings, setSettings] = useState<AppSettings>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28,
+        topAlert: { message: '', isActive: false, type: 'info' }
+    });
     const navigate = useNavigate();
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
@@ -383,6 +391,72 @@ export default function ManagerPanel() {
                             </select>
                             <p style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280' }}>
                                 Students will see "Maintenance Day" on this day of the week.
+                            </p>
+                        </div>
+
+                        {/* Auto Booking Opening */}
+                        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px' }}>
+                            <label style={{ display: 'block', marginBottom: '12px', fontWeight: '500', color: '#9ca3af' }}>Auto Booking Opening</label>
+                            <div style={{ display: 'grid', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Day</label>
+                                    <select
+                                        value={settings.autoOpenWeekday ?? 6}
+                                        onChange={(e) => updateSettings({ autoOpenWeekday: parseInt(e.target.value, 10) })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            color: 'white',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => (
+                                            <option key={day} value={index}>{day}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Time (Belarus)</label>
+                                    <input
+                                        type="time"
+                                        value={settings.autoOpenTime || '16:00'}
+                                        onChange={(e) => updateSettings({ autoOpenTime: e.target.value })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            color: 'white'
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Window (hours)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={168}
+                                        value={settings.autoOpenDurationHours ?? 28}
+                                        onChange={(e) => updateSettings({ autoOpenDurationHours: parseInt(e.target.value, 10) || 28 })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            color: 'white'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <p style={{ marginTop: '10px', fontSize: '13px', color: '#6b7280' }}>
+                                Schedule opens automatically every {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][settings.autoOpenWeekday ?? 6]} at {settings.autoOpenTime || '16:00'} (Belarus) for {settings.autoOpenDurationHours ?? 28} hours.
                             </p>
                         </div>
 

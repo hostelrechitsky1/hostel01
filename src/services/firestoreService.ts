@@ -160,6 +160,9 @@ export const firestoreService = {
             forceShowNextWeek: false,
             forceCloseBookings: false,
             maintenanceDay: 3, // Default Wednesday
+            autoOpenWeekday: 6, // Default Saturday
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
             topAlert: { message: '', isActive: false, type: 'info' }
         };
 
@@ -173,7 +176,12 @@ export const firestoreService = {
         const result = {
             ...defaultSettings,
             ...data,
-            maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay
+            maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay,
+            autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : defaultSettings.autoOpenWeekday,
+            autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' ? Number(data.autoOpenDurationHours) : defaultSettings.autoOpenDurationHours,
+            autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
+                ? data.autoOpenTime
+                : defaultSettings.autoOpenTime
         };
 
         return result;
@@ -183,6 +191,12 @@ export const firestoreService = {
         const cleanSettings = { ...settings };
         if (cleanSettings.maintenanceDay !== undefined) {
             cleanSettings.maintenanceDay = Number(cleanSettings.maintenanceDay);
+        }
+        if (cleanSettings.autoOpenWeekday !== undefined) {
+            cleanSettings.autoOpenWeekday = Number(cleanSettings.autoOpenWeekday);
+        }
+        if (cleanSettings.autoOpenDurationHours !== undefined) {
+            cleanSettings.autoOpenDurationHours = Number(cleanSettings.autoOpenDurationHours);
         }
         await setDoc(doc(db, 'settings', 'config'), cleanSettings, { merge: true });
     },

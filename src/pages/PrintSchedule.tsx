@@ -19,9 +19,7 @@ import {
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
-    const [weekOffset, setWeekOffset] = useState(() => {
-        return isAutoBookingWindowOpen() ? 1 : 0;
-    });
+    const [weekOffset, setWeekOffset] = useState(0);
 
     const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const isStaff = sessionStorage.getItem('hostel_admin_auth');
@@ -79,10 +77,9 @@ export default function PrintSchedule() {
                 setBookings(bs);
                 setStudents(ss);
 
-                // Smart Auto-Switch if Force Open is active
-                if (settings.forceShowNextWeek) {
-                    setWeekOffset(1);
-                }
+                // Smart Auto-Switch based on force setting or auto schedule
+                const shouldShowNextWeek = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+                setWeekOffset(shouldShowNextWeek ? 1 : 0);
                 if (typeof settings.maintenanceDay === 'number') {
                     setMaintenanceDay(settings.maintenanceDay);
                 }
