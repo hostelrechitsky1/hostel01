@@ -15,14 +15,31 @@ import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBe
 export default function Dashboard() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
+    const dashboardCacheKey = user ? `dashboard_bootstrap_${user.id}` : null;
+    const cachedBootstrap = (() => {
+        if (!dashboardCacheKey) return null;
+        const raw = sessionStorage.getItem(dashboardCacheKey);
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw) as {
+                settings?: AppSettings;
+                banners?: Banner[];
+                machines?: Machine[];
+                bookings?: Booking[];
+                hydratedAt?: number;
+            };
+        } catch {
+            return null;
+        }
+    })();
     const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
     const [history, setHistory] = useState<Booking[]>([]);
-    const [machines, setMachines] = useState<Machine[]>([]);
-    const [allBookings, setAllBookings] = useState<Booking[]>([]);
-    const [banners, setBanners] = useState<Banner[]>([]);
-    const [bannersLoading, setBannersLoading] = useState(true);
-    const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState<AppSettings>({
+    const [machines, setMachines] = useState<Machine[]>(cachedBootstrap?.machines || []);
+    const [allBookings, setAllBookings] = useState<Booking[]>(cachedBootstrap?.bookings || []);
+    const [banners, setBanners] = useState<Banner[]>(cachedBootstrap?.banners || []);
+    const [bannersLoading, setBannersLoading] = useState(!cachedBootstrap?.banners);
+    const [loading, setLoading] = useState(!cachedBootstrap);
+    const [settings, setSettings] = useState<AppSettings>(cachedBootstrap?.settings || {
         forceShowNextWeek: false,
         forceCloseBookings: false,
         maintenanceDay: 3,
@@ -76,7 +93,6 @@ export default function Dashboard() {
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
                 setBannersLoading(false);
-
                 unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
                     setMachines(machines);
                 });
@@ -103,6 +119,15 @@ export default function Dashboard() {
                     setUpcomingBookings(futureBookings);
                     setHistory(pastBookings.slice(0, 3));
                     setLoading(false);
+                    if (dashboardCacheKey) {
+                        sessionStorage.setItem(dashboardCacheKey, JSON.stringify({
+                            settings: fetchedSettings,
+                            banners: fetchedBanners,
+                            machines: cachedBootstrap?.machines || [],
+                            bookings,
+                            hydratedAt: Date.now()
+                        }));
+                    }
                 }, (error) => {
                     console.error("Dashboard bookings subscription error:", error);
                     setLoading(false);

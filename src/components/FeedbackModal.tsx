@@ -24,6 +24,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         try {
             await firestoreService.addFeedback({
                 id: Date.now().toString(),
+                studentId: user?.id || '',
                 studentName: user?.name || 'Anonymous',
                 roomNumber: user?.roomNumber || '?',
                 text,

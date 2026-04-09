@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
@@ -14,6 +14,7 @@ export default function LoginScreen() {
     const [roommates, setRoommates] = useState<Student[]>([]);
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const normalizedRoom = useMemo(() => room.trim(), [room]);
 
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
@@ -21,8 +22,7 @@ export default function LoginScreen() {
         setLoading(true);
 
         try {
-            const allStudents = await firestoreService.getAllStudents();
-            const roomStudents = allStudents.filter(s => s.roomNumber === room);
+            const roomStudents = await firestoreService.getStudentsByRoom(normalizedRoom);
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
@@ -66,6 +66,24 @@ export default function LoginScreen() {
 
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
+
+        // Prefetch dashboard essentials so first paint after PIN feels instant.
+        void Promise.all([
+            firestoreService.getSettings(),
+            firestoreService.getBanners(),
+            firestoreService.getMachines(),
+            firestoreService.getBookings()
+        ]).then(([settings, banners, machines, bookings]) => {
+            sessionStorage.setItem(`dashboard_bootstrap_${student.id}`, JSON.stringify({
+                settings,
+                banners,
+                machines,
+                bookings,
+                hydratedAt: Date.now()
+            }));
+        }).catch((error) => {
+            console.error('Dashboard prefetch failed', error);
+        });
 
         requestAnimationFrame(() => {
             navigate('/', { replace: true });

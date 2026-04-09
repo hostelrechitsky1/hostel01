@@ -1,6 +1,6 @@
 import { db } from '../firebase';
-import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
-import type { Student, Machine, Booking, AppSettings, VipRecurringRule } from '../types';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where } from 'firebase/firestore';
+import type { Student, Machine, Booking, AppSettings, VipRecurringRule, Banner, Feedback } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
 
@@ -14,6 +14,12 @@ export const firestoreService = {
     // --- Students ---
     async getAllStudents(): Promise<Student[]> {
         const snapshot = await getDocs(collection(db, STUDENTS_COL));
+        return snapshot.docs.map(doc => doc.data() as Student);
+    },
+
+    async getStudentsByRoom(roomNumber: string): Promise<Student[]> {
+        const q = query(collection(db, STUDENTS_COL), where('roomNumber', '==', roomNumber));
+        const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => doc.data() as Student);
     },
 
@@ -229,14 +235,63 @@ export const firestoreService = {
         return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => b.timestamp - a.timestamp);
     },
 
+    subscribeToFeedbacks(callback: (feedbacks: Feedback[]) => void, onError?: (error: unknown) => void): () => void {
+        const q = collection(db, 'feedbacks');
+        return onSnapshot(q, (snapshot) => {
+            const feedbacks = snapshot.docs
+                .map(doc => doc.data() as Feedback)
+                .sort((a, b) => b.timestamp - a.timestamp);
+            callback(feedbacks);
+        }, (error) => {
+            console.error('Error subscribing to feedbacks:', error);
+            if (onError) onError(error);
+        });
+    },
+
+    async getFeedbacksByStudent(studentId: string): Promise<Feedback[]> {
+        const q = query(collection(db, 'feedbacks'), where('studentId', '==', studentId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs
+            .map(doc => doc.data() as Feedback)
+            .sort((a, b) => b.timestamp - a.timestamp);
+    },
+
+    subscribeToFeedbacksByStudent(
+        studentId: string,
+        callback: (feedbacks: Feedback[]) => void,
+        onError?: (error: unknown) => void
+    ): () => void {
+        const q = query(collection(db, 'feedbacks'), where('studentId', '==', studentId));
+        return onSnapshot(q, (snapshot) => {
+            const feedbacks = snapshot.docs
+                .map(doc => doc.data() as Feedback)
+                .sort((a, b) => b.timestamp - a.timestamp);
+            callback(feedbacks);
+        }, (error) => {
+            console.error('Error subscribing to student feedbacks:', error);
+            if (onError) onError(error);
+        });
+    },
+
+    async replyToFeedback(feedbackId: string, reply: string, adminName = 'Admin') {
+        await updateDoc(doc(db, 'feedbacks', feedbackId), {
+            adminReply: reply,
+            adminReplyAt: Date.now(),
+            adminRepliedBy: adminName,
+            read: true
+        });
+    },
+
     async deleteFeedback(id: string) {
         await deleteDoc(doc(db, 'feedbacks', id));
     },
 
     // --- Banners / Announcements ---
-    async getBanners(): Promise<any[]> {
+    async getBanners(): Promise<Banner[]> {
         const snapshot = await getDocs(collection(db, 'banners'));
-        return snapshot.docs.map(doc => doc.data()).sort((a: any, b: any) => (a.priority || 99) - (b.priority || 99));
+        return snapshot.docs
+            .map(doc => doc.data() as Banner)
+            .sort((a, b) => (a.priority || 99) - (b.priority || 99));
     },
 
     async addBanner(banner: any) {

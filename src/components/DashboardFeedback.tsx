@@ -1,22 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { firestoreService } from '../services/firestoreService';
 import { bookingService } from '../services/bookingService';
-import { Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, Reply, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import type { Feedback } from '../types';
 
 export default function DashboardFeedback() {
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [history, setHistory] = useState<Feedback[]>([]);
+    const user = bookingService.getCurrentUser();
+
+    useEffect(() => {
+        if (!user) return;
+        const unsubscribe = firestoreService.subscribeToFeedbacks((feedbacks) => {
+            const myFeedbacks = feedbacks.filter((item) =>
+                item.studentId === user.id ||
+                (item.studentName === user.name && item.roomNumber === user.roomNumber)
+            );
+            setHistory(myFeedbacks);
+        }, () => {
+            toast.error('Failed to load feedback history.');
+        });
+
+        return unsubscribe;
+    }, [user]);
 
     const handleSubmit = async () => {
         if (!text.trim()) return;
         setLoading(true);
-        const user = bookingService.getCurrentUser();
 
         try {
             await firestoreService.addFeedback({
                 id: Date.now().toString(),
+                studentId: user?.id || '',
                 studentName: user?.name || 'Anonymous',
                 roomNumber: user?.roomNumber || '?',
                 text,
@@ -78,6 +97,68 @@ export default function DashboardFeedback() {
                         {success ? 'Sent!' : <Send size={18} />}
                     </button>
                 </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px', marginTop: '16px' }}>
+                <h4 style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={16} /> Feedback History
+                </h4>
+
+                {history.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+                        No feedback yet. Your sent messages and admin replies will appear here.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {history.map(item => (
+                            <div
+                                key={item.id}
+                                style={{
+                                    border: '1px solid var(--glass-border)',
+                                    borderRadius: '14px',
+                                    padding: '14px',
+                                    background: 'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))'
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                        {item.type}
+                                    </span>
+                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        {format(item.timestamp, 'MMM d, HH:mm')}
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: '14px', lineHeight: 1.5 }}>
+                                    {item.text}
+                                </div>
+
+                                {item.adminReply ? (
+                                    <div style={{
+                                        marginTop: '12px',
+                                        borderRadius: '12px',
+                                        padding: '12px',
+                                        background: 'rgba(16, 185, 129, 0.12)',
+                                        border: '1px solid rgba(16, 185, 129, 0.35)'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#34d399' }}>
+                                                <Reply size={14} /> Admin Reply
+                                            </div>
+                                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                {item.adminReplyAt ? format(item.adminReplyAt, 'MMM d, HH:mm') : ''}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '13px', lineHeight: 1.5 }}>{item.adminReply}</div>
+                                    </div>
+                                ) : (
+                                    <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        Waiting for admin reply…
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
