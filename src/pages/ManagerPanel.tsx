@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
@@ -30,6 +30,15 @@ export default function ManagerPanel() {
         weekday: 6,
         startTime: '16:30'
     });
+    const [vipStudentSearch, setVipStudentSearch] = useState('');
+    const [vipApplyStatus, setVipApplyStatus] = useState<{
+        weekId: string;
+        success: number;
+        skipped: number;
+        mode: 'auto' | 'manual';
+        at: number;
+    } | null>(null);
+    const autoVipInFlightRef = useRef(false);
     const [settings, setSettings] = useState<AppSettings>({
         forceShowNextWeek: false,
         forceCloseBookings: false,
@@ -37,6 +46,8 @@ export default function ManagerPanel() {
         autoOpenWeekday: 6,
         autoOpenTime: '16:00',
         autoOpenDurationHours: 28,
+        vipAutoEnabled: true,
+        vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
     });
     const navigate = useNavigate();
@@ -97,6 +108,16 @@ export default function ManagerPanel() {
         const start = (bookingPage - 1) * BOOKING_ITEMS_PER_PAGE;
         return filteredBookings.slice(start, start + BOOKING_ITEMS_PER_PAGE);
     }, [filteredBookings, bookingPage]);
+
+    const filteredVipStudents = useMemo(() => {
+        const search = vipStudentSearch.trim().toLowerCase();
+        if (!search) return students;
+
+        return students.filter(student =>
+            student.name.toLowerCase().includes(search) ||
+            student.roomNumber.toLowerCase().includes(search)
+        );
+    }, [students, vipStudentSearch]);
 
     useEffect(() => {
         setBookingPage(1);
@@ -250,14 +271,15 @@ export default function ManagerPanel() {
         await refreshData();
     };
 
-    const handleApplyVipForNextWeek = async () => {
+    const applyVipForWeek = async (mode: 'auto' | 'manual') => {
         const activeRules = vipRules.filter(rule => rule.isActive);
         if (activeRules.length === 0) {
-            await alertDialog('No Active Rules', 'Enable or add at least one VIP rule first.');
+            if (mode === 'manual') {
+                await alertDialog('No Active Rules', 'Enable or add at least one VIP rule first.');
+            }
             return;
         }
 
-        setLoading(true);
         try {
             const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
             const nextWeekId = getBelarusWeekId(nextWeekStart);
@@ -309,14 +331,32 @@ export default function ManagerPanel() {
                 }
             }
 
-            await alertDialog(
-                'VIP Apply Complete',
-                `Applied for week ${nextWeekId}.\nSuccess: ${success}\nSkipped: ${skipped}`
-            );
+            setVipApplyStatus({ weekId: nextWeekId, success, skipped, mode, at: Date.now() });
+
+            if (mode === 'manual') {
+                await alertDialog(
+                    'VIP Apply Complete',
+                    `Applied for week ${nextWeekId}.\nSuccess: ${success}\nSkipped: ${skipped}`
+                );
+            }
+
+            if (settings.vipLastAppliedWeekId !== nextWeekId) {
+                await firestoreService.updateSettings({ vipLastAppliedWeekId: nextWeekId });
+                setSettings(prev => ({ ...prev, vipLastAppliedWeekId: nextWeekId }));
+            }
             await refreshData();
         } catch (error) {
             console.error('VIP apply failed', error);
-            await alertDialog('VIP Apply Failed', 'Could not apply VIP recurring bookings.');
+            if (mode === 'manual') {
+                await alertDialog('VIP Apply Failed', 'Could not apply VIP recurring bookings.');
+            }
+        }
+    };
+
+    const handleApplyVipForNextWeek = async () => {
+        setLoading(true);
+        try {
+            await applyVipForWeek('manual');
         } finally {
             setLoading(false);
         }
@@ -468,6 +508,29 @@ export default function ManagerPanel() {
     }
 
     const autoWindowDisplay = getAutoOpenWindowDisplay(settings);
+
+    useEffect(() => {
+        if (!settings.vipAutoEnabled) return;
+        if (autoVipInFlightRef.current) return;
+
+        const activeRules = vipRules.filter(rule => rule.isActive);
+        if (activeRules.length === 0) return;
+
+        const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+        const nextWeekId = getBelarusWeekId(nextWeekStart);
+
+        if (settings.vipLastAppliedWeekId === nextWeekId) return;
+
+        autoVipInFlightRef.current = true;
+
+        (async () => {
+            try {
+                await applyVipForWeek('auto');
+            } finally {
+                autoVipInFlightRef.current = false;
+            }
+        })();
+    }, [settings.vipAutoEnabled, settings.vipLastAppliedWeekId, vipRules, students, machines]);
 
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
@@ -760,13 +823,47 @@ export default function ManagerPanel() {
                 <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
                         <h3 style={{ margin: 0 }}>VIP Recurring Bookings ({vipRules.length})</h3>
-                        <button
-                            onClick={handleApplyVipForNextWeek}
-                            className="primary-button"
-                            style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
-                        >
-                            Apply VIP for Next Week
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.vipAutoEnabled !== false}
+                                    onChange={async (e) => {
+                                        const enabled = e.target.checked;
+                                        await updateSettings({ vipAutoEnabled: enabled });
+                                    }}
+                                />
+                                Auto-apply every week
+                            </label>
+                            <button
+                                onClick={handleApplyVipForNextWeek}
+                                className="primary-button"
+                                style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                            >
+                                Apply VIP for Next Week
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                        Status: {settings.vipAutoEnabled !== false ? 'Auto mode ON' : 'Auto mode OFF'} · Last applied week: {settings.vipLastAppliedWeekId || 'Not yet'}
+                    </div>
+
+                    {vipApplyStatus && (
+                        <div className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', marginBottom: '12px', border: '1px solid rgba(16,185,129,0.35)' }}>
+                            ✅ {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply complete for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Skipped: {vipApplyStatus.skipped}.
+                        </div>
+                    )}
+
+                    <div style={{ marginBottom: '10px' }}>
+                        <input
+                            type="text"
+                            placeholder="Search student by name or room"
+                            value={vipStudentSearch}
+                            onChange={(e) => setVipStudentSearch(e.target.value)}
+                            className="glass-button"
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px' }}
+                        />
                     </div>
 
                     <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: '14px' }}>
@@ -777,7 +874,7 @@ export default function ManagerPanel() {
                             style={{ padding: '10px', borderRadius: '8px' }}
                         >
                             <option value="">Select Student</option>
-                            {students.map(student => (
+                            {filteredVipStudents.map(student => (
                                 <option key={student.id} value={student.id}>{student.name} (Room {student.roomNumber})</option>
                             ))}
                         </select>

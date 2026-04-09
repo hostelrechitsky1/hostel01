@@ -164,6 +164,8 @@ export const firestoreService = {
             autoOpenWeekday: 6, // Default Saturday
             autoOpenTime: '16:00',
             autoOpenDurationHours: 28,
+            vipAutoEnabled: true,
+            vipLastAppliedWeekId: '',
             topAlert: { message: '', isActive: false, type: 'info' }
         };
 
@@ -182,7 +184,9 @@ export const firestoreService = {
             autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' ? Number(data.autoOpenDurationHours) : defaultSettings.autoOpenDurationHours,
             autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
                 ? data.autoOpenTime
-                : defaultSettings.autoOpenTime
+                : defaultSettings.autoOpenTime,
+            vipAutoEnabled: typeof data.vipAutoEnabled === 'boolean' ? data.vipAutoEnabled : defaultSettings.vipAutoEnabled,
+            vipLastAppliedWeekId: typeof data.vipLastAppliedWeekId === 'string' ? data.vipLastAppliedWeekId : defaultSettings.vipLastAppliedWeekId
         };
 
         return result;

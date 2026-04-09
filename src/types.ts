@@ -94,5 +94,7 @@ export interface AppSettings {
   autoOpenWeekday: number; // 0=Sun, 1=Mon, ..., 6=Sat
   autoOpenTime: string; // HH:mm (Belarus local)
   autoOpenDurationHours: number; // Opening window length
+  vipAutoEnabled?: boolean;
+  vipLastAppliedWeekId?: string;
   topAlert?: TopAlert;
 }
