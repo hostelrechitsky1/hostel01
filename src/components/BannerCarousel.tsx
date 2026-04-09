@@ -5,35 +5,110 @@ interface InternalBannerCarouselProps {
     banners: Banner[];
 }
 
+interface NetworkInformation {
+    effectiveType?: string;
+    saveData?: boolean;
+}
+
+type NavigatorWithConnection = Navigator & {
+    connection?: NetworkInformation;
+    mozConnection?: NetworkInformation;
+    webkitConnection?: NetworkInformation;
+};
+
+const getConnectionInfo = () => {
+    const navigatorConnection = navigator as NavigatorWithConnection;
+    return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
+};
+
+const getAdaptiveBannerSrc = (source: string) => {
+    if (!source.includes('drive.google.com/thumbnail')) return source;
+
+    const connection = getConnectionInfo();
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+    const isMobile = window.innerWidth < 768;
+
+    let qualityWidth = 'w1920';
+
+    if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
+        qualityWidth = isMobile ? 'w360' : 'w640';
+    } else if (effectiveType === '3g') {
+        qualityWidth = isMobile ? 'w480' : 'w960';
+    } else if (isMobile) {
+        qualityWidth = 'w800';
+    }
+
+    return source.replace(/sz=w\d+/, `sz=${qualityWidth}`);
+};
+
+const getTinyBannerSrc = (source: string) => {
+    if (!source.includes('drive.google.com/thumbnail')) return source;
+    const isMobile = window.innerWidth < 768;
+    const tinyWidth = isMobile ? 'w240' : 'w480';
+    return source.replace(/sz=w\d+/, `sz=${tinyWidth}`);
+};
+
+const shouldUpgradeToFullQuality = () => {
+    const connection = getConnectionInfo();
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+    return !saveData && effectiveType !== 'slow-2g' && effectiveType !== '2g' && effectiveType !== '3g';
+};
+
 // Helper component to handle image loading and retries
 const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
-    const [imgSrc, setImgSrc] = useState(src);
+    const [imgSrc, setImgSrc] = useState(() => getTinyBannerSrc(src));
     const [error, setError] = useState(false);
     const [loaded, setLoaded] = useState(false);
+    const [tinyLoaded, setTinyLoaded] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
+    const adaptiveSrcRef = useRef<string | null>(null);
+    const highQualitySrcRef = useRef<string | null>(null);
 
     useEffect(() => {
-        // Adaptive sizing for Google Drive images
-        let optimizedSrc = src;
-        const isMobile = window.innerWidth < 768;
+        const tinySrc = getTinyBannerSrc(src);
+        const optimizedSrc = getAdaptiveBannerSrc(src);
+        adaptiveSrcRef.current = optimizedSrc;
+        highQualitySrcRef.current = src;
+        setTinyLoaded(false);
 
-        if (src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920') && isMobile) {
-            optimizedSrc = src.replace('sz=w1920', 'sz=w800');
-        }
-
-        // Only reset loaded state if the source is actually changing to a new URL
-        if (optimizedSrc !== imgSrc) {
+        // Only reset loaded state if the source is actually changing to a new URL.
+        if (tinySrc !== imgSrc) {
             setLoaded(false);
-            setImgSrc(optimizedSrc);
+            setImgSrc(tinySrc);
         } else {
-            // If source is same, check if already complete (e.g. from cache or instant load)
+            // If source is same, check if already complete (e.g. from cache or instant load).
             if (imgRef.current?.complete) {
                 setLoaded(true);
+                setTinyLoaded(true);
             }
         }
 
         setError(false);
     }, [src]);
+
+    useEffect(() => {
+        if (!tinyLoaded || !adaptiveSrcRef.current) return;
+
+        const nextAdaptiveSrc = adaptiveSrcRef.current;
+        if (imgSrc === nextAdaptiveSrc) return;
+
+        const adaptiveImage = new Image();
+        adaptiveImage.src = nextAdaptiveSrc;
+        adaptiveImage.onload = () => setImgSrc(nextAdaptiveSrc);
+    }, [tinyLoaded, imgSrc]);
+
+    useEffect(() => {
+        if (!loaded || !priority || !highQualitySrcRef.current || !shouldUpgradeToFullQuality()) return;
+
+        const nextHighQualitySrc = highQualitySrcRef.current;
+        if (imgSrc === nextHighQualitySrc) return;
+
+        const highQualityImage = new Image();
+        highQualityImage.src = nextHighQualitySrc;
+        highQualityImage.onload = () => setImgSrc(nextHighQualitySrc);
+    }, [loaded, priority, imgSrc]);
 
     const handleError = () => {
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
@@ -77,10 +152,14 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
                     transition: 'opacity 0.3s ease-in-out',
                     zIndex: 1
                 }}
-                onLoad={() => setLoaded(true)}
+                onLoad={() => {
+                    setTinyLoaded(true);
+                    setLoaded(true);
+                }}
                 onError={handleError}
                 referrerPolicy="no-referrer"
                 loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
             />
             <style>{`
                 @keyframes shimmer {
@@ -124,22 +203,19 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         };
     }, [activeBanners.length, isDragging]);
 
-    // Preload ALL active images logic
+    // Preload current + next banner only to reduce bandwidth spikes on slow networks
     useEffect(() => {
-        if (activeBanners.length > 0) {
-            activeBanners.forEach(banner => {
-                if (banner.imageUrl) {
-                    const img = new Image();
-                    // Apply same mobile optimization to preload url
-                    let src = banner.imageUrl;
-                    if (window.innerWidth < 768 && src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920')) {
-                        src = src.replace('sz=w1920', 'sz=w800');
-                    }
-                    img.src = src;
-                }
-            });
-        }
-    }, [activeBanners]);
+        if (activeBanners.length === 0) return;
+
+        const preloadIndexes = [currentIndex, (currentIndex + 1) % activeBanners.length];
+        preloadIndexes.forEach((index) => {
+            const banner = activeBanners[index];
+            if (!banner?.imageUrl) return;
+
+            const img = new Image();
+            img.src = getAdaptiveBannerSrc(banner.imageUrl);
+        });
+    }, [activeBanners, currentIndex]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
