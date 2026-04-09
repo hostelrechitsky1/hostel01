@@ -503,10 +503,6 @@ export default function ManagerPanel() {
         }
     };
 
-    if (loading && bookings.length === 0 && machines.length === 0) {
-        return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
-    }
-
     const autoWindowDisplay = getAutoOpenWindowDisplay(settings);
 
     useEffect(() => {
@@ -531,6 +527,10 @@ export default function ManagerPanel() {
             }
         })();
     }, [settings.vipAutoEnabled, settings.vipLastAppliedWeekId, vipRules, students, machines]);
+
+    if (loading && bookings.length === 0 && machines.length === 0) {
+        return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
+    }
 
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
