@@ -16,11 +16,15 @@ type NavigatorWithConnection = Navigator & {
     webkitConnection?: NetworkInformation;
 };
 
+const getConnectionInfo = () => {
+    const navigatorConnection = navigator as NavigatorWithConnection;
+    return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
+};
+
 const getAdaptiveBannerSrc = (source: string) => {
     if (!source.includes('drive.google.com/thumbnail')) return source;
 
-    const navigatorConnection = navigator as NavigatorWithConnection;
-    const connection = navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
+    const connection = getConnectionInfo();
     const effectiveType = connection?.effectiveType;
     const saveData = connection?.saveData === true;
     const isMobile = window.innerWidth < 768;
@@ -38,26 +42,46 @@ const getAdaptiveBannerSrc = (source: string) => {
     return source.replace(/sz=w\d+/, `sz=${qualityWidth}`);
 };
 
+const getTinyBannerSrc = (source: string) => {
+    if (!source.includes('drive.google.com/thumbnail')) return source;
+    const isMobile = window.innerWidth < 768;
+    const tinyWidth = isMobile ? 'w240' : 'w480';
+    return source.replace(/sz=w\d+/, `sz=${tinyWidth}`);
+};
+
+const shouldUpgradeToFullQuality = () => {
+    const connection = getConnectionInfo();
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+    return !saveData && effectiveType !== 'slow-2g' && effectiveType !== '2g' && effectiveType !== '3g';
+};
+
 // Helper component to handle image loading and retries
 const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
-    const [imgSrc, setImgSrc] = useState(() => getAdaptiveBannerSrc(src));
+    const [imgSrc, setImgSrc] = useState(() => getTinyBannerSrc(src));
     const [error, setError] = useState(false);
     const [loaded, setLoaded] = useState(false);
+    const [tinyLoaded, setTinyLoaded] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
+    const adaptiveSrcRef = useRef<string | null>(null);
     const highQualitySrcRef = useRef<string | null>(null);
 
     useEffect(() => {
+        const tinySrc = getTinyBannerSrc(src);
         const optimizedSrc = getAdaptiveBannerSrc(src);
+        adaptiveSrcRef.current = optimizedSrc;
         highQualitySrcRef.current = src;
+        setTinyLoaded(false);
 
-        // Only reset loaded state if the source is actually changing to a new URL
-        if (optimizedSrc !== imgSrc) {
+        // Only reset loaded state if the source is actually changing to a new URL.
+        if (tinySrc !== imgSrc) {
             setLoaded(false);
-            setImgSrc(optimizedSrc);
+            setImgSrc(tinySrc);
         } else {
-            // If source is same, check if already complete (e.g. from cache or instant load)
+            // If source is same, check if already complete (e.g. from cache or instant load).
             if (imgRef.current?.complete) {
                 setLoaded(true);
+                setTinyLoaded(true);
             }
         }
 
@@ -65,7 +89,18 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     }, [src]);
 
     useEffect(() => {
-        if (!loaded || !priority || !highQualitySrcRef.current) return;
+        if (!tinyLoaded || !adaptiveSrcRef.current) return;
+
+        const nextAdaptiveSrc = adaptiveSrcRef.current;
+        if (imgSrc === nextAdaptiveSrc) return;
+
+        const adaptiveImage = new Image();
+        adaptiveImage.src = nextAdaptiveSrc;
+        adaptiveImage.onload = () => setImgSrc(nextAdaptiveSrc);
+    }, [tinyLoaded, imgSrc]);
+
+    useEffect(() => {
+        if (!loaded || !priority || !highQualitySrcRef.current || !shouldUpgradeToFullQuality()) return;
 
         const nextHighQualitySrc = highQualitySrcRef.current;
         if (imgSrc === nextHighQualitySrc) return;
@@ -117,10 +152,14 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
                     transition: 'opacity 0.3s ease-in-out',
                     zIndex: 1
                 }}
-                onLoad={() => setLoaded(true)}
+                onLoad={() => {
+                    setTinyLoaded(true);
+                    setLoaded(true);
+                }}
                 onError={handleError}
                 referrerPolicy="no-referrer"
                 loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
             />
             <style>{`
                 @keyframes shimmer {
