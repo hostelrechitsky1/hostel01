@@ -10,6 +10,7 @@ interface AutoOpenConfig {
 const DEFAULT_AUTO_OPEN_WEEKDAY = 6;
 const DEFAULT_AUTO_OPEN_TIME = '16:00';
 const DEFAULT_AUTO_OPEN_DURATION_HOURS = 28;
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const normalizeAutoOpenConfig = (config: AutoOpenConfig = {}) => {
     const weekday = typeof config.autoOpenWeekday === 'number' ? config.autoOpenWeekday : DEFAULT_AUTO_OPEN_WEEKDAY;
@@ -123,6 +124,22 @@ export const getNextAutoOpenDate = (now: Date = new Date(), configInput: AutoOpe
         ? openingThisWeek
         : new Date(openingThisWeek.getTime() + (7 * 24 * 60 * 60 * 1000));
     return new Date(nextOpeningBelarus.getTime() - (BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000));
+};
+
+export const getAutoOpenWindowDisplay = (configInput: AutoOpenConfig = {}) => {
+    const config = normalizeAutoOpenConfig(configInput);
+    const thisWeekStart = getBelarusWeekStart(getBelarusDate());
+    const opening = getOpeningForBelarusWeek(thisWeekStart, config);
+    const closing = new Date(opening.getTime() + (config.durationHours * 60 * 60 * 1000));
+
+    const formatTime = (date: Date) => `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+
+    return {
+        openDay: WEEKDAY_LABELS[opening.getUTCDay()],
+        openTime: formatTime(opening),
+        closeDay: WEEKDAY_LABELS[closing.getUTCDay()],
+        closeTime: formatTime(closing)
+    };
 };
 
 export const getNextSaturday1600 = (now: Date = new Date()) => {

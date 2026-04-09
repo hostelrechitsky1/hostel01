@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
 import { TIME_SLOTS } from '../types';
-import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
+import { addBelarusDays, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
 
 const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -467,6 +467,8 @@ export default function ManagerPanel() {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
 
+    const autoWindowDisplay = getAutoOpenWindowDisplay(settings);
+
     return (
         <div className="container animate-fade-in" style={{ paddingBottom: '80px', maxWidth: '800px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', gap: '12px', flexWrap: 'wrap' }}>
@@ -590,7 +592,7 @@ export default function ManagerPanel() {
                                 </div>
                             </div>
                             <p style={{ marginTop: '10px', fontSize: '13px', color: '#6b7280' }}>
-                                Schedule opens automatically every {WEEKDAY_LABELS[settings.autoOpenWeekday ?? 6]} at {settings.autoOpenTime || '16:00'} (Belarus) for {settings.autoOpenDurationHours ?? 28} hours.
+                                Schedule window: {autoWindowDisplay.openDay} {autoWindowDisplay.openTime} - {autoWindowDisplay.closeDay} {autoWindowDisplay.closeTime} (Belarus).
                             </p>
                         </div>
 
@@ -683,7 +685,7 @@ export default function ManagerPanel() {
                                 ? <span style={{ color: 'var(--error)' }}>CLOSED (Forced)</span>
                                 : settings.forceShowNextWeek
                                     ? <span style={{ color: 'var(--success)' }}>OPEN (Forced)</span>
-                                    : <span>Auto: {WEEKDAY_LABELS[settings.autoOpenWeekday ?? 6]} {settings.autoOpenTime || '16:00'} ({settings.autoOpenDurationHours ?? 28}h)</span>}
+                                    : <span>Auto: {autoWindowDisplay.openDay} {autoWindowDisplay.openTime} - {autoWindowDisplay.closeDay} {autoWindowDisplay.closeTime}</span>}
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>

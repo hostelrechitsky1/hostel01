@@ -24,7 +24,8 @@ import {
     getBelarusWeekId,
     isAutoBookingWindowOpen,
     isSameBelarusDay,
-    getNextAutoOpenDate
+    getNextAutoOpenDate,
+    getAutoOpenWindowDisplay
 } from '../utils/time';
 
 export default function BookingFlow() {
@@ -290,9 +291,7 @@ export default function BookingFlow() {
         return () => clearInterval(timer);
     }, [settings]);
 
-    const autoOpenDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][settings.autoOpenWeekday ?? 6];
-    const autoOpenTimeLabel = settings.autoOpenTime || '16:00';
-    const autoOpenDurationLabel = settings.autoOpenDurationHours ?? 28;
+    const windowDisplay = getAutoOpenWindowDisplay(settings);
 
     if (loading) {
         return (
@@ -344,7 +343,7 @@ export default function BookingFlow() {
                 <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
                     {settings.forceCloseBookings
                         ? 'Temporarily disabled by admin.'
-                        : `Opens ${autoOpenDayName} ${autoOpenTimeLabel} for ${autoOpenDurationLabel}h.`}
+                        : `Open ${windowDisplay.openDay} ${windowDisplay.openTime} - ${windowDisplay.closeDay} ${windowDisplay.closeTime}.`}
                 </p>
 
                 {!settings.forceCloseBookings && (
