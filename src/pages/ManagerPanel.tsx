@@ -35,10 +35,13 @@ export default function ManagerPanel() {
         weekId: string;
         success: number;
         skipped: number;
+        overridden: number;
         mode: 'auto' | 'manual';
         at: number;
     } | null>(null);
     const autoVipInFlightRef = useRef(false);
+    const [addingVipRule, setAddingVipRule] = useState(false);
+    const [applyingVipRules, setApplyingVipRules] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const deferredVipStudentSearch = useDeferredValue(vipStudentSearch);
     const [settings, setSettings] = useState<AppSettings>({
@@ -238,6 +241,8 @@ export default function ManagerPanel() {
 
     // --- VIP Recurring Booking Management ---
     const handleAddVipRule = async () => {
+        setAddingVipRule(true);
+        try {
         if (!vipForm.studentId || !vipForm.machineId || !vipForm.startTime) {
             await alertDialog('Missing Fields', 'Please select student, machine, day, and time.');
             return;
@@ -266,6 +271,9 @@ export default function ManagerPanel() {
 
         await firestoreService.addVipRecurringRule(newRule);
         await refreshData();
+        } finally {
+            setAddingVipRule(false);
+        }
     };
 
     const toggleVipRule = async (rule: VipRecurringRule) => {
@@ -298,9 +306,11 @@ export default function ManagerPanel() {
             const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
             const nextWeekId = getBelarusWeekId(nextWeekStart);
             const maintenanceDay = settings.maintenanceDay ?? 3;
+            let workingBookings = [...bookings];
 
             let success = 0;
             let skipped = 0;
+            let overridden = 0;
 
             for (const rule of activeRules) {
                 const student = studentsById.get(rule.studentId);
@@ -323,9 +333,30 @@ export default function ManagerPanel() {
                 const [hour, minute] = rule.startTime.split(':').map(Number);
                 const endMinutes = (hour * 60) + minute + 90;
                 const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+                const targetSlotId = `${targetDateStr}_${rule.machineId}_${rule.startTime.replace(':', '-')}`;
+
+                const existingAtSlot = workingBookings.find(b => b.id === targetSlotId);
+                if (existingAtSlot) {
+                    if (existingAtSlot.studentId === student.id) {
+                        // Already correctly booked by the same VIP student.
+                        success += 1;
+                        continue;
+                    }
+
+                    await firestoreService.cancelBooking(existingAtSlot.id);
+                    workingBookings = workingBookings.filter(b => b.id !== existingAtSlot.id);
+                    overridden += 1;
+                }
+
+                const existingStudentBooking = workingBookings.find(b => b.studentId === student.id && b.weekId === nextWeekId);
+                if (existingStudentBooking) {
+                    await firestoreService.cancelBooking(existingStudentBooking.id);
+                    workingBookings = workingBookings.filter(b => b.id !== existingStudentBooking.id);
+                    overridden += 1;
+                }
 
                 const bookingPayload: Booking = {
-                    id: `${targetDateStr}_${rule.machineId}_${rule.startTime.replace(':', '-')}`,
+                    id: targetSlotId,
                     machineId: rule.machineId,
                     studentId: student.id,
                     studentName: student.name,
@@ -340,17 +371,18 @@ export default function ManagerPanel() {
                 const result = await firestoreService.createBooking(bookingPayload);
                 if (result.success) {
                     success += 1;
+                    workingBookings.push({ ...bookingPayload, id: targetSlotId });
                 } else {
                     skipped += 1;
                 }
             }
 
-            setVipApplyStatus({ weekId: nextWeekId, success, skipped, mode, at: Date.now() });
+            setVipApplyStatus({ weekId: nextWeekId, success, skipped, overridden, mode, at: Date.now() });
 
             if (mode === 'manual') {
                 await alertDialog(
                     'VIP Apply Complete',
-                    `Applied for week ${nextWeekId}.\nSuccess: ${success}\nSkipped: ${skipped}`
+                    `Applied for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}`
                 );
             }
 
@@ -369,9 +401,11 @@ export default function ManagerPanel() {
 
     const handleApplyVipForNextWeek = async () => {
         setLoading(true);
+        setApplyingVipRules(true);
         try {
             await applyVipForWeek('manual');
         } finally {
+            setApplyingVipRules(false);
             setLoading(false);
         }
     };
@@ -853,9 +887,10 @@ export default function ManagerPanel() {
                             <button
                                 onClick={handleApplyVipForNextWeek}
                                 className="primary-button"
+                                disabled={applyingVipRules}
                                 style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
                             >
-                                Apply VIP for Next Week
+                                {applyingVipRules ? '⏳ Applying...' : 'Apply VIP for Next Week'}
                             </button>
                         </div>
                     </div>
@@ -866,7 +901,7 @@ export default function ManagerPanel() {
 
                     {vipApplyStatus && (
                         <div className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', marginBottom: '12px', border: '1px solid rgba(16,185,129,0.35)' }}>
-                            ✅ {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply complete for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Skipped: {vipApplyStatus.skipped}.
+                            ✅ {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply complete for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Overridden: {vipApplyStatus.overridden}, Skipped: {vipApplyStatus.skipped}.
                         </div>
                     )}
 
@@ -929,8 +964,8 @@ export default function ManagerPanel() {
                         </select>
                     </div>
 
-                    <button onClick={handleAddVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px' }}>
-                        Add VIP Rule
+                    <button onClick={handleAddVipRule} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px' }}>
+                        {addingVipRule ? '⏳ Adding VIP...' : 'Add VIP Rule'}
                     </button>
 
                     <div style={{ display: 'grid', gap: '10px' }}>
