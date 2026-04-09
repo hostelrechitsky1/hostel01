@@ -5,21 +5,50 @@ interface InternalBannerCarouselProps {
     banners: Banner[];
 }
 
+interface NetworkInformation {
+    effectiveType?: string;
+    saveData?: boolean;
+}
+
+type NavigatorWithConnection = Navigator & {
+    connection?: NetworkInformation;
+    mozConnection?: NetworkInformation;
+    webkitConnection?: NetworkInformation;
+};
+
+const getAdaptiveBannerSrc = (source: string) => {
+    if (!source.includes('drive.google.com/thumbnail')) return source;
+
+    const navigatorConnection = navigator as NavigatorWithConnection;
+    const connection = navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+    const isMobile = window.innerWidth < 768;
+
+    let qualityWidth = 'w1920';
+
+    if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
+        qualityWidth = isMobile ? 'w360' : 'w640';
+    } else if (effectiveType === '3g') {
+        qualityWidth = isMobile ? 'w480' : 'w960';
+    } else if (isMobile) {
+        qualityWidth = 'w800';
+    }
+
+    return source.replace(/sz=w\d+/, `sz=${qualityWidth}`);
+};
+
 // Helper component to handle image loading and retries
 const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
-    const [imgSrc, setImgSrc] = useState(src);
+    const [imgSrc, setImgSrc] = useState(() => getAdaptiveBannerSrc(src));
     const [error, setError] = useState(false);
     const [loaded, setLoaded] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
+    const highQualitySrcRef = useRef<string | null>(null);
 
     useEffect(() => {
-        // Adaptive sizing for Google Drive images
-        let optimizedSrc = src;
-        const isMobile = window.innerWidth < 768;
-
-        if (src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920') && isMobile) {
-            optimizedSrc = src.replace('sz=w1920', 'sz=w800');
-        }
+        const optimizedSrc = getAdaptiveBannerSrc(src);
+        highQualitySrcRef.current = src;
 
         // Only reset loaded state if the source is actually changing to a new URL
         if (optimizedSrc !== imgSrc) {
@@ -34,6 +63,17 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
 
         setError(false);
     }, [src]);
+
+    useEffect(() => {
+        if (!loaded || !priority || !highQualitySrcRef.current) return;
+
+        const nextHighQualitySrc = highQualitySrcRef.current;
+        if (imgSrc === nextHighQualitySrc) return;
+
+        const highQualityImage = new Image();
+        highQualityImage.src = nextHighQualitySrc;
+        highQualityImage.onload = () => setImgSrc(nextHighQualitySrc);
+    }, [loaded, priority, imgSrc]);
 
     const handleError = () => {
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
@@ -124,22 +164,19 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         };
     }, [activeBanners.length, isDragging]);
 
-    // Preload ALL active images logic
+    // Preload current + next banner only to reduce bandwidth spikes on slow networks
     useEffect(() => {
-        if (activeBanners.length > 0) {
-            activeBanners.forEach(banner => {
-                if (banner.imageUrl) {
-                    const img = new Image();
-                    // Apply same mobile optimization to preload url
-                    let src = banner.imageUrl;
-                    if (window.innerWidth < 768 && src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920')) {
-                        src = src.replace('sz=w1920', 'sz=w800');
-                    }
-                    img.src = src;
-                }
-            });
-        }
-    }, [activeBanners]);
+        if (activeBanners.length === 0) return;
+
+        const preloadIndexes = [currentIndex, (currentIndex + 1) % activeBanners.length];
+        preloadIndexes.forEach((index) => {
+            const banner = activeBanners[index];
+            if (!banner?.imageUrl) return;
+
+            const img = new Image();
+            img.src = getAdaptiveBannerSrc(banner.imageUrl);
+        });
+    }, [activeBanners, currentIndex]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
