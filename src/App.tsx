@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import LoginScreen from './pages/LoginScreen';
 import Dashboard from './pages/Dashboard';
 import BookingFlow from './pages/BookingFlow';
@@ -16,10 +16,41 @@ function ScrollToTopOnRouteChange() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    // Timeout ensures DOM update has processed before scrolling
-    setTimeout(() => {
-      window.scrollTo(0, 0);
-    }, 10);
+    if (!('scrollRestoration' in window.history)) return;
+
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  const forceScrollToTop = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+
+  useLayoutEffect(() => {
+    forceScrollToTop();
+  }, [pathname]);
+
+  useEffect(() => {
+    forceScrollToTop();
+
+    const rafId = requestAnimationFrame(() => {
+      forceScrollToTop();
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      forceScrollToTop();
+    }, 100);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
   }, [pathname]);
 
   return null;

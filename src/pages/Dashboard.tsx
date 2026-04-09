@@ -20,6 +20,7 @@ export default function Dashboard() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);
+    const [bannersLoading, setBannersLoading] = useState(true);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<AppSettings>({
         forceShowNextWeek: false,
@@ -53,6 +54,7 @@ export default function Dashboard() {
 
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
+                setBannersLoading(false);
 
                 unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
                     setMachines(machines);
@@ -87,6 +89,7 @@ export default function Dashboard() {
 
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
+                setBannersLoading(false);
                 setLoading(false);
             }
         };
@@ -395,7 +398,7 @@ export default function Dashboard() {
             </header>
 
             {/* Announcements Carousel */}
-            <BannerCarousel banners={banners} />
+            <BannerCarousel banners={banners} isLoading={bannersLoading} />
 
             {/* Main Action */}
             <div
