@@ -33,7 +33,25 @@ export default function Dashboard() {
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
-        window.scrollTo(0, 0);
+        const ensureTop = () => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        };
+
+        ensureTop();
+
+        const onPageShow = () => ensureTop();
+        const rafId = requestAnimationFrame(ensureTop);
+        const timeoutId = window.setTimeout(ensureTop, 120);
+
+        window.addEventListener('pageshow', onPageShow);
+
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.clearTimeout(timeoutId);
+            window.removeEventListener('pageshow', onPageShow);
+        };
     }, []);
 
     useEffect(() => {

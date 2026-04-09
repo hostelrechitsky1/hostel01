@@ -13,7 +13,7 @@ import { PrivateRoute } from './components/PrivateRoute';
 import { Toaster } from 'sonner';
 
 function ScrollToTopOnRouteChange() {
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
 
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) return;
@@ -34,7 +34,7 @@ function ScrollToTopOnRouteChange() {
 
   useLayoutEffect(() => {
     forceScrollToTop();
-  }, [pathname]);
+  }, [pathname, key]);
 
   useEffect(() => {
     forceScrollToTop();
@@ -51,7 +51,7 @@ function ScrollToTopOnRouteChange() {
       cancelAnimationFrame(rafId);
       window.clearTimeout(timeoutId);
     };
-  }, [pathname]);
+  }, [pathname, key]);
 
   return null;
 }
