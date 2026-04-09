@@ -20,11 +20,15 @@ export default function Dashboard() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [allBookings, setAllBookings] = useState<Booking[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);
+    const [bannersLoading, setBannersLoading] = useState(true);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<AppSettings>({
         forceShowNextWeek: false,
         forceCloseBookings: false,
         maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28,
         topAlert: { message: '', isActive: false, type: 'info' }
     });
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
@@ -32,7 +36,25 @@ export default function Dashboard() {
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
 
     useEffect(() => {
-        window.scrollTo(0, 0);
+        const ensureTop = () => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        };
+
+        ensureTop();
+
+        const onPageShow = () => ensureTop();
+        const rafId = requestAnimationFrame(ensureTop);
+        const timeoutId = window.setTimeout(ensureTop, 120);
+
+        window.addEventListener('pageshow', onPageShow);
+
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.clearTimeout(timeoutId);
+            window.removeEventListener('pageshow', onPageShow);
+        };
     }, []);
 
     useEffect(() => {
@@ -53,6 +75,7 @@ export default function Dashboard() {
 
                 setSettings(fetchedSettings);
                 setBanners(fetchedBanners);
+                setBannersLoading(false);
 
                 unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
                     setMachines(machines);
@@ -87,6 +110,7 @@ export default function Dashboard() {
 
             } catch (err) {
                 console.error("Failed to load dashboard data", err);
+                setBannersLoading(false);
                 setLoading(false);
             }
         };
@@ -99,7 +123,7 @@ export default function Dashboard() {
         };
     }, [user?.id, navigate]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
@@ -395,7 +419,7 @@ export default function Dashboard() {
             </header>
 
             {/* Announcements Carousel */}
-            <BannerCarousel banners={banners} />
+            <BannerCarousel banners={banners} isLoading={bannersLoading} />
 
             {/* Main Action */}
             <div

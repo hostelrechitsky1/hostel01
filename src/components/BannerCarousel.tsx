@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import type { Banner } from '../types';
 
 interface InternalBannerCarouselProps {
     banners: Banner[];
+    isLoading?: boolean;
 }
 
 interface NetworkInformation {
@@ -171,7 +172,7 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     );
 };
 
-export default function BannerCarousel({ banners }: InternalBannerCarouselProps) {
+function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselProps) {
     // Filter    // activeBanners filtering is redundant if done inside the component, but good to keep clean
     const activeBanners = banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -263,6 +264,39 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         setTouchStart(null);
         setTouchEnd(null);
     };
+
+    if (isLoading) {
+        return (
+            <div
+                className="banner-carousel-container"
+                style={{
+                    width: '100%',
+                    marginBottom: '24px',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    aspectRatio: '16/9',
+                    maxHeight: '300px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    background: '#1f2937'
+                }}
+            >
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.5s infinite'
+                }} />
+                <style>{`
+                    @keyframes shimmer {
+                        0% { background-position: 200% 0; }
+                        100% { background-position: -200% 0; }
+                    }
+                `}</style>
+            </div>
+        );
+    }
 
     if (activeBanners.length === 0) return null;
 
@@ -402,3 +436,5 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         </div>
     );
 }
+
+export default memo(BannerCarousel);

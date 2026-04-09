@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
-import type { Student, Machine, Booking, AppSettings } from '../types';
+import type { Student, Machine, Booking, AppSettings, VipRecurringRule } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
 
@@ -8,6 +8,7 @@ const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
 const BOOKING_LIMITS_COL = 'bookingLimits';
+const VIP_RULES_COL = 'vipRecurringRules';
 
 export const firestoreService = {
     // --- Students ---
@@ -160,6 +161,11 @@ export const firestoreService = {
             forceShowNextWeek: false,
             forceCloseBookings: false,
             maintenanceDay: 3, // Default Wednesday
+            autoOpenWeekday: 6, // Default Saturday
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+            vipAutoEnabled: true,
+            vipLastAppliedWeekId: '',
             topAlert: { message: '', isActive: false, type: 'info' }
         };
 
@@ -173,7 +179,14 @@ export const firestoreService = {
         const result = {
             ...defaultSettings,
             ...data,
-            maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay
+            maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : defaultSettings.maintenanceDay,
+            autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : defaultSettings.autoOpenWeekday,
+            autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' ? Number(data.autoOpenDurationHours) : defaultSettings.autoOpenDurationHours,
+            autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
+                ? data.autoOpenTime
+                : defaultSettings.autoOpenTime,
+            vipAutoEnabled: typeof data.vipAutoEnabled === 'boolean' ? data.vipAutoEnabled : defaultSettings.vipAutoEnabled,
+            vipLastAppliedWeekId: typeof data.vipLastAppliedWeekId === 'string' ? data.vipLastAppliedWeekId : defaultSettings.vipLastAppliedWeekId
         };
 
         return result;
@@ -183,6 +196,12 @@ export const firestoreService = {
         const cleanSettings = { ...settings };
         if (cleanSettings.maintenanceDay !== undefined) {
             cleanSettings.maintenanceDay = Number(cleanSettings.maintenanceDay);
+        }
+        if (cleanSettings.autoOpenWeekday !== undefined) {
+            cleanSettings.autoOpenWeekday = Number(cleanSettings.autoOpenWeekday);
+        }
+        if (cleanSettings.autoOpenDurationHours !== undefined) {
+            cleanSettings.autoOpenDurationHours = Number(cleanSettings.autoOpenDurationHours);
         }
         await setDoc(doc(db, 'settings', 'config'), cleanSettings, { merge: true });
     },
@@ -230,6 +249,26 @@ export const firestoreService = {
 
     async toggleBannerStatus(id: string, isActive: boolean) {
         await updateDoc(doc(db, 'banners', id), { isActive });
+    },
+
+    // --- VIP Recurring Rules ---
+    async getVipRecurringRules(): Promise<VipRecurringRule[]> {
+        const snapshot = await getDocs(collection(db, VIP_RULES_COL));
+        return snapshot.docs
+            .map(doc => doc.data() as VipRecurringRule)
+            .sort((a, b) => b.createdAt - a.createdAt);
+    },
+
+    async addVipRecurringRule(rule: VipRecurringRule) {
+        await setDoc(doc(db, VIP_RULES_COL, rule.id), rule);
+    },
+
+    async toggleVipRecurringRule(id: string, isActive: boolean) {
+        await updateDoc(doc(db, VIP_RULES_COL, id), { isActive });
+    },
+
+    async deleteVipRecurringRule(id: string) {
+        await deleteDoc(doc(db, VIP_RULES_COL, id));
     },
 
     // --- Auth Sync ---

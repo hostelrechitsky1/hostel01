@@ -55,9 +55,21 @@ export default function LoginScreen() {
     };
 
     const handleStudentSelect = (student: Student) => {
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLElement) {
+            activeElement.blur();
+        }
+
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
-        navigate('/');
+
+        requestAnimationFrame(() => {
+            navigate('/', { replace: true });
+        });
     };
 
 
