@@ -5,7 +5,9 @@ import {
     doc,
     getDoc,
     getDocs,
+    limit,
     onSnapshot,
+    orderBy,
     query,
     runTransaction,
     setDoc,
@@ -29,7 +31,9 @@ const CACHE_MAX_AGE_MS = {
     banners: 10 * 60 * 1000,
     bookingsByWeek: 2 * 60 * 1000,
     machines: 5 * 60 * 1000,
+    recentAdminBookings: 2 * 60 * 1000,
     recentStudentBookings: 5 * 60 * 1000,
+    recentFeedbacks: 2 * 60 * 1000,
     settings: 10 * 60 * 1000,
     studentsAll: 5 * 60 * 1000,
     studentsByRoom: 15 * 60 * 1000,
@@ -177,6 +181,10 @@ const sortStudentBookingsByRecent = (bookings: Booking[], limitCount?: number) =
     return typeof limitCount === 'number' ? sorted.slice(0, limitCount) : sorted;
 };
 
+const sortFeedbacksByRecent = (feedbacks: Feedback[]) => {
+    return [...feedbacks].sort((left, right) => right.timestamp - left.timestamp);
+};
+
 const normalizeWeekIds = (weekIds: string[]) => {
     return Array.from(new Set(weekIds.filter(Boolean))).sort();
 };
@@ -184,6 +192,8 @@ const normalizeWeekIds = (weekIds: string[]) => {
 const getStudentsRoomCacheKey = (roomNumber: string) => `students:room:${roomNumber.trim().toLowerCase()}`;
 const getBookingsByWeeksCacheKey = (weekIds: string[]) => `bookings:weeks:${normalizeWeekIds(weekIds).join('|')}`;
 const getStudentBookingsCacheKey = (studentId: string, limitCount: number) => `bookings:student:${studentId}:recent:${limitCount}`;
+const getRecentAdminBookingsCacheKey = (limitCount: number) => `bookings:admin:recent:${limitCount}`;
+const getFeedbacksCacheKey = (limitCount?: number) => `feedbacks:${typeof limitCount === 'number' ? `recent:${limitCount}` : 'all'}`;
 
 const cacheKeys = {
     banners: 'banners:all',
@@ -205,13 +215,25 @@ export const firestoreService = {
         return readCache<Machine[]>(cacheKeys.machines, CACHE_MAX_AGE_MS.machines);
     },
 
+    getCachedStudents() {
+        return readCache<Student[]>(cacheKeys.students, CACHE_MAX_AGE_MS.studentsAll);
+    },
+
     getCachedBookingsForWeekIds(weekIds: string[]) {
         return readCache<Booking[]>(getBookingsByWeeksCacheKey(weekIds), CACHE_MAX_AGE_MS.bookingsByWeek);
+    },
+
+    getCachedRecentAdminBookings(limitCount = 80) {
+        return readCache<Booking[]>(getRecentAdminBookingsCacheKey(limitCount), CACHE_MAX_AGE_MS.recentAdminBookings);
     },
 
     getCachedRecentBookingsForStudent(studentId: string, limitCount = 12) {
         if (!studentId) return undefined;
         return readCache<Booking[]>(getStudentBookingsCacheKey(studentId, limitCount), CACHE_MAX_AGE_MS.recentStudentBookings);
+    },
+
+    getCachedFeedbacks(limitCount?: number) {
+        return readCache<Feedback[]>(getFeedbacksCacheKey(limitCount), CACHE_MAX_AGE_MS.recentFeedbacks);
     },
 
     async getAllStudents(): Promise<Student[]> {
@@ -330,6 +352,14 @@ export const firestoreService = {
             const snapshot = await getDocs(collection(db, BOOKINGS_COL));
             return snapshot.docs.map((bookingDoc) => bookingDoc.data() as Booking);
         }, { persist: false });
+    },
+
+    async getRecentAdminBookings(limitCount = 80): Promise<Booking[]> {
+        return resolveWithCache(getRecentAdminBookingsCacheKey(limitCount), CACHE_MAX_AGE_MS.recentAdminBookings, async () => {
+            const bookingsQuery = query(collection(db, BOOKINGS_COL), orderBy('createdAt', 'desc'), limit(limitCount));
+            const snapshot = await getDocs(bookingsQuery);
+            return snapshot.docs.map((bookingDoc) => bookingDoc.data() as Booking);
+        });
     },
 
     subscribeToBookings(callback: (bookings: Booking[]) => void, onError?: (error: unknown) => void): () => void {
@@ -519,15 +549,20 @@ export const firestoreService = {
         await setDoc(doc(db, 'feedbacks', feedback.id), feedback);
     },
 
-    async getFeedbacks(): Promise<Feedback[]> {
-        const snapshot = await getDocs(collection(db, 'feedbacks'));
-        return snapshot.docs
-            .map((feedbackDoc) => feedbackDoc.data() as Feedback)
-            .sort((left, right) => right.timestamp - left.timestamp);
+    async getFeedbacks(limitCount?: number): Promise<Feedback[]> {
+        return resolveWithCache(getFeedbacksCacheKey(limitCount), CACHE_MAX_AGE_MS.recentFeedbacks, async () => {
+            const feedbacksRef = collection(db, 'feedbacks');
+            const feedbacksQuery = typeof limitCount === 'number'
+                ? query(feedbacksRef, orderBy('timestamp', 'desc'), limit(limitCount))
+                : query(feedbacksRef, orderBy('timestamp', 'desc'));
+            const snapshot = await getDocs(feedbacksQuery);
+            return sortFeedbacksByRecent(snapshot.docs.map((feedbackDoc) => feedbackDoc.data() as Feedback));
+        });
     },
 
     async deleteFeedback(id: string) {
         await deleteDoc(doc(db, 'feedbacks', id));
+        clearCacheByPrefix('feedbacks:');
     },
 
     async getBanners(): Promise<Banner[]> {
