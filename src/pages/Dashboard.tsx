@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
@@ -10,8 +10,10 @@ import { motion } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
+import { DataLoadNotice } from '../components/DataLoadNotice';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
 import { preloadBookingRoute } from '../utils/preloadRoutes';
+import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 
@@ -31,13 +33,15 @@ export default function Dashboard() {
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
     }, []);
-    const cachedMachines = firestoreService.getCachedMachines();
-    const cachedWeekBookings = firestoreService.getCachedBookingsForWeekIds(dashboardWeekIds);
-    const cachedRecentBookings = userId
-        ? firestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
-        : undefined;
-    const cachedSettings = firestoreService.getCachedSettings();
-    const cachedBanners = firestoreService.getCachedBanners();
+    const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
+    const cachedWeekBookings = useMemo(() => firestoreService.getCachedBookingsForWeekIds(dashboardWeekIds), [dashboardWeekIds]);
+    const cachedRecentBookings = useMemo(() => (
+        userId
+            ? firestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+            : undefined
+    ), [userId]);
+    const cachedSettings = useMemo(() => firestoreService.getCachedSettings(), []);
+    const cachedBanners = useMemo(() => firestoreService.getCachedBanners(), []);
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
     const hasCachedRecentBookings = cachedRecentBookings !== undefined;
@@ -55,6 +59,33 @@ export default function Dashboard() {
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
+    const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+    const hasResidentSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || hasCachedRecentBookings
+        || cachedBanners !== undefined
+        || machines.length > 0
+        || weekBookings.length > 0
+        || recentBookings.length > 0
+        || banners.length > 0;
+    const residentLoadSlow = useSlowLoadFlag(loading, 4500);
+    const residentSnapshotRef = useRef(hasResidentSnapshot);
+
+    useEffect(() => {
+        residentSnapshotRef.current = hasResidentSnapshot;
+    }, [hasResidentSnapshot]);
+
+    useEffect(() => {
+        if (!residentLoadSlow || !loading || !hasResidentSnapshot) {
+            return;
+        }
+
+        setLoadIssue('saved');
+        setLoadErrorMessage('Showing saved dashboard data while live updates reconnect in the background.');
+        setLoading(false);
+    }, [hasResidentSnapshot, loading, residentLoadSlow]);
 
     useEffect(() => {
         const ensureTop = () => {
@@ -93,15 +124,18 @@ export default function Dashboard() {
 
         const finishLoadingIfReady = () => {
             if (isMounted && machinesReady && weekBookingsReady && recentBookingsReady) {
+                setLoadIssue(null);
+                setLoadErrorMessage(null);
                 setLoading(false);
             }
         };
 
         const handleResidentDataError = (label: string, error: unknown) => {
             console.error(label, error);
-            if (isMounted) {
-                setLoading(false);
-            }
+            if (!isMounted) return;
+            setLoadErrorMessage('We could not refresh the latest dashboard data. Retry to reconnect.');
+            setLoadIssue(residentSnapshotRef.current ? 'saved' : 'error');
+            setLoading(false);
         };
 
         finishLoadingIfReady();
@@ -172,7 +206,7 @@ export default function Dashboard() {
             unsubscribeWeekBookings();
             unsubscribeRecentBookings();
         };
-    }, [dashboardWeekIds, hasCachedMachines, hasCachedRecentBookings, hasCachedWeekBookings, navigate, userId]);
+    }, [dashboardWeekIds, hasCachedMachines, hasCachedRecentBookings, hasCachedWeekBookings, navigate, reloadKey, userId]);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -248,6 +282,21 @@ export default function Dashboard() {
     const handleLogout = () => {
         bookingService.logout();
         navigate('/login');
+    };
+
+    const retryDashboardData = () => {
+        if (hasResidentSnapshot) {
+            setLoadIssue('saved');
+            setLoadErrorMessage('Reconnecting to live dashboard updates...');
+        } else {
+            setLoadIssue(null);
+            setLoadErrorMessage(null);
+            setLoading(true);
+        }
+        if (!hasResidentSnapshot) {
+            setBannersLoading(banners.length === 0);
+        }
+        setReloadKey((current) => current + 1);
     };
 
     const formatUtcForIcs = (date: Date) => {
@@ -381,7 +430,10 @@ export default function Dashboard() {
     };
 
 
-    if (loading) {
+    const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasResidentSnapshot)
+        || (!loading && loadIssue === 'error' && !hasResidentSnapshot);
+
+    if (loading && !showBlockingDashboardNotice) {
         return (
             <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
                 <header style={{ marginBottom: '32px', marginTop: '16px' }}>
@@ -397,6 +449,21 @@ export default function Dashboard() {
             </div>
         );
     }
+
+    if (showBlockingDashboardNotice) {
+        return (
+            <div className="container animate-fade-in flex-center" style={{ minHeight: '100vh', padding: '24px' }}>
+                <DataLoadNotice
+                    tone="error"
+                    title={residentLoadSlow ? 'Dashboard is taking longer than usual' : 'Unable to load dashboard'}
+                    description={loadErrorMessage ?? 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.'}
+                    onRetry={retryDashboardData}
+                    retryLabel="Retry Dashboard"
+                />
+            </div>
+        );
+    }
+
     if (!user) return null;
 
     const quickBookTargetDate = quickBookModalBooking
@@ -477,6 +544,18 @@ export default function Dashboard() {
                     <LogOut size={20} />
                 </button>
             </header>
+
+            {loadIssue === 'saved' && (
+                <div style={{ marginBottom: '20px' }}>
+                    <DataLoadNotice
+                        compact
+                        title="Showing saved dashboard data"
+                        description={loadErrorMessage ?? 'Live updates are reconnecting in the background. You can keep using the page.'}
+                        onRetry={retryDashboardData}
+                        retryLabel="Refresh Data"
+                    />
+                </div>
+            )}
 
             {/* Announcements Carousel */}
             <BannerCarousel banners={banners} isLoading={bannersLoading} />

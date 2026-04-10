@@ -1,4 +1,4 @@
-import { lazy, startTransition, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
@@ -10,6 +10,7 @@ import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
     addBelarusDays,
     formatBelarusDate,
@@ -27,6 +28,7 @@ import {
     getAutoOpenWindowDisplay
 } from '../utils/time';
 import { preloadDashboardRoute } from '../utils/preloadRoutes';
+import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 
 const LazyConfetti = lazy(() => import('react-confetti'));
 
@@ -46,9 +48,9 @@ export default function BookingFlow() {
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
     }, []);
-    const cachedMachines = firestoreService.getCachedMachines();
-    const cachedWeekBookings = firestoreService.getCachedBookingsForWeekIds(bookingWeekIds);
-    const cachedSettings = firestoreService.getCachedSettings();
+    const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
+    const cachedWeekBookings = useMemo(() => firestoreService.getCachedBookingsForWeekIds(bookingWeekIds), [bookingWeekIds]);
+    const cachedSettings = useMemo(() => firestoreService.getCachedSettings(), []);
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
 
@@ -61,10 +63,33 @@ export default function BookingFlow() {
     const [loading, setLoading] = useState(() => Boolean(userId) && (!hasCachedMachines || !hasCachedWeekBookings));
     const [submitting, setSubmitting] = useState(false);
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
+    const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
 
     // Async State
     const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
     const [bookings, setBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const hasBookingSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || machines.length > 0
+        || bookings.length > 0;
+    const bookingLoadSlow = useSlowLoadFlag(loading, 4500);
+    const bookingSnapshotRef = useRef(hasBookingSnapshot);
+
+    useEffect(() => {
+        bookingSnapshotRef.current = hasBookingSnapshot;
+    }, [hasBookingSnapshot]);
+
+    useEffect(() => {
+        if (!bookingLoadSlow || !loading || !hasBookingSnapshot) {
+            return;
+        }
+
+        setLoadIssue('saved');
+        setLoadErrorMessage('Showing saved slot data while live availability reconnects in the background.');
+        setLoading(false);
+    }, [bookingLoadSlow, hasBookingSnapshot, loading]);
 
     useEffect(() => {
         if (!userId) {
@@ -79,8 +104,18 @@ export default function BookingFlow() {
 
         const finishLoadingIfReady = () => {
             if (isMounted && machinesReady && bookingsReady) {
+                setLoadIssue(null);
+                setLoadErrorMessage(null);
                 setLoading(false);
             }
+        };
+
+        const handleBookingLoadError = (label: string, error: unknown) => {
+            console.error(label, error);
+            if (!isMounted) return;
+            setLoadErrorMessage('We could not refresh live slot data right now. Retry to reconnect.');
+            setLoadIssue(bookingSnapshotRef.current ? 'saved' : 'error');
+            setLoading(false);
         };
 
         finishLoadingIfReady();
@@ -93,11 +128,7 @@ export default function BookingFlow() {
             });
             finishLoadingIfReady();
         }, (error) => {
-            console.error('Machine fetching error:', error);
-            toast.error('Failed to subscribe to machines.');
-            if (isMounted) {
-                setLoading(false);
-            }
+            handleBookingLoadError('Machine fetching error:', error);
         });
 
         const unsubscribeBookings = firestoreService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
@@ -108,11 +139,7 @@ export default function BookingFlow() {
             });
             finishLoadingIfReady();
         }, (error) => {
-            console.error('Booking streaming error:', error);
-            toast.error('Failed to get live booking data. Please check connection.');
-            if (isMounted) {
-                setLoading(false);
-            }
+            handleBookingLoadError('Booking streaming error:', error);
         });
 
         void firestoreService.getSettings()
@@ -132,7 +159,7 @@ export default function BookingFlow() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [bookingWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, userId]);
+    }, [bookingWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -299,6 +326,17 @@ export default function BookingFlow() {
     const maintenanceDay = typeof settings.maintenanceDay === 'number' ? settings.maintenanceDay : 3;
     const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
+    const retryBookingData = () => {
+        if (hasBookingSnapshot) {
+            setLoadIssue('saved');
+            setLoadErrorMessage('Reconnecting to live slot updates...');
+        } else {
+            setLoadIssue(null);
+            setLoadErrorMessage(null);
+            setLoading(true);
+        }
+        setReloadKey((current) => current + 1);
+    };
 
     // --- RENDER ---
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -332,7 +370,10 @@ export default function BookingFlow() {
 
     const windowDisplay = getAutoOpenWindowDisplay(settings);
 
-    if (loading) {
+    const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
+        || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
+
+    if (loading && !showBlockingBookingNotice) {
         return (
             <div className="container animate-fade-in" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
@@ -349,6 +390,23 @@ export default function BookingFlow() {
                         <div key={i} style={{ width: '100%', height: '80px', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
                     ))}
                 </div>
+            </div>
+        );
+    }
+
+    if (showBlockingBookingNotice) {
+        return (
+            <div
+                className="container animate-fade-in flex-center"
+                style={{ minHeight: '100vh', padding: '24px', textAlign: 'left' }}
+            >
+                <DataLoadNotice
+                    tone="error"
+                    title={bookingLoadSlow ? 'Booking page is taking longer than usual' : 'Unable to load live booking data'}
+                    description={loadErrorMessage ?? 'Retry to reconnect and fetch the latest machine availability.'}
+                    onRetry={retryBookingData}
+                    retryLabel="Retry Slots"
+                />
             </div>
         );
     }
@@ -502,6 +560,18 @@ export default function BookingFlow() {
                 </button>
                 <h2 style={{ margin: 0, fontSize: '20px' }}>Select a Slot</h2>
             </div>
+
+            {loadIssue === 'saved' && (
+                <div style={{ marginBottom: '16px' }}>
+                    <DataLoadNotice
+                        compact
+                        title="Showing saved slot data"
+                        description={loadErrorMessage ?? 'Live slot availability is reconnecting in the background. You can keep browsing.'}
+                        onRetry={retryBookingData}
+                        retryLabel="Refresh Slots"
+                    />
+                </div>
+            )}
 
             {/* Date Selector */}
             {dateOptions.length === 0 ? (
