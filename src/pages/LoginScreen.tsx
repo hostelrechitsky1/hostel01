@@ -6,6 +6,8 @@ import { Building, ArrowRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { Student } from '../types';
+import { preloadResidentRoutes } from '../utils/preloadRoutes';
+import { warmResidentAppData } from '../utils/warmResidentApp';
 
 export default function LoginScreen() {
     const [step, setStep] = useState<1 | 1.5 | 2>(1);
@@ -21,11 +23,12 @@ export default function LoginScreen() {
         setLoading(true);
 
         try {
-            const allStudents = await firestoreService.getAllStudents();
-            const roomStudents = allStudents.filter(s => s.roomNumber === room);
+            const roomStudents = await firestoreService.getStudentsByRoom(room);
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
+                preloadResidentRoutes();
+                void warmResidentAppData();
                 // Check if Room has PIN protection
                 const roomPin = roomStudents[0].pin;
                 if (roomPin) {
@@ -55,9 +58,23 @@ export default function LoginScreen() {
     };
 
     const handleStudentSelect = (student: Student) => {
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLElement) {
+            activeElement.blur();
+        }
+
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
-        navigate('/');
+        preloadResidentRoutes();
+        void warmResidentAppData(student.id);
+
+        requestAnimationFrame(() => {
+            navigate('/', { replace: true });
+        });
     };
 
 

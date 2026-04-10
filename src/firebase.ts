@@ -1,5 +1,10 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp } from 'firebase/app';
+import {
+    getFirestore,
+    initializeFirestore,
+    persistentLocalCache,
+    persistentMultipleTabManager,
+} from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,18 +17,33 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
-// Analytics is optional - only initialize if we're in a browser and have a measurementId
+const createFirestore = () => {
+    if (typeof window === 'undefined') {
+        return getFirestore(app);
+    }
+
+    try {
+        return initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
+        });
+    } catch {
+        return getFirestore(app);
+    }
+};
+
+const db = createFirestore();
+
 try {
     if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
-        import("firebase/analytics").then(({ getAnalytics }) => {
+        import('firebase/analytics').then(({ getAnalytics }) => {
             getAnalytics(app);
-        }).catch(() => {/* analytics load failed silently */ });
+        }).catch(() => { /* analytics load failed silently */ });
     }
 } catch {
     // analytics is non-critical, ignore errors
 }
 
 export { db };
-

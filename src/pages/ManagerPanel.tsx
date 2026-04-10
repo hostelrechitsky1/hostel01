@@ -19,7 +19,17 @@ export default function ManagerPanel() {
     const [searchTerm, setSearchTerm] = useState('');
     const [bookingPage, setBookingPage] = useState(1);
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState<AppSettings>({ forceShowNextWeek: false, forceCloseBookings: false, maintenanceDay: 3, topAlert: { message: '', isActive: false, type: 'info' } });
+    const [settings, setSettings] = useState<AppSettings>({
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28,
+        vipAutoEnabled: true,
+        vipLastAppliedWeekId: '',
+        topAlert: { message: '', isActive: false, type: 'info' }
+    });
     const navigate = useNavigate();
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
