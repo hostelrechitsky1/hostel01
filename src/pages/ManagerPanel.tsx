@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useDeferredValue } from 'react';
-import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database } from 'lucide-react';
+import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database, Reply } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
@@ -186,6 +186,25 @@ export default function ManagerPanel() {
             await firestoreService.cancelBooking(id);
             refreshData();
         }
+    };
+
+    const handleReplyFeedback = async (feedback: Feedback) => {
+        const initial = feedback.adminReply || '';
+        const reply = await promptDialog('Reply to Feedback', `Reply to ${feedback.studentName} (Room ${feedback.roomNumber})`, {
+            placeholder: 'Write your reply...',
+            defaultValue: initial,
+            confirmText: initial ? 'Update Reply' : 'Send Reply'
+        });
+
+        if (reply === null) return;
+        if (!reply.trim()) {
+            await alertDialog('Reply Required', 'Please enter a reply message.');
+            return;
+        }
+
+        await firestoreService.replyToFeedback(feedback.id, reply.trim(), 'Manager');
+        const refreshed = await firestoreService.getFeedbacks();
+        setFeedbacks(refreshed);
     };
 
     // --- Banner Management ---
@@ -1357,6 +1376,7 @@ export default function ManagerPanel() {
                                     <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
                                     <th style={{ padding: '12px', textAlign: 'left' }}>From</th>
                                     <th style={{ padding: '12px', textAlign: 'left' }}>Message</th>
+                                    <th style={{ padding: '12px', textAlign: 'left' }}>Reply</th>
                                     <th style={{ padding: '12px', textAlign: 'right' }}>Time</th>
                                     <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
                                 </tr>
@@ -1377,11 +1397,33 @@ export default function ManagerPanel() {
                                             <div style={{ fontWeight: 600 }}>{f.studentName}</div>
                                             <div style={{ fontSize: '12px', opacity: 0.7 }}>Room {f.roomNumber}</div>
                                         </td>
-                                        <td style={{ padding: '12px' }}>{f.text}</td>
+                                        <td style={{ padding: '12px', maxWidth: '320px' }}>{f.text}</td>
+                                        <td style={{ padding: '12px', maxWidth: '320px' }}>
+                                            {f.adminReply ? (
+                                                <div style={{
+                                                    borderRadius: '10px',
+                                                    padding: '10px',
+                                                    background: 'rgba(16, 185, 129, 0.14)',
+                                                    border: '1px solid rgba(16, 185, 129, 0.28)'
+                                                }}>
+                                                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#34d399', marginBottom: '4px' }}>Admin Reply</div>
+                                                    <div style={{ fontSize: '13px' }}>{f.adminReply}</div>
+                                                </div>
+                                            ) : (
+                                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No reply yet</span>
+                                            )}
+                                        </td>
                                         <td style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
                                             {format(f.timestamp, 'MMM d, H:mm')}
                                         </td>
                                         <td style={{ padding: '12px', textAlign: 'right' }}>
+                                            <button
+                                                onClick={() => handleReplyFeedback(f)}
+                                                style={{ color: '#34d399', background: 'none', border: 'none', cursor: 'pointer', marginRight: '8px' }}
+                                                title={f.adminReply ? 'Edit reply' : 'Reply'}
+                                            >
+                                                <Reply size={16} />
+                                            </button>
                                             <button
                                                 onClick={async () => {
                                                     const confirmed = await confirmDialog('Delete Feedback?', 'Delete this feedback entry?', {

@@ -69,6 +69,9 @@ export interface Feedback {
   type: 'bug' | 'feature' | 'other';
   timestamp: number;
   read: boolean;
+  adminReply?: string;
+  adminReplyAt?: number;
+  adminRepliedBy?: string;
 }
 
 export interface TopAlert {
