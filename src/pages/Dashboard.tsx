@@ -18,7 +18,8 @@ export default function Dashboard() {
     const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
     const [history, setHistory] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
-    const [allBookings, setAllBookings] = useState<Booking[]>([]);
+    const [weekBookings, setWeekBookings] = useState<Booking[]>([]);
+    const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);
     const [bannersLoading, setBannersLoading] = useState(true);
     const [loading, setLoading] = useState(true);
@@ -34,6 +35,11 @@ export default function Dashboard() {
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
+
+    const today = getBelarusDate();
+    const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
+    const nextWeekId = getBelarusWeekId(nextWeekStart);
+    const todayDateId = formatBelarusDate(today);
 
     useEffect(() => {
         const ensureTop = () => {
@@ -63,7 +69,9 @@ export default function Dashboard() {
             return;
         }
 
-        let unsubscribeBookings = () => { };
+        let unsubscribeUserBookings = () => { };
+        let unsubscribeWeekBookings = () => { };
+        let unsubscribeTodayBookings = () => { };
         let unsubscribeMachines = () => { };
 
         const loadData = async () => {
@@ -81,10 +89,8 @@ export default function Dashboard() {
                     setMachines(machines);
                 });
 
-                unsubscribeBookings = firestoreService.subscribeToBookings((bookings) => {
-                    setAllBookings(bookings);
-                    const myBookings = bookings.filter(b => b.studentId === user.id);
-                    const chronological = [...myBookings].sort((a, b) =>
+                unsubscribeUserBookings = firestoreService.subscribeToUserBookings(user.id, (bookings) => {
+                    const chronological = [...bookings].sort((a, b) =>
                         new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
                     );
 
@@ -104,8 +110,20 @@ export default function Dashboard() {
                     setHistory(pastBookings.slice(0, 3));
                     setLoading(false);
                 }, (error) => {
-                    console.error("Dashboard bookings subscription error:", error);
+                    console.error("Dashboard user bookings subscription error:", error);
                     setLoading(false);
+                });
+
+                unsubscribeWeekBookings = firestoreService.subscribeToWeekBookings(nextWeekId, (bookings) => {
+                    setWeekBookings(bookings);
+                }, (error) => {
+                    console.error("Dashboard week bookings subscription error:", error);
+                });
+
+                unsubscribeTodayBookings = firestoreService.subscribeToDateBookings(todayDateId, (bookings) => {
+                    setTodayBookings(bookings);
+                }, (error) => {
+                    console.error("Dashboard today bookings subscription error:", error);
                 });
 
             } catch (err) {
@@ -118,10 +136,12 @@ export default function Dashboard() {
         loadData();
 
         return () => {
-            unsubscribeBookings();
+            unsubscribeUserBookings();
+            unsubscribeWeekBookings();
+            unsubscribeTodayBookings();
             unsubscribeMachines();
         };
-    }, [user?.id, navigate]);
+    }, [user?.id, navigate, nextWeekId, todayDateId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -137,11 +157,7 @@ export default function Dashboard() {
         if (isMaintenanceDay) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
         if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
 
-        // Check current bookings using allBookings state
-        const today = formatBelarusDate(getBelarusDate());
-        const bookingsToday = allBookings.filter(b => b.date === today); // In memory filter
-
-        const currentBooking = bookingsToday.find(b => {
+        const currentBooking = todayBookings.find(b => {
             if (b.machineId !== machine.id) return false;
 
             const start = parse(b.startTime, 'HH:mm', now);
@@ -163,20 +179,17 @@ export default function Dashboard() {
 
         const today = getBelarusDate();
         const weekStart = isNextWeekOpen ? addBelarusDays(getBelarusWeekStart(today), 7) : getBelarusWeekStart(today);
-        const targetWeekId = getBelarusWeekId(weekStart);
 
         const maintenanceDay = settings.maintenanceDay ?? 3;
         const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
         const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
 
         const totalSlots = slotsPerDay * bookableDates.length;
-        const bookedInTargetWeek = allBookings.filter(
-            b => b.weekId === targetWeekId && bookableDates.includes(b.date)
-        ).length;
+        const bookedInTargetWeek = weekBookings.filter(b => bookableDates.includes(b.date)).length;
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, allBookings, settings.maintenanceDay, isNextWeekOpen]);
+    }, [machines, weekBookings, settings.maintenanceDay, isNextWeekOpen]);
 
     const handleLogout = () => {
         bookingService.logout();
@@ -187,12 +200,8 @@ export default function Dashboard() {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
     };
 
-    const today = getBelarusDate();
-    const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
-    const nextWeekId = getBelarusWeekId(nextWeekStart);
-
     // Check if the user has a booking specifically for the *upcoming* week (next week slots)
-    const hasBookedForNextWeek = user ? allBookings.some(b => b.studentId === user.id && b.weekId === nextWeekId) : false;
+    const hasBookedForNextWeek = user ? weekBookings.some(b => b.studentId === user.id) : false;
 
 
     const primaryUpcomingBooking = upcomingBookings[0] || null;
@@ -250,7 +259,7 @@ export default function Dashboard() {
         }
 
         const targetDateStr = formatBelarusDate(targetDate);
-        const existingSlotBooking = allBookings.find(b =>
+        const existingSlotBooking = weekBookings.find(b =>
             b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
         );
 
@@ -292,19 +301,6 @@ export default function Dashboard() {
                 return;
             }
 
-            const refreshedBookings = await firestoreService.getBookings();
-            setAllBookings(refreshedBookings);
-
-            const myBookings = refreshedBookings.filter(b => b.studentId === user.id);
-            const chronological = [...myBookings].sort((a, b) =>
-                new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-            );
-            const now = new Date();
-            const futureBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now);
-            const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
-
-            setUpcomingBookings(futureBookings);
-            setHistory(pastBookings);
             setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
 
             // Auto close on success

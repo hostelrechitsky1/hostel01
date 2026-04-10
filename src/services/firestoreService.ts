@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, runTransaction, onSnapshot, query, where } from 'firebase/firestore';
 import type { Student, Machine, Booking, AppSettings, VipRecurringRule } from '../types';
 import { parseRawStudentData } from '../utils/studentParser';
 import { legacyPinMap } from '../data/pinMap';
@@ -14,6 +14,12 @@ export const firestoreService = {
     // --- Students ---
     async getAllStudents(): Promise<Student[]> {
         const snapshot = await getDocs(collection(db, STUDENTS_COL));
+        return snapshot.docs.map(doc => doc.data() as Student);
+    },
+
+    async getStudentsByRoom(roomNumber: string): Promise<Student[]> {
+        const q = query(collection(db, STUDENTS_COL), where('roomNumber', '==', roomNumber));
+        const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => doc.data() as Student);
     },
 
@@ -115,6 +121,39 @@ export const firestoreService = {
             callback(bookings);
         }, (error) => {
             console.error("Error subscribing to bookings:", error);
+            if (onError) onError(error);
+        });
+    },
+
+    subscribeToUserBookings(studentId: string, callback: (bookings: Booking[]) => void, onError?: (error: any) => void): () => void {
+        const q = query(collection(db, BOOKINGS_COL), where('studentId', '==', studentId));
+        return onSnapshot(q, (snapshot) => {
+            const bookings = snapshot.docs.map(doc => doc.data() as Booking);
+            callback(bookings);
+        }, (error) => {
+            console.error("Error subscribing to user bookings:", error);
+            if (onError) onError(error);
+        });
+    },
+
+    subscribeToWeekBookings(weekId: string, callback: (bookings: Booking[]) => void, onError?: (error: any) => void): () => void {
+        const q = query(collection(db, BOOKINGS_COL), where('weekId', '==', weekId));
+        return onSnapshot(q, (snapshot) => {
+            const bookings = snapshot.docs.map(doc => doc.data() as Booking);
+            callback(bookings);
+        }, (error) => {
+            console.error("Error subscribing to week bookings:", error);
+            if (onError) onError(error);
+        });
+    },
+
+    subscribeToDateBookings(date: string, callback: (bookings: Booking[]) => void, onError?: (error: any) => void): () => void {
+        const q = query(collection(db, BOOKINGS_COL), where('date', '==', date));
+        return onSnapshot(q, (snapshot) => {
+            const bookings = snapshot.docs.map(doc => doc.data() as Booking);
+            callback(bookings);
+        }, (error) => {
+            console.error("Error subscribing to date bookings:", error);
             if (onError) onError(error);
         });
     },
