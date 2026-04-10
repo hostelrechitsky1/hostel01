@@ -53,6 +53,8 @@ export default function BookingFlow() {
     // Async State
     const [machines, setMachines] = useState<Machine[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const nextWeekStart = addBelarusDays(getBelarusWeekEnd(getBelarusDate()), 1);
+    const nextWeekId = getBelarusWeekId(nextWeekStart);
 
     useEffect(() => {
         if (!user) {
@@ -75,7 +77,7 @@ export default function BookingFlow() {
                     setLoading(false);
                 });
 
-                unsubscribeBookings = firestoreService.subscribeToBookings((bs) => {
+                unsubscribeBookings = firestoreService.subscribeToWeekBookings(nextWeekId, (bs) => {
                     setBookings(bs);
                     setLoading(false);
                 }, (err) => {
@@ -95,7 +97,7 @@ export default function BookingFlow() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [user?.id, navigate]);
+    }, [user?.id, navigate, nextWeekId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 

@@ -18,11 +18,16 @@ export default function LoginScreen() {
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const normalizedRoom = room.trim();
+        if (!normalizedRoom) {
+            toast.error('Please enter your room number.');
+            return;
+        }
+
         setLoading(true);
 
         try {
-            const allStudents = await firestoreService.getAllStudents();
-            const roomStudents = allStudents.filter(s => s.roomNumber === room);
+            const roomStudents = await firestoreService.getStudentsByRoom(normalizedRoom);
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
