@@ -18,7 +18,8 @@ export default function Dashboard() {
     const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
     const [history, setHistory] = useState<Booking[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
-    const [weekBookings, setWeekBookings] = useState<Booking[]>([]);
+    const [nextWeekBookings, setNextWeekBookings] = useState<Booking[]>([]);
+    const [capacityWeekBookings, setCapacityWeekBookings] = useState<Booking[]>([]);
     const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
     const [banners, setBanners] = useState<Banner[]>([]);
     const [bannersLoading, setBannersLoading] = useState(true);
@@ -39,7 +40,10 @@ export default function Dashboard() {
     const today = getBelarusDate();
     const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
     const nextWeekId = getBelarusWeekId(nextWeekStart);
+    const currentWeekId = getBelarusWeekId(getBelarusWeekStart(today));
     const todayDateId = formatBelarusDate(today);
+
+    const parseBelarusSlotTime = (date: string, time: string) => parseISO(`${date}T${time}:00Z`);
 
     useEffect(() => {
         const ensureTop = () => {
@@ -70,7 +74,8 @@ export default function Dashboard() {
         }
 
         let unsubscribeUserBookings = () => { };
-        let unsubscribeWeekBookings = () => { };
+        let unsubscribeNextWeekBookings = () => { };
+        let unsubscribeCapacityWeekBookings = () => { };
         let unsubscribeTodayBookings = () => { };
         let unsubscribeMachines = () => { };
 
@@ -95,16 +100,9 @@ export default function Dashboard() {
                     );
 
                     const now = getBelarusNow();
-                    const futureBookings = chronological.filter(b => {
-                        // Parse as UTC+3 (Belarus time) by appending +03:00
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
-                        return end > now;
-                    });
+                    const futureBookings = chronological.filter(b => parseBelarusSlotTime(b.date, b.startTime) >= now);
 
-                    const pastBookings = chronological.filter(b => {
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
-                        return end <= now;
-                    }).reverse();
+                    const pastBookings = chronological.filter(b => parseBelarusSlotTime(b.date, b.startTime) < now).reverse();
 
                     setUpcomingBookings(futureBookings);
                     setHistory(pastBookings.slice(0, 3));
@@ -114,10 +112,19 @@ export default function Dashboard() {
                     setLoading(false);
                 });
 
-                unsubscribeWeekBookings = firestoreService.subscribeToWeekBookings(nextWeekId, (bookings) => {
-                    setWeekBookings(bookings);
+                const shouldUseNextWeekForCapacity = fetchedSettings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), fetchedSettings);
+                const capacityWeekId = shouldUseNextWeekForCapacity ? nextWeekId : currentWeekId;
+
+                unsubscribeNextWeekBookings = firestoreService.subscribeToWeekBookings(nextWeekId, (bookings) => {
+                    setNextWeekBookings(bookings);
                 }, (error) => {
-                    console.error("Dashboard week bookings subscription error:", error);
+                    console.error("Dashboard next-week bookings subscription error:", error);
+                });
+
+                unsubscribeCapacityWeekBookings = firestoreService.subscribeToWeekBookings(capacityWeekId, (bookings) => {
+                    setCapacityWeekBookings(bookings);
+                }, (error) => {
+                    console.error("Dashboard capacity week bookings subscription error:", error);
                 });
 
                 unsubscribeTodayBookings = firestoreService.subscribeToDateBookings(todayDateId, (bookings) => {
@@ -137,11 +144,12 @@ export default function Dashboard() {
 
         return () => {
             unsubscribeUserBookings();
-            unsubscribeWeekBookings();
+            unsubscribeNextWeekBookings();
+            unsubscribeCapacityWeekBookings();
             unsubscribeTodayBookings();
             unsubscribeMachines();
         };
-    }, [user?.id, navigate, nextWeekId, todayDateId]);
+    }, [user?.id, navigate, nextWeekId, currentWeekId, todayDateId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -185,11 +193,11 @@ export default function Dashboard() {
         const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
 
         const totalSlots = slotsPerDay * bookableDates.length;
-        const bookedInTargetWeek = weekBookings.filter(b => bookableDates.includes(b.date)).length;
+        const bookedInTargetWeek = capacityWeekBookings.filter(b => bookableDates.includes(b.date)).length;
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, weekBookings, settings.maintenanceDay, isNextWeekOpen]);
+    }, [machines, capacityWeekBookings, settings.maintenanceDay, isNextWeekOpen]);
 
     const handleLogout = () => {
         bookingService.logout();
@@ -201,7 +209,7 @@ export default function Dashboard() {
     };
 
     // Check if the user has a booking specifically for the *upcoming* week (next week slots)
-    const hasBookedForNextWeek = user ? weekBookings.some(b => b.studentId === user.id) : false;
+    const hasBookedForNextWeek = user ? nextWeekBookings.some(b => b.studentId === user.id) : false;
 
 
     const primaryUpcomingBooking = upcomingBookings[0] || null;
@@ -259,7 +267,7 @@ export default function Dashboard() {
         }
 
         const targetDateStr = formatBelarusDate(targetDate);
-        const existingSlotBooking = weekBookings.find(b =>
+        const existingSlotBooking = nextWeekBookings.find(b =>
             b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
         );
 
