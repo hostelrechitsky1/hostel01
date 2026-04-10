@@ -8,18 +8,30 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
 
+const BOOKING_ITEMS_PER_PAGE = 12;
+const INITIAL_RECENT_BOOKINGS_LIMIT = 80;
+const INITIAL_RECENT_FEEDBACK_LIMIT = 40;
+
 export default function ManagerPanel() {
-    const [bookings, setBookings] = useState<Booking[]>([]);
-    const [machines, setMachines] = useState<Machine[]>([]);
-    const [students, setStudents] = useState<Student[]>([]);
-    const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
-    const [banners, setBanners] = useState<Banner[]>([]);
+    const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
+    const cachedStudents = useMemo(() => firestoreService.getCachedStudents(), []);
+    const cachedBanners = useMemo(() => firestoreService.getCachedBanners(), []);
+    const cachedSettings = useMemo(() => firestoreService.getCachedSettings(), []);
+    const cachedBookings = useMemo(() => firestoreService.getCachedRecentAdminBookings(INITIAL_RECENT_BOOKINGS_LIMIT), []);
+    const cachedFeedbacks = useMemo(() => firestoreService.getCachedFeedbacks(INITIAL_RECENT_FEEDBACK_LIMIT), []);
+    const [bookings, setBookings] = useState<Booking[]>(() => cachedBookings ?? []);
+    const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
+    const [students, setStudents] = useState<Student[]>(() => cachedStudents ?? []);
+    const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
+    const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
     const [showBannerForm, setShowBannerForm] = useState(false);
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
-    const [searchTerm, setSearchTerm] = useState('');
+    const [residentSearchTerm, setResidentSearchTerm] = useState('');
+    const [bookingSearchTerm, setBookingSearchTerm] = useState('');
     const [bookingPage, setBookingPage] = useState(1);
-    const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState<AppSettings>({
+    const [loading, setLoading] = useState(() => !cachedMachines && !cachedStudents && !cachedBanners);
+    const [activityLoading, setActivityLoading] = useState(() => !cachedBookings && !cachedFeedbacks);
+    const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? {
         forceShowNextWeek: false,
         forceCloseBookings: false,
         maintenanceDay: 3,
@@ -30,32 +42,38 @@ export default function ManagerPanel() {
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
     });
+    const [recentBookingLimit, setRecentBookingLimit] = useState(INITIAL_RECENT_BOOKINGS_LIMIT);
+    const [recentFeedbackLimit, setRecentFeedbackLimit] = useState(INITIAL_RECENT_FEEDBACK_LIMIT);
     const navigate = useNavigate();
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
     useEffect(() => {
         if (!sessionStorage.getItem('manager_auth')) {
             navigate('/manager/login');
+            return;
         }
-        refreshData();
-    }, []);
+        void refreshCoreData();
+    }, [navigate]);
 
-    const refreshData = async () => {
+    useEffect(() => {
+        if (!sessionStorage.getItem('manager_auth')) {
+            return;
+        }
+        void refreshActivityData();
+    }, [recentBookingLimit, recentFeedbackLimit]);
+
+    const refreshCoreData = async () => {
         setLoading(true);
         try {
-            const [fetchedBookings, fetchedMachines, fetchedStudents, fetchedSettings, fetchedFeedbacks, fetchedBanners] = await Promise.all([
-                firestoreService.getBookings(),
+            const [fetchedMachines, fetchedStudents, fetchedSettings, fetchedBanners] = await Promise.all([
                 firestoreService.getMachines(),
                 firestoreService.getAllStudents(),
                 firestoreService.getSettings(),
-                firestoreService.getFeedbacks(),
                 firestoreService.getBanners()
             ]);
-            setBookings(fetchedBookings);
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
             setSettings(fetchedSettings);
-            setFeedbacks(fetchedFeedbacks);
             setBanners(fetchedBanners);
         } catch (error) {
             console.error("Failed to load admin data", error);
@@ -65,21 +83,48 @@ export default function ManagerPanel() {
         }
     };
 
+    const refreshActivityData = async () => {
+        setActivityLoading(true);
+        try {
+            const [fetchedBookings, fetchedFeedbacks] = await Promise.all([
+                firestoreService.getRecentAdminBookings(recentBookingLimit),
+                firestoreService.getFeedbacks(recentFeedbackLimit)
+            ]);
+            setBookings(fetchedBookings);
+            setFeedbacks(fetchedFeedbacks);
+        } catch (error) {
+            console.error('Failed to load admin activity', error);
+            await alertDialog('Load Failed', 'Failed to load recent booking activity.');
+        } finally {
+            setActivityLoading(false);
+        }
+    };
+
+    const studentById = useMemo(() => {
+        return new Map(students.map((student) => [student.id, student]));
+    }, [students]);
+
+    const machineById = useMemo(() => {
+        return new Map(machines.map((machine) => [machine.id, machine]));
+    }, [machines]);
+
     const filteredBookings = useMemo(() => {
+        const searchLower = bookingSearchTerm.trim().toLowerCase();
         return bookings.filter(b => {
-            const student = students.find(s => s.id === b.studentId); // Use studentId
-            const machine = machines.find(m => m.id === b.machineId);
-            const searchLower = searchTerm.toLowerCase();
+            if (!searchLower) return true;
+            const student = studentById.get(b.studentId);
+            const machine = machineById.get(b.machineId);
 
             return (
                 student?.name.toLowerCase().includes(searchLower) ||
                 student?.roomNumber.toLowerCase().includes(searchLower) ||
-                machine?.name.toLowerCase().includes(searchLower)
+                machine?.name.toLowerCase().includes(searchLower) ||
+                b.date.toLowerCase().includes(searchLower) ||
+                b.startTime.toLowerCase().includes(searchLower)
             );
-        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [bookings, students, machines, searchTerm]);
+        });
+    }, [bookingSearchTerm, bookings, machineById, studentById]);
 
-    const BOOKING_ITEMS_PER_PAGE = 12;
     const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKING_ITEMS_PER_PAGE));
 
     const paginatedBookings = useMemo(() => {
@@ -89,7 +134,7 @@ export default function ManagerPanel() {
 
     useEffect(() => {
         setBookingPage(1);
-    }, [searchTerm, bookings.length]);
+    }, [bookingSearchTerm, bookings.length]);
 
     useEffect(() => {
         if (bookingPage > totalBookingPages) {
@@ -101,7 +146,7 @@ export default function ManagerPanel() {
     const toggleMachine = async (machine: Machine) => {
         const newStatus = machine.status === 'available' ? 'maintenance' : 'available';
         await firestoreService.updateMachineStatus(machine.id, newStatus);
-        refreshData();
+        refreshCoreData();
     };
 
     const handleAddMachine = async () => {
@@ -111,7 +156,7 @@ export default function ManagerPanel() {
         });
         if (name?.trim()) {
             await firestoreService.addMachine(name.trim());
-            refreshData();
+            refreshCoreData();
         }
     };
 
@@ -123,7 +168,7 @@ export default function ManagerPanel() {
         );
         if (confirmed) {
             await firestoreService.deleteMachine(id);
-            refreshData();
+            refreshCoreData();
         }
     };
 
@@ -135,7 +180,7 @@ export default function ManagerPanel() {
         });
         if (confirmed) {
             await firestoreService.cancelBooking(id);
-            refreshData();
+            refreshActivityData();
         }
     };
 
@@ -170,7 +215,7 @@ export default function ManagerPanel() {
         await firestoreService.addBanner(banner);
         setNewBanner({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
         setShowBannerForm(false);
-        refreshData();
+        refreshCoreData();
     };
 
     const handleDeleteBanner = async (id: string) => {
@@ -181,13 +226,13 @@ export default function ManagerPanel() {
         });
         if (confirmed) {
             await firestoreService.deleteBanner(id);
-            refreshData();
+            refreshCoreData();
         }
     };
 
     const toggleBanner = async (banner: Banner) => {
         await firestoreService.toggleBannerStatus(banner.id, !banner.isActive);
-        refreshData();
+        refreshCoreData();
     };
 
     // --- Resident Management ---
@@ -219,7 +264,7 @@ export default function ManagerPanel() {
 
         await firestoreService.addStudent(newStudent);
         await alertDialog('Resident Added', `Name: ${newStudent.name}\nRoom: ${newStudent.roomNumber}\nPIN: ${newStudent.pin}`);
-        refreshData();
+        refreshCoreData();
     };
 
     const verifyManagerBeforePrintingCodes = async () => {
@@ -247,7 +292,7 @@ export default function ManagerPanel() {
         });
         if (confirmed) {
             await firestoreService.deleteStudent(student.id);
-            refreshData();
+            refreshCoreData();
         }
     };
 
@@ -259,7 +304,7 @@ export default function ManagerPanel() {
         if (newName && newName.trim() && newName.trim() !== student.name) {
             const updated = { ...student, name: newName.trim() };
             await firestoreService.updateStudent(updated);
-            refreshData();
+            refreshCoreData();
         }
     };
 
@@ -274,7 +319,7 @@ export default function ManagerPanel() {
             try {
                 await firestoreService.seedStudents(studentsRawData);
                 await alertDialog('Database Reset Complete', 'New PINs were generated successfully.');
-                refreshData();
+                refreshCoreData();
             } catch (e) {
                 await alertDialog('Reset Failed', 'Error: ' + e);
             } finally {
@@ -294,7 +339,7 @@ export default function ManagerPanel() {
             try {
                 await firestoreService.clearAllBookings();
                 await alertDialog('Bookings Cleared', 'All bookings were deleted.');
-                refreshData();
+                refreshActivityData();
             } catch (e) {
                 await alertDialog('Delete Failed', 'Error: ' + e);
             } finally {
@@ -316,7 +361,7 @@ export default function ManagerPanel() {
         const confirmed = await confirmDialog('Confirm Setting Update', messages[key]);
         if (confirmed) {
             await firestoreService.updateSettings({ [key]: newValue });
-            refreshData();
+            refreshCoreData();
         }
     };
 
@@ -331,7 +376,7 @@ export default function ManagerPanel() {
         }
     };
 
-    if (loading && bookings.length === 0 && machines.length === 0) {
+    if (loading && bookings.length === 0 && machines.length === 0 && students.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
 
@@ -762,8 +807,8 @@ export default function ManagerPanel() {
                     <input
                         type="text"
                         placeholder="Search residents by Name or Room..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        value={residentSearchTerm}
+                        onChange={(e) => setResidentSearchTerm(e.target.value)}
                         style={{
                             width: '100%',
                             padding: '12px',
@@ -790,8 +835,8 @@ export default function ManagerPanel() {
                         <tbody>
                             {students
                                 .filter(s =>
-                                    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                    s.roomNumber.toLowerCase().includes(searchTerm.toLowerCase())
+                                    s.name.toLowerCase().includes(residentSearchTerm.toLowerCase()) ||
+                                    s.roomNumber.toLowerCase().includes(residentSearchTerm.toLowerCase())
                                 )
                                 .sort((a, b) => a.roomNumber.localeCompare(b.roomNumber, undefined, { numeric: true }))
                                 .slice(0, 50) // Limit display for perf
@@ -815,12 +860,17 @@ export default function ManagerPanel() {
             {/* Recent Bookings */}
             <section>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-                    <h3 style={{ margin: 0 }}>All Bookings ({filteredBookings.length})</h3>
+                    <div>
+                        <h3 style={{ margin: 0 }}>Recent Bookings ({filteredBookings.length})</h3>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            Showing the latest {bookings.length} booking records for a faster manager dashboard.
+                        </div>
+                    </div>
                     <input
                         type="text"
                         placeholder="Search Name or Room..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        value={bookingSearchTerm}
+                        onChange={(e) => setBookingSearchTerm(e.target.value)}
                         style={{
                             padding: '10px 16px',
                             borderRadius: '12px',
@@ -838,8 +888,8 @@ export default function ManagerPanel() {
                     {filteredBookings.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {paginatedBookings.map(b => {
-                                const student = students.find(s => s.id === b.studentId);
-                                const machine = machines.find(m => m.id === b.machineId);
+                                const student = studentById.get(b.studentId);
+                                const machine = machineById.get(b.machineId);
                                 return (
                                     <div key={b.id} className="glass-panel" style={{ padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                                         <div style={{ minWidth: 0 }}>
@@ -870,17 +920,17 @@ export default function ManagerPanel() {
                         </div>
                     ) : (
                         <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '16px' }}>
-                            No bookings found matching "{searchTerm}"
+                            {activityLoading ? 'Loading booking activity...' : `No bookings found matching "${bookingSearchTerm}"`}
                         </div>
                     )}
                 </div>
 
-                {filteredBookings.length > 0 && (
+                {(filteredBookings.length > 0 || bookings.length > 0) && (
                     <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                            Page {bookingPage} of {totalBookingPages}
+                            Page {bookingPage} of {totalBookingPages}{activityLoading ? ' • Refreshing…' : ''}
                         </span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             <button
                                 className="glass-button"
                                 onClick={() => setBookingPage((prev) => Math.max(1, prev - 1))}
@@ -897,6 +947,15 @@ export default function ManagerPanel() {
                             >
                                 Next
                             </button>
+                            {!bookingSearchTerm && bookings.length >= recentBookingLimit && (
+                                <button
+                                    className="glass-button"
+                                    onClick={() => setRecentBookingLimit((current) => current + INITIAL_RECENT_BOOKINGS_LIMIT)}
+                                    style={{ padding: '8px 12px', borderRadius: '8px' }}
+                                >
+                                    Load Older
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -904,7 +963,23 @@ export default function ManagerPanel() {
 
             {/* Feedback Section */}
             <section>
-                <h3 style={{ marginBottom: '16px' }}>Student Feedback ({feedbacks.length})</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+                    <div>
+                        <h3 style={{ margin: 0 }}>Recent Feedback ({feedbacks.length})</h3>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            Showing the latest {feedbacks.length} feedback messages to keep this page responsive.
+                        </div>
+                    </div>
+                    {!activityLoading && feedbacks.length >= recentFeedbackLimit && (
+                        <button
+                            className="glass-button"
+                            onClick={() => setRecentFeedbackLimit((current) => current + INITIAL_RECENT_FEEDBACK_LIMIT)}
+                            style={{ padding: '8px 12px', borderRadius: '8px' }}
+                        >
+                            Load Older
+                        </button>
+                    )}
+                </div>
                 <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto', overflowX: 'auto' }}>
                     {feedbacks.length > 0 ? (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
@@ -947,8 +1022,8 @@ export default function ManagerPanel() {
                                                     });
                                                     if (confirmed) {
                                                         await firestoreService.deleteFeedback(f.id);
-                                                        const [fb] = await Promise.all([firestoreService.getFeedbacks()]);
-                                                        setFeedbacks(fb);
+                                                        const nextFeedbacks = await firestoreService.getFeedbacks(recentFeedbackLimit);
+                                                        setFeedbacks(nextFeedbacks);
                                                     }
                                                 }}
                                                 style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -961,7 +1036,9 @@ export default function ManagerPanel() {
                             </tbody>
                         </table>
                     ) : (
-                        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No feedback yet.</div>
+                        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            {activityLoading ? 'Loading recent feedback...' : 'No feedback yet.'}
+                        </div>
                     )}
                 </div>
             </section>
