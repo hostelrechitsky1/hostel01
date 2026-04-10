@@ -11,6 +11,7 @@ import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
+import { warmBannerImages } from '../utils/bannerImages';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
 import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
@@ -190,6 +191,7 @@ export default function Dashboard() {
                 startTransition(() => {
                     setBanners(fetchedBanners);
                 });
+                warmBannerImages(fetchedBanners, 2);
             })
             .catch((error) => {
                 console.error('Failed to refresh dashboard banners', error);

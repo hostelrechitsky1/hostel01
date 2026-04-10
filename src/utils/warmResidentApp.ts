@@ -1,4 +1,6 @@
+import type { Banner } from '../types';
 import { addBelarusDays, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from './time';
+import { warmBannerImages } from './bannerImages';
 
 const inFlightWarmups = new Map<string, Promise<void>>();
 
@@ -28,7 +30,12 @@ export const warmResidentAppData = (studentId?: string) => {
                 tasks.push(firestoreService.getRecentBookingsForStudent(studentId, 12));
             }
 
-            return Promise.allSettled(tasks);
+            return Promise.allSettled(tasks).then((results) => {
+                const bannersResult = results[2];
+                if (bannersResult?.status === 'fulfilled') {
+                    warmBannerImages(bannersResult.value as Banner[], 2);
+                }
+            });
         })
         .then(() => undefined)
         .finally(() => {

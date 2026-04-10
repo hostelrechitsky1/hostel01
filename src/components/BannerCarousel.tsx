@@ -1,115 +1,71 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Banner } from '../types';
+import {
+    ensureBannerPreloadLink,
+    getAdaptiveBannerSrc,
+    getTinyBannerSrc,
+    hasWarmBannerImage,
+    markBannerImageLoaded,
+    preloadBannerImage,
+} from '../utils/bannerImages';
 
 interface InternalBannerCarouselProps {
     banners: Banner[];
     isLoading?: boolean;
 }
 
-interface NetworkInformation {
-    effectiveType?: string;
-    saveData?: boolean;
-}
-
-type NavigatorWithConnection = Navigator & {
-    connection?: NetworkInformation;
-    mozConnection?: NetworkInformation;
-    webkitConnection?: NetworkInformation;
-};
-
-const getConnectionInfo = () => {
-    const navigatorConnection = navigator as NavigatorWithConnection;
-    return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
-};
-
-const getAdaptiveBannerSrc = (source: string) => {
-    if (!source.includes('drive.google.com/thumbnail')) return source;
-
-    const connection = getConnectionInfo();
-    const effectiveType = connection?.effectiveType;
-    const saveData = connection?.saveData === true;
-    const isMobile = window.innerWidth < 768;
-
-    let qualityWidth = 'w1920';
-
-    if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
-        qualityWidth = isMobile ? 'w360' : 'w640';
-    } else if (effectiveType === '3g') {
-        qualityWidth = isMobile ? 'w480' : 'w960';
-    } else if (isMobile) {
-        qualityWidth = 'w800';
-    }
-
-    return source.replace(/sz=w\d+/, `sz=${qualityWidth}`);
-};
-
-const getTinyBannerSrc = (source: string) => {
-    if (!source.includes('drive.google.com/thumbnail')) return source;
-    const isMobile = window.innerWidth < 768;
-    const tinyWidth = isMobile ? 'w240' : 'w480';
-    return source.replace(/sz=w\d+/, `sz=${tinyWidth}`);
-};
-
-const shouldUpgradeToFullQuality = () => {
-    const connection = getConnectionInfo();
-    const effectiveType = connection?.effectiveType;
-    const saveData = connection?.saveData === true;
-    return !saveData && effectiveType !== 'slow-2g' && effectiveType !== '2g' && effectiveType !== '3g';
-};
-
 // Helper component to handle image loading and retries
 const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
-    const [imgSrc, setImgSrc] = useState(() => getTinyBannerSrc(src));
+    const initialAdaptiveSrc = getAdaptiveBannerSrc(src, { priority });
+    const initialPreviewSrc = priority ? initialAdaptiveSrc : getTinyBannerSrc(src);
+    const [imgSrc, setImgSrc] = useState(initialPreviewSrc);
     const [error, setError] = useState(false);
-    const [loaded, setLoaded] = useState(false);
-    const [tinyLoaded, setTinyLoaded] = useState(false);
+    const [loaded, setLoaded] = useState(() => hasWarmBannerImage(initialPreviewSrc));
+    const [previewLoaded, setPreviewLoaded] = useState(() => hasWarmBannerImage(initialPreviewSrc));
     const imgRef = useRef<HTMLImageElement>(null);
     const adaptiveSrcRef = useRef<string | null>(null);
-    const highQualitySrcRef = useRef<string | null>(null);
+    const previewSrcRef = useRef<string | null>(null);
 
     useEffect(() => {
         const tinySrc = getTinyBannerSrc(src);
-        const optimizedSrc = getAdaptiveBannerSrc(src);
+        const optimizedSrc = getAdaptiveBannerSrc(src, { priority });
+        const nextPreviewSrc = priority ? optimizedSrc : tinySrc;
+
         adaptiveSrcRef.current = optimizedSrc;
-        highQualitySrcRef.current = src;
-        setTinyLoaded(false);
-
-        // Only reset loaded state if the source is actually changing to a new URL.
-        if (tinySrc !== imgSrc) {
-            setLoaded(false);
-            setImgSrc(tinySrc);
-        } else {
-            // If source is same, check if already complete (e.g. from cache or instant load).
-            if (imgRef.current?.complete) {
-                setLoaded(true);
-                setTinyLoaded(true);
-            }
-        }
-
+        previewSrcRef.current = nextPreviewSrc;
+        setPreviewLoaded(hasWarmBannerImage(nextPreviewSrc));
+        setLoaded(hasWarmBannerImage(nextPreviewSrc));
+        setImgSrc(nextPreviewSrc);
         setError(false);
-    }, [src]);
+
+        ensureBannerPreloadLink(optimizedSrc);
+        void preloadBannerImage(priority ? optimizedSrc : nextPreviewSrc);
+    }, [priority, src]);
 
     useEffect(() => {
-        if (!tinyLoaded || !adaptiveSrcRef.current) return;
+        if (!previewLoaded || !adaptiveSrcRef.current || !previewSrcRef.current) return;
+        if (previewSrcRef.current === adaptiveSrcRef.current) return;
+        if (imgSrc === adaptiveSrcRef.current) return;
 
         const nextAdaptiveSrc = adaptiveSrcRef.current;
-        if (imgSrc === nextAdaptiveSrc) return;
+        let isActive = true;
 
-        const adaptiveImage = new Image();
-        adaptiveImage.src = nextAdaptiveSrc;
-        adaptiveImage.onload = () => setImgSrc(nextAdaptiveSrc);
-    }, [tinyLoaded, imgSrc]);
+        void preloadBannerImage(nextAdaptiveSrc).then(() => {
+            if (!isActive) return;
+            setImgSrc((currentSrc) => currentSrc === nextAdaptiveSrc ? currentSrc : nextAdaptiveSrc);
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [imgSrc, previewLoaded]);
 
     useEffect(() => {
-        if (!loaded || !priority || !highQualitySrcRef.current || !shouldUpgradeToFullQuality()) return;
-
-        const nextHighQualitySrc = highQualitySrcRef.current;
-        if (imgSrc === nextHighQualitySrc) return;
-
-        const highQualityImage = new Image();
-        highQualityImage.src = nextHighQualitySrc;
-        highQualityImage.onload = () => setImgSrc(nextHighQualitySrc);
-    }, [loaded, priority, imgSrc]);
+        if (imgRef.current?.complete && hasWarmBannerImage(imgSrc)) {
+            setLoaded(true);
+            setPreviewLoaded(true);
+        }
+    }, [imgSrc]);
 
     const handleError = () => {
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
@@ -154,12 +110,13 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
                     zIndex: 1
                 }}
                 onLoad={() => {
-                    setTinyLoaded(true);
+                    markBannerImageLoaded(imgSrc);
+                    setPreviewLoaded(true);
                     setLoaded(true);
                 }}
                 onError={handleError}
                 referrerPolicy="no-referrer"
-                decoding="async"
+                decoding={priority ? 'sync' : 'async'}
                 draggable={false}
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
@@ -245,9 +202,9 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         preloadIndexes.forEach((index) => {
             const banner = activeBanners[index];
             if (!banner?.imageUrl) return;
-
-            const img = new Image();
-            img.src = getAdaptiveBannerSrc(banner.imageUrl);
+            const source = getAdaptiveBannerSrc(banner.imageUrl, { priority: index === currentIndex });
+            ensureBannerPreloadLink(source);
+            void preloadBannerImage(source);
         });
     }, [activeBanners, currentIndex, isVisible]);
 
