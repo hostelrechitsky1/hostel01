@@ -77,9 +77,24 @@ export interface TopAlert {
   type: 'info' | 'warning' | 'urgent';
 }
 
+export interface VipRecurringRule {
+  id: string;
+  studentId: string;
+  machineId: string;
+  weekday: number; // 0=Sun, 1=Mon ... 6=Sat
+  startTime: string; // HH:mm
+  isActive: boolean;
+  createdAt: number;
+}
+
 export interface AppSettings {
   forceShowNextWeek: boolean;
   forceCloseBookings: boolean;
   maintenanceDay: number; // 0=Sun, 1=Mon, ..., 6=Sat
+  autoOpenWeekday: number; // 0=Sun, 1=Mon, ..., 6=Sat
+  autoOpenTime: string; // HH:mm (Belarus local)
+  autoOpenDurationHours: number; // Opening window length
+  vipAutoEnabled?: boolean;
+  vipLastAppliedWeekId?: string;
   topAlert?: TopAlert;
 }

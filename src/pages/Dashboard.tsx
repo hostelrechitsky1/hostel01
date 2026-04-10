@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { firestoreService } from '../services/firestoreService';
+import { DEFAULT_APP_SETTINGS, firestoreService } from '../services/firestoreService';
 import type { Machine, Booking, Banner, AppSettings } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
@@ -10,96 +10,222 @@ import { motion } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
+import { DataLoadNotice } from '../components/DataLoadNotice';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
+import { preloadBookingRoute } from '../utils/preloadRoutes';
+import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
+
+const RECENT_BOOKINGS_LIMIT = 12;
+
+const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
+    const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
+    return [...withoutExisting, nextBooking];
+};
 
 export default function Dashboard() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
-    const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
-    const [history, setHistory] = useState<Booking[]>([]);
-    const [machines, setMachines] = useState<Machine[]>([]);
-    const [allBookings, setAllBookings] = useState<Booking[]>([]);
-    const [banners, setBanners] = useState<Banner[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState<AppSettings>({
-        forceShowNextWeek: false,
-        forceCloseBookings: false,
-        maintenanceDay: 3,
-        topAlert: { message: '', isActive: false, type: 'info' }
-    });
+    const userId = user?.id ?? '';
+    const dashboardWeekIds = useMemo(() => {
+        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        return [
+            getBelarusWeekId(currentWeekStart),
+            getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
+        ];
+    }, []);
+    const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
+    const cachedWeekBookings = useMemo(() => firestoreService.getCachedBookingsForWeekIds(dashboardWeekIds), [dashboardWeekIds]);
+    const cachedRecentBookings = useMemo(() => (
+        userId
+            ? firestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+            : undefined
+    ), [userId]);
+    const cachedSettings = useMemo(() => firestoreService.getCachedSettings(), []);
+    const cachedBanners = useMemo(() => firestoreService.getCachedBanners(), []);
+    const hasCachedMachines = cachedMachines !== undefined;
+    const hasCachedWeekBookings = cachedWeekBookings !== undefined;
+    const hasCachedRecentBookings = cachedRecentBookings !== undefined;
+    const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
+    const [weekBookings, setWeekBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const [recentBookings, setRecentBookings] = useState<Booking[]>(() => cachedRecentBookings ?? []);
+    const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
+    const [bannersLoading, setBannersLoading] = useState(() => cachedBanners === undefined);
+    const [loading, setLoading] = useState(() => Boolean(userId) && (
+        !hasCachedMachines ||
+        !hasCachedWeekBookings ||
+        !hasCachedRecentBookings
+    ));
+    const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
+    const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+    const hasResidentSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || hasCachedRecentBookings
+        || cachedBanners !== undefined
+        || machines.length > 0
+        || weekBookings.length > 0
+        || recentBookings.length > 0
+        || banners.length > 0;
+    const residentLoadSlow = useSlowLoadFlag(loading, 4500);
+    const residentSnapshotRef = useRef(hasResidentSnapshot);
 
     useEffect(() => {
-        window.scrollTo(0, 0);
+        residentSnapshotRef.current = hasResidentSnapshot;
+    }, [hasResidentSnapshot]);
+
+    useEffect(() => {
+        if (!residentLoadSlow || !loading || !hasResidentSnapshot) {
+            return;
+        }
+
+        setLoadIssue('saved');
+        setLoadErrorMessage('Showing saved dashboard data while live updates reconnect in the background.');
+        setLoading(false);
+    }, [hasResidentSnapshot, loading, residentLoadSlow]);
+
+    useEffect(() => {
+        const ensureTop = () => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        };
+
+        ensureTop();
+
+        const onPageShow = () => ensureTop();
+        const rafId = requestAnimationFrame(ensureTop);
+        const timeoutId = window.setTimeout(ensureTop, 120);
+
+        window.addEventListener('pageshow', onPageShow);
+
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.clearTimeout(timeoutId);
+            window.removeEventListener('pageshow', onPageShow);
+        };
     }, []);
 
     useEffect(() => {
-        if (!user) {
+        if (!userId) {
             navigate('/login');
             return;
         }
 
-        let unsubscribeBookings = () => { };
-        let unsubscribeMachines = () => { };
+        preloadBookingRoute();
 
-        const loadData = async () => {
-            try {
-                const [fetchedSettings, fetchedBanners] = await Promise.all([
-                    firestoreService.getSettings(),
-                    firestoreService.getBanners()
-                ]);
+        let isMounted = true;
+        let machinesReady = hasCachedMachines;
+        let weekBookingsReady = hasCachedWeekBookings;
+        let recentBookingsReady = hasCachedRecentBookings;
 
-                setSettings(fetchedSettings);
-                setBanners(fetchedBanners);
-
-                unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
-                    setMachines(machines);
-                });
-
-                unsubscribeBookings = firestoreService.subscribeToBookings((bookings) => {
-                    setAllBookings(bookings);
-                    const myBookings = bookings.filter(b => b.studentId === user.id);
-                    const chronological = [...myBookings].sort((a, b) =>
-                        new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-                    );
-
-                    const now = getBelarusNow();
-                    const futureBookings = chronological.filter(b => {
-                        // Parse as UTC+3 (Belarus time) by appending +03:00
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
-                        return end > now;
-                    });
-
-                    const pastBookings = chronological.filter(b => {
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
-                        return end <= now;
-                    }).reverse();
-
-                    setUpcomingBookings(futureBookings);
-                    setHistory(pastBookings.slice(0, 3));
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Dashboard bookings subscription error:", error);
-                    setLoading(false);
-                });
-
-            } catch (err) {
-                console.error("Failed to load dashboard data", err);
+        const finishLoadingIfReady = () => {
+            if (isMounted && machinesReady && weekBookingsReady && recentBookingsReady) {
+                setLoadIssue(null);
+                setLoadErrorMessage(null);
                 setLoading(false);
             }
         };
 
-        loadData();
+        const handleResidentDataError = (label: string, error: unknown) => {
+            console.error(label, error);
+            if (!isMounted) return;
+            setLoadErrorMessage('We could not refresh the latest dashboard data. Retry to reconnect.');
+            setLoadIssue(residentSnapshotRef.current ? 'saved' : 'error');
+            setLoading(false);
+        };
+
+        finishLoadingIfReady();
+
+        const unsubscribeMachines = firestoreService.subscribeToMachines((nextMachines) => {
+            if (!isMounted) return;
+            machinesReady = true;
+            startTransition(() => {
+                setMachines(nextMachines);
+            });
+            finishLoadingIfReady();
+        }, (error) => {
+            handleResidentDataError('Dashboard machines subscription error:', error);
+        });
+
+        const unsubscribeWeekBookings = firestoreService.subscribeToBookingsForWeekIds(dashboardWeekIds, (nextBookings) => {
+            if (!isMounted) return;
+            weekBookingsReady = true;
+            startTransition(() => {
+                setWeekBookings(nextBookings);
+            });
+            finishLoadingIfReady();
+        }, (error) => {
+            handleResidentDataError('Dashboard week bookings subscription error:', error);
+        });
+
+        const unsubscribeRecentBookings = firestoreService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
+            if (!isMounted) return;
+            recentBookingsReady = true;
+            startTransition(() => {
+                setRecentBookings(nextBookings);
+            });
+            finishLoadingIfReady();
+        }, (error) => {
+            handleResidentDataError('Dashboard student bookings subscription error:', error);
+        });
+
+        void firestoreService.getSettings()
+            .then((fetchedSettings) => {
+                if (!isMounted) return;
+                startTransition(() => {
+                    setSettings(fetchedSettings);
+                });
+            })
+            .catch((error) => {
+                console.error('Failed to refresh dashboard settings', error);
+            });
+
+        void firestoreService.getBanners()
+            .then((fetchedBanners) => {
+                if (!isMounted) return;
+                startTransition(() => {
+                    setBanners(fetchedBanners);
+                });
+            })
+            .catch((error) => {
+                console.error('Failed to refresh dashboard banners', error);
+            })
+            .finally(() => {
+                if (isMounted) {
+                    setBannersLoading(false);
+                }
+            });
 
         return () => {
-            unsubscribeBookings();
+            isMounted = false;
             unsubscribeMachines();
+            unsubscribeWeekBookings();
+            unsubscribeRecentBookings();
         };
-    }, [user?.id, navigate]);
+    }, [dashboardWeekIds, hasCachedMachines, hasCachedRecentBookings, hasCachedWeekBookings, navigate, reloadKey, userId]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen();
+    const { upcomingBookings, history } = useMemo(() => {
+        const chronological = [...recentBookings].sort((left, right) =>
+            new Date(left.date + 'T' + left.startTime).getTime() - new Date(right.date + 'T' + right.startTime).getTime()
+        );
+
+        const now = getBelarusNow();
+        const upcoming = chronological.filter((booking) => addMinutes(parseISO(booking.date + 'T' + booking.startTime + '+03:00'), 90) > now);
+        const past = chronological
+            .filter((booking) => addMinutes(parseISO(booking.date + 'T' + booking.startTime + '+03:00'), 90) <= now)
+            .reverse();
+
+        return {
+            upcomingBookings: upcoming,
+            history: past.slice(0, 5)
+        };
+    }, [recentBookings]);
+
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
@@ -113,9 +239,8 @@ export default function Dashboard() {
         if (isMaintenanceDay) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
         if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
 
-        // Check current bookings using allBookings state
         const today = formatBelarusDate(getBelarusDate());
-        const bookingsToday = allBookings.filter(b => b.date === today); // In memory filter
+        const bookingsToday = weekBookings.filter(b => b.date === today);
 
         const currentBooking = bookingsToday.find(b => {
             if (b.machineId !== machine.id) return false;
@@ -146,17 +271,32 @@ export default function Dashboard() {
         const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
 
         const totalSlots = slotsPerDay * bookableDates.length;
-        const bookedInTargetWeek = allBookings.filter(
+        const bookedInTargetWeek = weekBookings.filter(
             b => b.weekId === targetWeekId && bookableDates.includes(b.date)
         ).length;
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, allBookings, settings.maintenanceDay, isNextWeekOpen]);
+    }, [machines, settings.maintenanceDay, isNextWeekOpen, weekBookings]);
 
     const handleLogout = () => {
         bookingService.logout();
         navigate('/login');
+    };
+
+    const retryDashboardData = () => {
+        if (hasResidentSnapshot) {
+            setLoadIssue('saved');
+            setLoadErrorMessage('Reconnecting to live dashboard updates...');
+        } else {
+            setLoadIssue(null);
+            setLoadErrorMessage(null);
+            setLoading(true);
+        }
+        if (!hasResidentSnapshot) {
+            setBannersLoading(banners.length === 0);
+        }
+        setReloadKey((current) => current + 1);
     };
 
     const formatUtcForIcs = (date: Date) => {
@@ -168,7 +308,7 @@ export default function Dashboard() {
     const nextWeekId = getBelarusWeekId(nextWeekStart);
 
     // Check if the user has a booking specifically for the *upcoming* week (next week slots)
-    const hasBookedForNextWeek = user ? allBookings.some(b => b.studentId === user.id && b.weekId === nextWeekId) : false;
+    const hasBookedForNextWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === nextWeekId);
 
 
     const primaryUpcomingBooking = upcomingBookings[0] || null;
@@ -226,7 +366,7 @@ export default function Dashboard() {
         }
 
         const targetDateStr = formatBelarusDate(targetDate);
-        const existingSlotBooking = allBookings.find(b =>
+        const existingSlotBooking = weekBookings.find(b =>
             b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
         );
 
@@ -268,19 +408,12 @@ export default function Dashboard() {
                 return;
             }
 
-            const refreshedBookings = await firestoreService.getBookings();
-            setAllBookings(refreshedBookings);
-
-            const myBookings = refreshedBookings.filter(b => b.studentId === user.id);
-            const chronological = [...myBookings].sort((a, b) =>
-                new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-            );
-            const now = new Date();
-            const futureBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now);
-            const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
-
-            setUpcomingBookings(futureBookings);
-            setHistory(pastBookings);
+            const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
+            const createdBooking = { ...bookingData, id: createdSlotId };
+            startTransition(() => {
+                setWeekBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
+                setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
+            });
             setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
 
             // Auto close on success
@@ -297,7 +430,10 @@ export default function Dashboard() {
     };
 
 
-    if (loading) {
+    const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasResidentSnapshot)
+        || (!loading && loadIssue === 'error' && !hasResidentSnapshot);
+
+    if (loading && !showBlockingDashboardNotice) {
         return (
             <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
                 <header style={{ marginBottom: '32px', marginTop: '16px' }}>
@@ -313,6 +449,21 @@ export default function Dashboard() {
             </div>
         );
     }
+
+    if (showBlockingDashboardNotice) {
+        return (
+            <div className="container animate-fade-in flex-center" style={{ minHeight: '100vh', padding: '24px' }}>
+                <DataLoadNotice
+                    tone="error"
+                    title={residentLoadSlow ? 'Dashboard is taking longer than usual' : 'Unable to load dashboard'}
+                    description={loadErrorMessage ?? 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.'}
+                    onRetry={retryDashboardData}
+                    retryLabel="Retry Dashboard"
+                />
+            </div>
+        );
+    }
+
     if (!user) return null;
 
     const quickBookTargetDate = quickBookModalBooking
@@ -394,8 +545,20 @@ export default function Dashboard() {
                 </button>
             </header>
 
+            {loadIssue === 'saved' && (
+                <div style={{ marginBottom: '20px' }}>
+                    <DataLoadNotice
+                        compact
+                        title="Showing saved dashboard data"
+                        description={loadErrorMessage ?? 'Live updates are reconnecting in the background. You can keep using the page.'}
+                        onRetry={retryDashboardData}
+                        retryLabel="Refresh Data"
+                    />
+                </div>
+            )}
+
             {/* Announcements Carousel */}
-            <BannerCarousel banners={banners} />
+            <BannerCarousel banners={banners} isLoading={bannersLoading} />
 
             {/* Main Action */}
             <div
@@ -414,6 +577,8 @@ export default function Dashboard() {
                 </div>
                 <button
                     onClick={() => navigate('/book')}
+                    onMouseEnter={preloadBookingRoute}
+                    onTouchStart={preloadBookingRoute}
                     className="primary-button"
                     style={{
                         padding: '10px 24px',

@@ -1,31 +1,67 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
-import LoginScreen from './pages/LoginScreen';
-import Dashboard from './pages/Dashboard';
-import BookingFlow from './pages/BookingFlow';
-import ManagerPanel from './pages/ManagerPanel';
-import ManagerLogin from './pages/ManagerLogin';
-import PrintSchedule from './pages/PrintSchedule';
-import PrintCredentials from './pages/PrintCredentials';
-import HostelAdminLogin from './pages/HostelAdminLogin';
-import HostelAdminDashboard from './pages/HostelAdminDashboard';
-import { PrivateRoute } from './components/PrivateRoute';
+import { Suspense, useEffect, useLayoutEffect } from 'react';
+import { motion } from 'framer-motion';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { PrivateRoute } from './components/PrivateRoute';
+import { RouteFallback } from './components/RouteFallback';
+import { bookingService } from './services/bookingService';
+import { lazyRoute } from './utils/lazyRoute';
+import { preloadResidentRoutes } from './utils/preloadRoutes';
+import { warmResidentAppData } from './utils/warmResidentApp';
+
+const LoginScreen = lazyRoute(() => import('./pages/LoginScreen'));
+const Dashboard = lazyRoute(() => import('./pages/Dashboard'));
+const BookingFlow = lazyRoute(() => import('./pages/BookingFlow'));
+const ManagerPanel = lazyRoute(() => import('./pages/ManagerPanel'));
+const ManagerLogin = lazyRoute(() => import('./pages/ManagerLogin'));
+const PrintSchedule = lazyRoute(() => import('./pages/PrintSchedule'));
+const PrintCredentials = lazyRoute(() => import('./pages/PrintCredentials'));
+const HostelAdminLogin = lazyRoute(() => import('./pages/HostelAdminLogin'));
+const HostelAdminDashboard = lazyRoute(() => import('./pages/HostelAdminDashboard'));
 
 function ScrollToTopOnRouteChange() {
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
 
   useEffect(() => {
-    // Timeout ensures DOM update has processed before scrolling
-    setTimeout(() => {
-      window.scrollTo(0, 0);
-    }, 10);
-  }, [pathname]);
+    if (!('scrollRestoration' in window.history)) return;
+
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  const forceScrollToTop = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  };
+
+  useLayoutEffect(() => {
+    forceScrollToTop();
+  }, [pathname, key]);
+
+  useEffect(() => {
+    forceScrollToTop();
+
+    const rafId = requestAnimationFrame(() => {
+      forceScrollToTop();
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      forceScrollToTop();
+    }, 100);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [pathname, key]);
 
   return null;
 }
-
-import { motion } from 'framer-motion';
 
 const pageTransition = {
   initial: { opacity: 0, y: 10 },
@@ -44,35 +80,53 @@ const PageWrapper = ({ children }: { children: React.ReactNode }) => (
   </motion.div>
 );
 
+function RouteWarmup() {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const currentUser = bookingService.getCurrentUser();
+      if (currentUser) {
+        preloadResidentRoutes();
+        void warmResidentAppData(currentUser.id);
+      }
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return null;
+}
+
 function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <Routes location={location} key={location.pathname}>
-      <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
+    <Suspense fallback={<RouteFallback />}>
+      <Routes location={location} key={location.pathname}>
+        <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
 
-      <Route path="/" element={
-        <PrivateRoute>
-          <PageWrapper><Dashboard /></PageWrapper>
-        </PrivateRoute>
-      } />
+        <Route path="/" element={
+          <PrivateRoute>
+            <PageWrapper><Dashboard /></PageWrapper>
+          </PrivateRoute>
+        } />
 
-      <Route path="/book" element={
-        <PrivateRoute>
-          <PageWrapper><BookingFlow /></PageWrapper>
-        </PrivateRoute>
-      } />
+        <Route path="/book" element={
+          <PrivateRoute>
+            <PageWrapper><BookingFlow /></PageWrapper>
+          </PrivateRoute>
+        } />
 
-      <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
-      <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
-      <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
-      <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
+        <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
+        <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
+        <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
+        <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
 
-      <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
-      <Route path="/hostel-admin/dashboard" element={<PageWrapper><HostelAdminDashboard /></PageWrapper>} />
+        <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
+        <Route path="/hostel-admin/dashboard" element={<PageWrapper><HostelAdminDashboard /></PageWrapper>} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -80,6 +134,7 @@ function App() {
   return (
     <Router>
       <ScrollToTopOnRouteChange />
+      <RouteWarmup />
       <AnimatedRoutes />
       <Toaster
         position="top-center"

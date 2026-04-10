@@ -5,11 +5,34 @@ import BookingFlow from '../BookingFlow';
 import * as timeUtils from '../../utils/time';
 
 vi.mock('../../services/firestoreService', () => ({
+    DEFAULT_APP_SETTINGS: {
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28,
+        vipAutoEnabled: true,
+        vipLastAppliedWeekId: '',
+        topAlert: { message: '', isActive: false, type: 'info' }
+    },
     firestoreService: {
-        getAppSettings: vi.fn(),
-        subscribeToAppSettings: vi.fn(),
-        subscribeToMachines: vi.fn(),
-        subscribeToBookings: vi.fn(),
+        getCachedMachines: vi.fn(() => undefined),
+        getCachedBookingsForWeekIds: vi.fn(() => undefined),
+        getCachedSettings: vi.fn(() => undefined),
+        getSettings: vi.fn(() => Promise.resolve({
+            forceShowNextWeek: false,
+            forceCloseBookings: false,
+            maintenanceDay: 3,
+            autoOpenWeekday: 6,
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+            vipAutoEnabled: true,
+            vipLastAppliedWeekId: '',
+            topAlert: { message: '', isActive: false, type: 'info' }
+        })),
+        subscribeToMachines: vi.fn(() => () => {}),
+        subscribeToBookingsForWeekIds: vi.fn(() => () => {}),
     }
 }));
 

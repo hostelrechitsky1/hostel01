@@ -12,6 +12,7 @@ import {
     formatBelarusWeekdayLabel,
     getBelarusDate,
     getBelarusWeekEnd,
+    getBelarusWeekId,
     getBelarusWeekStart,
     getBelarusWeekday,
     isAutoBookingWindowOpen
@@ -19,9 +20,7 @@ import {
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
-    const [weekOffset, setWeekOffset] = useState(() => {
-        return isAutoBookingWindowOpen() ? 1 : 0;
-    });
+    const [weekOffset, setWeekOffset] = useState(0);
 
     const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const isStaff = sessionStorage.getItem('hostel_admin_auth');
@@ -61,6 +60,11 @@ export default function PrintSchedule() {
     useEffect(() => {
         const isManager = sessionStorage.getItem('manager_auth');
         const isStaff = sessionStorage.getItem('hostel_admin_auth');
+        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        const relevantWeekIds = [
+            getBelarusWeekId(currentWeekStart),
+            getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
+        ];
 
         if (!isManager && !isStaff) {
             navigate('/manager');
@@ -71,7 +75,7 @@ export default function PrintSchedule() {
             try {
                 const [ms, bs, ss, settings] = await Promise.all([
                     firestoreService.getMachines(),
-                    firestoreService.getBookings(),
+                    firestoreService.getBookingsForWeekIds(relevantWeekIds),
                     firestoreService.getAllStudents(),
                     firestoreService.getSettings()
                 ]);
@@ -79,10 +83,9 @@ export default function PrintSchedule() {
                 setBookings(bs);
                 setStudents(ss);
 
-                // Smart Auto-Switch if Force Open is active
-                if (settings.forceShowNextWeek) {
-                    setWeekOffset(1);
-                }
+                // Smart Auto-Switch based on force setting or auto schedule
+                const shouldShowNextWeek = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+                setWeekOffset(shouldShowNextWeek ? 1 : 0);
                 if (typeof settings.maintenanceDay === 'number') {
                     setMaintenanceDay(settings.maintenanceDay);
                 }

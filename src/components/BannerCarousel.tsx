@@ -1,39 +1,115 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Banner } from '../types';
 
 interface InternalBannerCarouselProps {
     banners: Banner[];
+    isLoading?: boolean;
 }
+
+interface NetworkInformation {
+    effectiveType?: string;
+    saveData?: boolean;
+}
+
+type NavigatorWithConnection = Navigator & {
+    connection?: NetworkInformation;
+    mozConnection?: NetworkInformation;
+    webkitConnection?: NetworkInformation;
+};
+
+const getConnectionInfo = () => {
+    const navigatorConnection = navigator as NavigatorWithConnection;
+    return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
+};
+
+const getAdaptiveBannerSrc = (source: string) => {
+    if (!source.includes('drive.google.com/thumbnail')) return source;
+
+    const connection = getConnectionInfo();
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+    const isMobile = window.innerWidth < 768;
+
+    let qualityWidth = 'w1920';
+
+    if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
+        qualityWidth = isMobile ? 'w360' : 'w640';
+    } else if (effectiveType === '3g') {
+        qualityWidth = isMobile ? 'w480' : 'w960';
+    } else if (isMobile) {
+        qualityWidth = 'w800';
+    }
+
+    return source.replace(/sz=w\d+/, `sz=${qualityWidth}`);
+};
+
+const getTinyBannerSrc = (source: string) => {
+    if (!source.includes('drive.google.com/thumbnail')) return source;
+    const isMobile = window.innerWidth < 768;
+    const tinyWidth = isMobile ? 'w240' : 'w480';
+    return source.replace(/sz=w\d+/, `sz=${tinyWidth}`);
+};
+
+const shouldUpgradeToFullQuality = () => {
+    const connection = getConnectionInfo();
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+    return !saveData && effectiveType !== 'slow-2g' && effectiveType !== '2g' && effectiveType !== '3g';
+};
 
 // Helper component to handle image loading and retries
 const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
-    const [imgSrc, setImgSrc] = useState(src);
+    const [imgSrc, setImgSrc] = useState(() => getTinyBannerSrc(src));
     const [error, setError] = useState(false);
     const [loaded, setLoaded] = useState(false);
+    const [tinyLoaded, setTinyLoaded] = useState(false);
     const imgRef = useRef<HTMLImageElement>(null);
+    const adaptiveSrcRef = useRef<string | null>(null);
+    const highQualitySrcRef = useRef<string | null>(null);
 
     useEffect(() => {
-        // Adaptive sizing for Google Drive images
-        let optimizedSrc = src;
-        const isMobile = window.innerWidth < 768;
+        const tinySrc = getTinyBannerSrc(src);
+        const optimizedSrc = getAdaptiveBannerSrc(src);
+        adaptiveSrcRef.current = optimizedSrc;
+        highQualitySrcRef.current = src;
+        setTinyLoaded(false);
 
-        if (src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920') && isMobile) {
-            optimizedSrc = src.replace('sz=w1920', 'sz=w800');
-        }
-
-        // Only reset loaded state if the source is actually changing to a new URL
-        if (optimizedSrc !== imgSrc) {
+        // Only reset loaded state if the source is actually changing to a new URL.
+        if (tinySrc !== imgSrc) {
             setLoaded(false);
-            setImgSrc(optimizedSrc);
+            setImgSrc(tinySrc);
         } else {
-            // If source is same, check if already complete (e.g. from cache or instant load)
+            // If source is same, check if already complete (e.g. from cache or instant load).
             if (imgRef.current?.complete) {
                 setLoaded(true);
+                setTinyLoaded(true);
             }
         }
 
         setError(false);
     }, [src]);
+
+    useEffect(() => {
+        if (!tinyLoaded || !adaptiveSrcRef.current) return;
+
+        const nextAdaptiveSrc = adaptiveSrcRef.current;
+        if (imgSrc === nextAdaptiveSrc) return;
+
+        const adaptiveImage = new Image();
+        adaptiveImage.src = nextAdaptiveSrc;
+        adaptiveImage.onload = () => setImgSrc(nextAdaptiveSrc);
+    }, [tinyLoaded, imgSrc]);
+
+    useEffect(() => {
+        if (!loaded || !priority || !highQualitySrcRef.current || !shouldUpgradeToFullQuality()) return;
+
+        const nextHighQualitySrc = highQualitySrcRef.current;
+        if (imgSrc === nextHighQualitySrc) return;
+
+        const highQualityImage = new Image();
+        highQualityImage.src = nextHighQualitySrc;
+        highQualityImage.onload = () => setImgSrc(nextHighQualitySrc);
+    }, [loaded, priority, imgSrc]);
 
     const handleError = () => {
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
@@ -77,10 +153,16 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
                     transition: 'opacity 0.3s ease-in-out',
                     zIndex: 1
                 }}
-                onLoad={() => setLoaded(true)}
+                onLoad={() => {
+                    setTinyLoaded(true);
+                    setLoaded(true);
+                }}
                 onError={handleError}
                 referrerPolicy="no-referrer"
+                decoding="async"
+                draggable={false}
                 loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
             />
             <style>{`
                 @keyframes shimmer {
@@ -92,11 +174,16 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     );
 };
 
-export default function BannerCarousel({ banners }: InternalBannerCarouselProps) {
-    // Filter    // activeBanners filtering is redundant if done inside the component, but good to keep clean
-    const activeBanners = banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority);
+function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselProps) {
+    const activeBanners = useMemo(
+        () => banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority),
+        [banners]
+    );
     const [currentIndex, setCurrentIndex] = useState(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isVisible, setIsVisible] = useState(true);
+    const [isPageVisible, setIsPageVisible] = useState(() => typeof document === 'undefined' || document.visibilityState === 'visible');
 
     // Swipe State
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -109,7 +196,33 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
 
     // Auto-play
     useEffect(() => {
-        if (activeBanners.length <= 1 || isDragging) return;
+        if (typeof document === 'undefined') return;
+
+        const handleVisibilityChange = () => {
+            setIsPageVisible(document.visibilityState === 'visible');
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!containerRef.current || typeof IntersectionObserver === 'undefined') return;
+
+        const observer = new IntersectionObserver(([entry]) => {
+            setIsVisible(entry.isIntersecting);
+        }, { rootMargin: '160px 0px' });
+
+        observer.observe(containerRef.current);
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (activeBanners.length <= 1 || isDragging || !isVisible || !isPageVisible) return;
 
         const startInterval = () => {
             intervalRef.current = setInterval(() => {
@@ -122,24 +235,21 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [activeBanners.length, isDragging]);
+    }, [activeBanners.length, isDragging, isPageVisible, isVisible]);
 
-    // Preload ALL active images logic
+    // Preload current + next banner only to reduce bandwidth spikes on slow networks
     useEffect(() => {
-        if (activeBanners.length > 0) {
-            activeBanners.forEach(banner => {
-                if (banner.imageUrl) {
-                    const img = new Image();
-                    // Apply same mobile optimization to preload url
-                    let src = banner.imageUrl;
-                    if (window.innerWidth < 768 && src.includes('drive.google.com/thumbnail') && src.includes('sz=w1920')) {
-                        src = src.replace('sz=w1920', 'sz=w800');
-                    }
-                    img.src = src;
-                }
-            });
-        }
-    }, [activeBanners]);
+        if (activeBanners.length === 0 || !isVisible) return;
+
+        const preloadIndexes = [currentIndex, (currentIndex + 1) % activeBanners.length];
+        preloadIndexes.forEach((index) => {
+            const banner = activeBanners[index];
+            if (!banner?.imageUrl) return;
+
+            const img = new Image();
+            img.src = getAdaptiveBannerSrc(banner.imageUrl);
+        });
+    }, [activeBanners, currentIndex, isVisible]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
@@ -188,10 +298,44 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         setTouchEnd(null);
     };
 
+    if (isLoading) {
+        return (
+            <div
+                className="banner-carousel-container"
+                style={{
+                    width: '100%',
+                    marginBottom: '24px',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    aspectRatio: '16/9',
+                    maxHeight: '300px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    background: '#1f2937'
+                }}
+            >
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.5s infinite'
+                }} />
+                <style>{`
+                    @keyframes shimmer {
+                        0% { background-position: 200% 0; }
+                        100% { background-position: -200% 0; }
+                    }
+                `}</style>
+            </div>
+        );
+    }
+
     if (activeBanners.length === 0) return null;
 
     return (
         <div
+            ref={containerRef}
             className="banner-carousel-container"
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
@@ -326,3 +470,5 @@ export default function BannerCarousel({ banners }: InternalBannerCarouselProps)
         </div>
     );
 }
+
+export default memo(BannerCarousel);
