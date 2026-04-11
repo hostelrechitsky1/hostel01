@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { firestoreService } from '../services/firestoreService';
+import { residentFirestoreService } from '../services/residentFirestoreService';
 import { bookingService } from '../services/bookingService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check } from 'lucide-react';
@@ -22,7 +22,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         const user = bookingService.getCurrentUser();
 
         try {
-            await firestoreService.addFeedback({
+            await residentFirestoreService.addFeedback({
                 id: Date.now().toString(),
                 studentId: user?.id,
                 studentName: user?.name || 'Anonymous',

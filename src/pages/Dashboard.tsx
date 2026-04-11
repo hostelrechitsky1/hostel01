@@ -2,7 +2,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { DEFAULT_APP_SETTINGS, firestoreService } from '../services/firestoreService';
+import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight, ChevronDown, Check } from 'lucide-react';
@@ -72,15 +72,15 @@ export default function Dashboard() {
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
     }, []);
-    const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
-    const cachedWeekBookings = useMemo(() => firestoreService.getCachedBookingsForWeekIds(dashboardWeekIds), [dashboardWeekIds]);
+    const cachedMachines = useMemo(() => residentFirestoreService.getCachedMachines(), []);
+    const cachedWeekBookings = useMemo(() => residentFirestoreService.getCachedBookingsForWeekIds(dashboardWeekIds), [dashboardWeekIds]);
     const cachedRecentBookings = useMemo(() => (
         userId
-            ? firestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+            ? residentFirestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
             : undefined
     ), [userId]);
-    const cachedSettings = useMemo(() => firestoreService.getCachedSettings(), []);
-    const cachedBanners = useMemo(() => firestoreService.getCachedBanners(), []);
+    const cachedSettings = useMemo(() => residentFirestoreService.getCachedSettings(), []);
+    const cachedBanners = useMemo(() => residentFirestoreService.getCachedBanners(), []);
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
     const hasCachedRecentBookings = cachedRecentBookings !== undefined;
@@ -122,7 +122,7 @@ export default function Dashboard() {
         let isMounted = true;
         setRoommatesLoading(true);
 
-        void firestoreService.getStudentsByRoom(user.roomNumber)
+        void residentFirestoreService.getStudentsByRoom(user.roomNumber)
             .then((fetchedRoommates) => {
                 if (!isMounted) return;
                 const sameRoomResidents = fetchedRoommates.filter((student) => student.roomNumber === user.roomNumber);
@@ -211,7 +211,7 @@ export default function Dashboard() {
 
         finishLoadingIfReady();
 
-        const unsubscribeMachines = firestoreService.subscribeToMachines((nextMachines) => {
+        const unsubscribeMachines = residentFirestoreService.subscribeToMachines((nextMachines) => {
             if (!isMounted) return;
             machinesReady = true;
             startTransition(() => {
@@ -222,7 +222,7 @@ export default function Dashboard() {
             handleResidentDataError('Dashboard machines subscription error:', error);
         });
 
-        const unsubscribeWeekBookings = firestoreService.subscribeToBookingsForWeekIds(dashboardWeekIds, (nextBookings) => {
+        const unsubscribeWeekBookings = residentFirestoreService.subscribeToBookingsForWeekIds(dashboardWeekIds, (nextBookings) => {
             if (!isMounted) return;
             weekBookingsReady = true;
             startTransition(() => {
@@ -233,7 +233,7 @@ export default function Dashboard() {
             handleResidentDataError('Dashboard week bookings subscription error:', error);
         });
 
-        const unsubscribeRecentBookings = firestoreService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
+        const unsubscribeRecentBookings = residentFirestoreService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
             if (!isMounted) return;
             recentBookingsReady = true;
             startTransition(() => {
@@ -244,7 +244,7 @@ export default function Dashboard() {
             handleResidentDataError('Dashboard student bookings subscription error:', error);
         });
 
-        void firestoreService.getSettings()
+        void residentFirestoreService.getSettings()
             .then((fetchedSettings) => {
                 if (!isMounted) return;
                 startTransition(() => {
@@ -255,7 +255,7 @@ export default function Dashboard() {
                 console.error('Failed to refresh dashboard settings', error);
             });
 
-        void firestoreService.getBanners()
+        void residentFirestoreService.getBanners()
             .then((fetchedBanners) => {
                 if (!isMounted) return;
                 startTransition(() => {
@@ -392,7 +392,7 @@ export default function Dashboard() {
             return;
         }
 
-        const cachedBookings = firestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
+        const cachedBookings = residentFirestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
 
         bookingService.setCurrentUser(nextResident);
         startTransition(() => {
@@ -525,7 +525,7 @@ export default function Dashboard() {
         };
 
         try {
-            const result = await firestoreService.createBooking(bookingData);
+            const result = await residentFirestoreService.createBooking(bookingData);
             if (!result.success) {
                 const detailedError = result.error?.includes('Slot already booked by another student')
                     ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'

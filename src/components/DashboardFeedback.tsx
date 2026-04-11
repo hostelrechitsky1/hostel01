@@ -8,7 +8,7 @@ import {
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
-import { firestoreService } from '../services/firestoreService';
+import { residentFirestoreService } from '../services/residentFirestoreService';
 import type { Feedback, FeedbackType } from '../types';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
@@ -32,7 +32,7 @@ export default function DashboardFeedback() {
     const user = bookingService.getCurrentUser();
     const cachedFeedbacks = useMemo(() => {
         if (!user) return undefined;
-        return firestoreService.getCachedFeedbacksForResident(
+        return residentFirestoreService.getCachedFeedbacksForResident(
             user.id ?? '',
             user.name,
             user.roomNumber,
@@ -55,7 +55,7 @@ export default function DashboardFeedback() {
     useEffect(() => {
         if (!user) return;
 
-        return firestoreService.subscribeToFeedbacksForResident(
+        return residentFirestoreService.subscribeToFeedbacksForResident(
             user.id ?? '',
             user.name,
             user.roomNumber,
@@ -74,7 +74,7 @@ export default function DashboardFeedback() {
         setLoading(true);
 
         try {
-            await firestoreService.addFeedback({
+            await residentFirestoreService.addFeedback({
                 id: Date.now().toString(),
                 studentId: user.id,
                 studentName: user.name,

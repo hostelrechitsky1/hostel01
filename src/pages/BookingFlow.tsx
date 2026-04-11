@@ -2,7 +2,7 @@ import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState }
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { DEFAULT_APP_SETTINGS, firestoreService } from '../services/firestoreService';
+import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
@@ -49,9 +49,9 @@ export default function BookingFlow() {
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
     }, []);
-    const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
-    const cachedWeekBookings = useMemo(() => firestoreService.getCachedBookingsForWeekIds(bookingWeekIds), [bookingWeekIds]);
-    const cachedSettings = useMemo(() => firestoreService.getCachedSettings(), []);
+    const cachedMachines = useMemo(() => residentFirestoreService.getCachedMachines(), []);
+    const cachedWeekBookings = useMemo(() => residentFirestoreService.getCachedBookingsForWeekIds(bookingWeekIds), [bookingWeekIds]);
+    const cachedSettings = useMemo(() => residentFirestoreService.getCachedSettings(), []);
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
 
@@ -121,7 +121,7 @@ export default function BookingFlow() {
 
         finishLoadingIfReady();
 
-        const unsubscribeMachines = firestoreService.subscribeToMachines((nextMachines) => {
+        const unsubscribeMachines = residentFirestoreService.subscribeToMachines((nextMachines) => {
             if (!isMounted) return;
             machinesReady = true;
             startTransition(() => {
@@ -132,7 +132,7 @@ export default function BookingFlow() {
             handleBookingLoadError('Machine fetching error:', error);
         });
 
-        const unsubscribeBookings = firestoreService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
+        const unsubscribeBookings = residentFirestoreService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
             if (!isMounted) return;
             bookingsReady = true;
             startTransition(() => {
@@ -143,7 +143,7 @@ export default function BookingFlow() {
             handleBookingLoadError('Booking streaming error:', error);
         });
 
-        void firestoreService.getSettings()
+        void residentFirestoreService.getSettings()
             .then((nextSettings) => {
                 if (!isMounted) return;
                 startTransition(() => {
@@ -290,7 +290,7 @@ export default function BookingFlow() {
         };
 
         try {
-            const result = await firestoreService.createBooking(bookingData);
+            const result = await residentFirestoreService.createBooking(bookingData);
             if (result.success) {
                 const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
                 hapticSuccess();

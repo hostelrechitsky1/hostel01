@@ -17,17 +17,17 @@ export const warmResidentAppData = (studentId?: string) => {
         return existingWarmup;
     }
 
-    const warmup = import('../services/firestoreService')
-        .then(({ firestoreService }) => {
+    const warmup = import('../services/residentFirestoreService')
+        .then(({ residentFirestoreService }) => {
             const tasks: Promise<unknown>[] = [
-                firestoreService.getSettings(),
-                firestoreService.getMachines(),
-                firestoreService.getBanners(),
-                firestoreService.getBookingsForWeekIds(relevantWeekIds),
+                residentFirestoreService.getSettings(),
+                residentFirestoreService.getMachines(),
+                residentFirestoreService.getBanners(),
+                residentFirestoreService.getBookingsForWeekIds(relevantWeekIds),
             ];
 
             if (studentId) {
-                tasks.push(firestoreService.getRecentBookingsForStudent(studentId, 12));
+                tasks.push(residentFirestoreService.getRecentBookingsForStudent(studentId, 12));
             }
 
             return Promise.allSettled(tasks).then((results) => {

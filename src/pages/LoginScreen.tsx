@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { firestoreService } from '../services/firestoreService';
+import { residentFirestoreService } from '../services/residentFirestoreService';
 import { Building, ArrowRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -23,7 +23,7 @@ export default function LoginScreen() {
         setLoading(true);
 
         try {
-            const roomStudents = await firestoreService.getStudentsByRoom(room);
+            const roomStudents = await residentFirestoreService.getStudentsByRoom(room);
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);

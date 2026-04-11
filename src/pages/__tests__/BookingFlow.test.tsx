@@ -4,7 +4,7 @@ import { vi, describe, it, expect } from 'vitest';
 import BookingFlow from '../BookingFlow';
 import * as timeUtils from '../../utils/time';
 
-vi.mock('../../services/firestoreService', () => ({
+vi.mock('../../services/residentFirestoreService', () => ({
     DEFAULT_APP_SETTINGS: {
         forceShowNextWeek: false,
         forceCloseBookings: false,
@@ -16,7 +16,7 @@ vi.mock('../../services/firestoreService', () => ({
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
     },
-    firestoreService: {
+    residentFirestoreService: {
         getCachedMachines: vi.fn(() => undefined),
         getCachedBookingsForWeekIds: vi.fn(() => undefined),
         getCachedSettings: vi.fn(() => undefined),

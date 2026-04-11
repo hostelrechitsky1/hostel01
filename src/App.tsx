@@ -1,5 +1,4 @@
 import { Suspense, useEffect, useLayoutEffect } from 'react';
-import { motion } from 'framer-motion';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -102,21 +101,10 @@ function ScrollToTopOnRouteChange() {
   return null;
 }
 
-const pageTransition = {
-  initial: { opacity: 0, y: 10 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.15, ease: 'easeOut' }
-};
-
 const PageWrapper = ({ children }: { children: React.ReactNode }) => (
-  <motion.div
-    initial="initial"
-    animate="animate"
-    variants={pageTransition}
-    style={{ width: '100%', height: '100%' }}
-  >
+  <div className="animate-fade-in" style={{ width: '100%', height: '100%' }}>
     {children}
-  </motion.div>
+  </div>
 );
 
 function RouteWarmup() {
