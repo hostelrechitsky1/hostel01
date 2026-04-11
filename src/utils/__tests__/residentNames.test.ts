@@ -31,6 +31,13 @@ describe('residentNames', () => {
         expect(getResidentFirstNameForLanguage('Силва Константирире Айон Шанилка', false)).toBe('Silva');
     });
 
+    it('uses hostel-friendly transliteration for H and J sounds', () => {
+        expect(getResidentNameForLanguage('Кхан Сара', false)).toBe('Khan Sara');
+        expect(getResidentNameForLanguage('Амир Хуссаин Абдул Рахуман', false)).toBe('Amir Hussain Abdul Rahuman');
+        expect(getResidentNameForLanguage('Джаясингхе', false)).toBe('Jayasinghe');
+        expect(getResidentNameForLanguage('Джунаид Сахид', false)).toBe('Junaid Sahid');
+    });
+
     it('keeps original resident names in Russian mode', () => {
         expect(getResidentNameForLanguage('Силва Константирире Айон Шанилка', true)).toBe('Силва Константирире Айон Шанилка');
     });

@@ -1,3 +1,10 @@
+const CYRILLIC_REPLACEMENTS: Array<[RegExp, string]> = [
+    [/Дж/g, 'J'],
+    [/дж/g, 'j'],
+    [/ДЖ/g, 'J'],
+    [/дЖ/g, 'j'],
+];
+
 const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
     А: 'A', а: 'a',
     Б: 'B', б: 'b',
@@ -21,7 +28,7 @@ const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
     Т: 'T', т: 't',
     У: 'U', у: 'u',
     Ф: 'F', ф: 'f',
-    Х: 'Kh', х: 'kh',
+    Х: 'H', х: 'h',
     Ц: 'Ts', ц: 'ts',
     Ч: 'Ch', ч: 'ch',
     Ш: 'Sh', ш: 'sh',
@@ -33,6 +40,10 @@ const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
     Ю: 'Yu', ю: 'yu',
     Я: 'Ya', я: 'ya',
 };
+
+const applyCyrillicReplacements = (name: string) => (
+    CYRILLIC_REPLACEMENTS.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), name)
+);
 
 const getResidentNameParts = (name: string) => name.trim().split(/\s+/).filter(Boolean);
 
@@ -68,7 +79,9 @@ export const getResidentInitials = (name: string) => {
 export const getResidentShortName = (name: string) => getResidentDisplayParts(name).join(' ');
 
 export const transliterateResidentName = (name: string) => (
-    Array.from(name).map((character) => CYRILLIC_TO_LATIN_MAP[character] ?? character).join('')
+    Array.from(applyCyrillicReplacements(name))
+        .map((character) => CYRILLIC_TO_LATIN_MAP[character] ?? character)
+        .join('')
 );
 
 export const getResidentNameForLanguage = (name: string, isRussian = false) => (
