@@ -332,7 +332,7 @@ export default function LoginScreen() {
         <div className="login-split">
             <div className="login-left">
                 <div
-                    className="glass-panel"
+                    className="glass-panel login-card"
                     style={{
                         padding: '48px',
                         width: '100%',
