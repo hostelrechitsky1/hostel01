@@ -8,7 +8,7 @@ import {
 const BOOKINGS_COL = 'bookings'
 const BOOKING_LIMITS_COL = 'bookingLimits'
 
-const getBookingConflictMessage = async (slotId, limitId) => {
+const getBookingConflictDetails = async (slotId, limitId) => {
   try {
     const [slotDoc, limitDoc] = await Promise.all([
       getFirestoreDocument(BOOKINGS_COL, slotId),
@@ -16,17 +16,26 @@ const getBookingConflictMessage = async (slotId, limitId) => {
     ])
 
     if (slotDoc) {
-      return 'Slot already booked by another student. Please try a different time.'
+      return {
+        error: 'Slot already booked by another student. Please try a different time.',
+        errorCode: 'slot_conflict',
+      }
     }
 
     if (limitDoc) {
-      return 'You have already booked a slot for this week.'
+      return {
+        error: 'You have already booked a slot for this week.',
+        errorCode: 'weekly_limit',
+      }
     }
   } catch (error) {
     console.error('Failed to inspect booking conflict details', error)
   }
 
-  return 'This slot is no longer available right now. Please refresh and try another slot.'
+  return {
+    error: 'This slot is no longer available right now. Please refresh and try another slot.',
+    errorCode: 'unknown_conflict',
+  }
 }
 
 export const handler = async (event) => {
@@ -78,10 +87,10 @@ export const handler = async (event) => {
       : null
 
     if (slotId && limitId) {
-      const message = await getBookingConflictMessage(slotId, limitId)
+      const conflict = await getBookingConflictDetails(slotId, limitId)
       return jsonResponse(409, {
         success: false,
-        error: message,
+        ...conflict,
       }, {
         'Cache-Control': 'no-store',
       })

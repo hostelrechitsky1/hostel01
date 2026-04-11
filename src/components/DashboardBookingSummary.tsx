@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { addBelarusDays, addBelarusMinutes, formatBelarusDate, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday, parseBelarusDateTime } from '../utils/time';
+import { addBelarusDays, addBelarusMinutes, addMinutesToTimeString, formatBelarusDate, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday, parseBelarusDateTime } from '../utils/time';
 import { hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from './ActionSpinner';
+import { getQuickBookFailureMessage } from '../utils/bookingMutations';
 
 interface DashboardBookingSummaryProps {
     user: Student;
@@ -132,7 +133,7 @@ export default function DashboardBookingSummary({
             roomNumber: user.roomNumber,
             date: targetDateStr,
             startTime: booking.startTime,
-            endTime: booking.startTime,
+            endTime: addMinutesToTimeString(booking.startTime, 90),
             weekId: getBelarusWeekId(targetDate),
             createdAt: Date.now()
         };
@@ -141,12 +142,7 @@ export default function DashboardBookingSummary({
             const { residentMutationsService } = await loadResidentMutationsService();
             const result = await residentMutationsService.createBooking(bookingData);
             if (!result.success) {
-                const detailedError = result.error?.includes('Slot already booked by another student')
-                    ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'
-                    : result.error?.includes('already booked a slot for this week')
-                        ? 'You already have a booking for this week (including bookings made via Book Now page).'
-                        : result.error || 'Quick booking failed. Please try again.';
-                setQuickBookModalMessage({ type: 'error', text: detailedError });
+                setQuickBookModalMessage({ type: 'error', text: getQuickBookFailureMessage(result.errorCode, result.error) });
                 return;
             }
 

@@ -4,6 +4,7 @@ import {
     CACHE_MAX_AGE_MS,
     DEFAULT_APP_SETTINGS,
     filterFeedbacksForResident,
+    getBookingsByDateCacheKey,
     getBookingsByWeeksCacheKey,
     getCachedResidentBanners,
     getCachedResidentMachines,
@@ -116,6 +117,15 @@ const fetchBookingsForWeekIdsViaLiteFallback = async (weekIds: string[]) => {
 
     const { db, collection, getDocs, query, where } = await loadFirestoreLiteClient();
     const bookingsQuery = query(collection(db, BOOKINGS_COL), where('weekId', 'in', normalizedWeekIds));
+    const snapshot = await getDocs(bookingsQuery);
+    return sortBookingsChronologically(snapshot.docs.map((bookingDoc) => bookingDoc.data() as Booking));
+};
+
+const fetchBookingsForDateViaLiteFallback = async (date: string) => {
+    if (!date) return [];
+
+    const { db, collection, getDocs, query, where } = await loadFirestoreLiteClient();
+    const bookingsQuery = query(collection(db, BOOKINGS_COL), where('date', '==', date));
     const snapshot = await getDocs(bookingsQuery);
     return sortBookingsChronologically(snapshot.docs.map((bookingDoc) => bookingDoc.data() as Booking));
 };
@@ -244,6 +254,29 @@ export const residentFirestoreService = {
             } catch (error) {
                 console.warn('REST week bookings fetch failed, falling back to Firestore Lite.', error);
                 return fetchBookingsForWeekIdsViaLiteFallback(normalizedWeekIds);
+            }
+        });
+    },
+
+    async getBookingsForDate(date: string): Promise<Booking[]> {
+        const normalizedDate = date.trim();
+        if (!normalizedDate) return [];
+
+        return resolveResidentCache(getBookingsByDateCacheKey(normalizedDate), CACHE_MAX_AGE_MS.bookingsByWeek, async () => {
+            try {
+                const documents = await runFirestoreQueryDocuments({
+                    collectionId: BOOKINGS_COL,
+                    filters: [{
+                        fieldPath: 'date',
+                        op: 'EQUAL',
+                        value: { stringValue: normalizedDate },
+                    }],
+                });
+
+                return sortBookingsChronologically(documents.map((document) => decodeFirestoreDocument<Booking>(document)));
+            } catch (error) {
+                console.warn('REST date bookings fetch failed, falling back to Firestore Lite.', error);
+                return fetchBookingsForDateViaLiteFallback(normalizedDate);
             }
         });
     },

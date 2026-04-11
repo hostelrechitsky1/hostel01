@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getNextSaturday1600 } from '../time';
+import { addMinutesToTimeString, getNextSaturday1600 } from '../time';
 
 describe('getNextSaturday1600 (Belarus Time UTC+3)', () => {
     beforeEach(() => {
@@ -48,5 +48,9 @@ describe('getNextSaturday1600 (Belarus Time UTC+3)', () => {
 
         // Next Saturday is March 7, 2026, 16:00 Belarus time (13:00 UTC)
         expect(nextTarget.toISOString()).toBe('2026-03-07T13:00:00.000Z');
+    });
+
+    it('adds minutes to a time string', () => {
+        expect(addMinutesToTimeString('21:00', 90)).toBe('22:30');
     });
 });

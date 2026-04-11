@@ -2,13 +2,14 @@ import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState }
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { DEFAULT_APP_SETTINGS } from '../services/residentFirestoreService';
+import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
+    addMinutesToTimeString,
     addBelarusDays,
     formatBelarusDate,
     formatBelarusMonthDayLabel,
@@ -29,7 +30,8 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from '../components/ActionSpinner';
 import { finishResidentPerfSpan } from '../utils/performance';
-import { notifyError } from '../utils/notify';
+import { notifyError, notifyInfo } from '../utils/notify';
+import { getBookNowFailureMessage, isBookingAvailabilityConflict } from '../utils/bookingMutations';
 
 let confettiPromise: Promise<typeof import('react-confetti')> | null = null;
 
@@ -110,6 +112,7 @@ export default function BookingFlow() {
     // Async State
     const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
     const [bookings, setBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const selectedDateKey = useMemo(() => formatBelarusDate(selectedDate), [selectedDate]);
     const hasBookingSnapshot = hasCachedMachines
         || hasCachedWeekBookings
         || machines.length > 0
@@ -301,7 +304,6 @@ export default function BookingFlow() {
         let idleHandle: number | null = null;
         let liveAttachTimeoutId: number | null = null;
         const liveSyncReason = liveSyncReasonRef.current;
-        const selectedDateKey = formatBelarusDate(selectedDate);
 
         const attachLiveStreams = () => {
             void loadResidentLiveService()
@@ -367,7 +369,7 @@ export default function BookingFlow() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [liveSyncRequested, reloadKey, selectedDate, userId]);
+    }, [liveSyncRequested, reloadKey, selectedDateKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -432,8 +434,7 @@ export default function BookingFlow() {
     }, [showConfirmModal]);
 
     const availability = useMemo(() => {
-        const dateStr = formatBelarusDate(selectedDate);
-        const dateBookings = bookings.filter(b => b.date === dateStr);
+        const dateBookings = bookings.filter(b => b.date === selectedDateKey);
         const now = getBelarusNow();
         const isToday = isSameBelarusDay(selectedDate, getBelarusDate());
         const currentHour = now.getUTCHours();
@@ -455,7 +456,7 @@ export default function BookingFlow() {
             const isFull = bookedMachineIds.length >= activeMachines.length;
             return { time, bookedMachineIds, isFull, isPassed };
         });
-    }, [selectedDate, activeMachines, bookings]);
+    }, [activeMachines, bookings, selectedDate, selectedDateKey]);
 
 
     const totalSlotsPerTime = activeMachines.length;
@@ -466,6 +467,21 @@ export default function BookingFlow() {
             return sum + remaining;
         }, 0);
     }, [availability, totalSlotsPerTime]);
+
+    const refreshDateAvailability = async (dateKey: string) => {
+        requestLiveSync('interaction');
+
+        try {
+            const latestDateBookings = await residentFirestoreService.getBookingsForDate(dateKey);
+            startTransition(() => {
+                setBookings((currentBookings) => replaceBookingsForDate(currentBookings, dateKey, latestDateBookings));
+            });
+            return true;
+        } catch (error) {
+            console.error('Failed to refresh selected date availability', error);
+            return false;
+        }
+    };
 
     const handleBook = async () => {
         if (!selectedSlot || !selectedMachine || !user || submitting) return;
@@ -484,9 +500,7 @@ export default function BookingFlow() {
             }
         }
 
-        const [h, m] = startTime.split(':').map(Number);
-        const endMinutes = h * 60 + m + 90;
-        const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+        const endTime = addMinutesToTimeString(startTime, 90);
 
         const bookingData: Booking = {
             id: Date.now().toString(),
@@ -494,7 +508,7 @@ export default function BookingFlow() {
             studentId: user.id,
             studentName: user.name,
             roomNumber: user.roomNumber,
-            date: formatBelarusDate(selectedDate),
+            date: selectedDateKey,
             startTime,
             endTime,
             weekId: getBelarusWeekId(selectedDate),
@@ -520,8 +534,29 @@ export default function BookingFlow() {
                 setShowConfirmation(true);
                 setSelectedMachine(null);
                 setPendingBooking(null);
+                requestLiveSync('interaction');
+                void refreshDateAvailability(createdBooking.date);
             } else {
-                notifyError(result.error || 'Booking failed');
+                const isAvailabilityConflict = isBookingAvailabilityConflict(result.errorCode, result.error);
+
+                if (isAvailabilityConflict) {
+                    const refreshed = await refreshDateAvailability(bookingData.date);
+                    setShowConfirmModal(false);
+                    setSelectedMachine(null);
+                    notifyInfo(
+                        refreshed
+                            ? 'That slot was just booked by another resident. Availability refreshed.'
+                            : 'That slot is no longer available. Live availability is reconnecting.'
+                    );
+                    return;
+                }
+
+                if (result.errorCode === 'weekly_limit') {
+                    setShowConfirmModal(false);
+                    setSelectedMachine(null);
+                }
+
+                notifyError(getBookNowFailureMessage(result.errorCode, result.error));
             }
         } catch (e: any) {
             console.error('Booking transaction failed:', e);
@@ -942,8 +977,8 @@ export default function BookingFlow() {
                                 {selectedSlot === time && (
                                     <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
                                         {activeMachines.map(m => {
-                                            const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
-                                            const isPendingBooking = pendingBooking?.date === formatBelarusDate(selectedDate)
+                                            const bookingForMachine = bookings.find(b => b.date === selectedDateKey && b.startTime === time && b.machineId === m.id);
+                                            const isPendingBooking = pendingBooking?.date === selectedDateKey
                                                 && pendingBooking.startTime === time
                                                 && pendingBooking.machineId === m.id;
                                             const isBooked = Boolean(bookingForMachine) || isPendingBooking;

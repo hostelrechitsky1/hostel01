@@ -72,6 +72,14 @@ export const getTimeStringMinutes = (timeString: string) => {
     return (hours || 0) * 60 + (minutes || 0);
 };
 
+export const addMinutesToTimeString = (timeString: string, minutesToAdd: number) => {
+    const totalMinutes = getTimeStringMinutes(timeString) + minutesToAdd;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
 export const getBelarusNow = (now: Date = new Date()) => {
     return new Date(now.getTime() + BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000);
 };
