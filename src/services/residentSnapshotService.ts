@@ -2,10 +2,14 @@ import type { AppSettings, Banner, Booking, Machine } from '../types';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from './residentFirestoreService';
 import {
     CACHE_MAX_AGE_MS,
+    getBookingsByWeeksCacheKey,
+    getStudentBookingsCacheKey,
     normalizeWeekIdsForResidentCache,
     readResidentCache,
+    residentCacheKeys,
     writeResidentCache,
 } from './residentCache';
+import { residentBootstrapService } from './residentBootstrapService';
 
 export type ResidentCoreSnapshot = {
     settings: AppSettings;
@@ -171,6 +175,18 @@ const persistResidentSnapshot = ({
         }),
         snapshot
     );
+
+    writeResidentCache(residentCacheKeys.settings, snapshot.settings);
+    writeResidentCache(residentCacheKeys.machines, snapshot.machines);
+    writeResidentCache(getBookingsByWeeksCacheKey(normalizedWeekIds), snapshot.weekBookings);
+
+    if (includeBanners && snapshot.banners) {
+        writeResidentCache(residentCacheKeys.banners, snapshot.banners);
+    }
+
+    if (includeRecentBookings && studentId && snapshot.recentBookings) {
+        writeResidentCache(getStudentBookingsCacheKey(studentId, 12), snapshot.recentBookings);
+    }
 };
 
 const resolveRequiredSnapshotValue = <T>(
@@ -228,6 +244,23 @@ const getResidentCoreSnapshot = async ({
         return existingSnapshot;
     }
 
+    const bootstrapSnapshotPromise = residentBootstrapService.getSnapshot({
+        weekIds: normalizedWeekIds,
+        studentId,
+        includeBanners,
+        includeRecentBookings,
+    }).then((snapshot) => {
+        persistResidentSnapshot({
+            weekIds: normalizedWeekIds,
+            includeBanners,
+            includeRecentBookings,
+            studentId,
+            snapshot,
+        });
+
+        return snapshot;
+    });
+
     const snapshotTasks = [
         residentFirestoreService.getSettings(),
         residentFirestoreService.getMachines(),
@@ -238,7 +271,7 @@ const getResidentCoreSnapshot = async ({
             : Promise.resolve([] as Booking[]),
     ] as const;
 
-    const snapshotPromise = Promise.allSettled(snapshotTasks).then(([settingsResult, machinesResult, bookingsResult, bannersResult, recentBookingsResult]) => {
+    const fallbackSnapshotPromise = Promise.allSettled(snapshotTasks).then(([settingsResult, machinesResult, bookingsResult, bannersResult, recentBookingsResult]) => {
         const settings = resolveRequiredSnapshotValue(
             settingsResult,
             residentFirestoreService.getCachedSettings() ?? DEFAULT_APP_SETTINGS,
@@ -284,7 +317,14 @@ const getResidentCoreSnapshot = async ({
         });
 
         return snapshot;
-    }).finally(() => {
+    });
+
+    const snapshotPromise = bootstrapSnapshotPromise
+        .catch((error) => {
+            console.warn('Resident bootstrap API fetch failed, falling back to client snapshot loaders.', error);
+            return fallbackSnapshotPromise;
+        })
+        .finally(() => {
         inFlightResidentSnapshots.delete(snapshotKey);
     });
 

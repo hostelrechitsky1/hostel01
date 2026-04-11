@@ -1,7 +1,8 @@
-const VERSION = 'v6'
+const VERSION = 'v7'
 const STATIC_CACHE = `app-static-${VERSION}`
 const DOCUMENT_CACHE = `app-documents-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
+const RESIDENT_API_CACHE = `resident-api-${VERSION}`
 const PRECACHE_URLS = ['/', '/index.html']
 const IMAGE_HOSTS = [
   'drive.google.com',
@@ -21,7 +22,7 @@ self.addEventListener('activate', (event) => {
     const cacheNames = await caches.keys()
     await Promise.all(
       cacheNames
-        .filter((cacheName) => ![STATIC_CACHE, DOCUMENT_CACHE, BANNER_CACHE].includes(cacheName))
+        .filter((cacheName) => ![STATIC_CACHE, DOCUMENT_CACHE, BANNER_CACHE, RESIDENT_API_CACHE].includes(cacheName))
         .map((cacheName) => caches.delete(cacheName))
     )
     await self.clients.claim()
@@ -46,6 +47,12 @@ const isStaticAssetRequest = (requestUrl, request) => {
   }
 
   return requestUrl.pathname.startsWith('/assets/')
+}
+
+const isResidentApiRequest = (requestUrl) => {
+  if (requestUrl.origin !== self.location.origin) return false
+
+  return requestUrl.pathname.includes('/.netlify/functions/resident-bootstrap')
 }
 
 const staleWhileRevalidate = async (request, cacheName) => {
@@ -122,6 +129,11 @@ self.addEventListener('fetch', (event) => {
 
   if (isBannerImageRequest(requestUrl, request.destination)) {
     event.respondWith(cacheFirstWithRefresh(request, BANNER_CACHE))
+    return
+  }
+
+  if (isResidentApiRequest(requestUrl)) {
+    event.respondWith(staleWhileRevalidate(request, RESIDENT_API_CACHE))
     return
   }
 

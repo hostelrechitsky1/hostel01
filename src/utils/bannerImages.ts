@@ -12,6 +12,13 @@ type NavigatorWithConnection = Navigator & {
 };
 
 const BANNER_WIDTH_STEPS = [180, 240, 360, 480, 640, 720, 840, 960];
+const PROXIED_BANNER_HOSTS = [
+    'drive.google.com',
+    'lh3.googleusercontent.com',
+    'googleusercontent.com',
+    'firebasestorage.googleapis.com',
+    'storage.googleapis.com',
+] as const;
 const warmedBannerSources = new Set<string>();
 const warmingBannerSources = new Map<string, Promise<void>>();
 
@@ -94,6 +101,62 @@ const getFetchMode = (source: string): RequestMode => {
     }
 };
 
+const shouldProxyBannerSource = (source: string) => {
+    if (typeof window === 'undefined') return false;
+    if (!source) return false;
+
+    try {
+        const requestUrl = new URL(source, window.location.href);
+
+        if (!['http:', 'https:'].includes(requestUrl.protocol)) {
+            return false;
+        }
+
+        if (requestUrl.origin === window.location.origin) {
+            return false;
+        }
+
+        return PROXIED_BANNER_HOSTS.some((host) => (
+            requestUrl.hostname === host || requestUrl.hostname.endsWith(`.${host}`)
+        ));
+    } catch {
+        return false;
+    }
+};
+
+const buildBannerProxyUrl = (source: string, requestedWidth?: number) => {
+    const normalizedSource = normalizeBannerSource(source);
+    if (!shouldProxyBannerSource(normalizedSource)) {
+        return normalizedSource;
+    }
+
+    const params = new URLSearchParams({
+        src: normalizedSource,
+    });
+
+    if (isDriveThumbnailBanner(normalizedSource) && requestedWidth) {
+        params.set('w', String(roundBannerWidth(requestedWidth)));
+    }
+
+    return `/.netlify/functions/banner-asset?${params.toString()}`;
+};
+
+const proxyResponsiveSrcSet = (srcSet: string) => (
+    srcSet
+        .split(',')
+        .map((candidate) => candidate.trim())
+        .filter(Boolean)
+        .map((candidate) => {
+            const parts = candidate.split(/\s+/);
+            const descriptor = parts.length > 1 ? parts.pop() : undefined;
+            const url = parts.join(' ');
+            const width = descriptor?.endsWith('w') ? Number(descriptor.slice(0, -1)) : undefined;
+            const proxiedUrl = buildBannerProxyUrl(url, Number.isFinite(width) ? width : undefined);
+            return descriptor ? `${proxiedUrl} ${descriptor}` : proxiedUrl;
+        })
+        .join(', ')
+);
+
 const getViewportScaledWidth = (priority: boolean) => {
     const viewportWidth = typeof window === 'undefined' ? 1280 : Math.max(window.innerWidth, 360);
     const devicePixelRatio = typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
@@ -169,7 +232,7 @@ const createExplicitResponsiveSrcSet = (source: BannerImageSource) => {
     }
 
     return uniqueCandidates
-        .map((candidate) => `${candidate.src} ${candidate.width}w`)
+        .map((candidate) => `${buildBannerProxyUrl(candidate.src, candidate.width)} ${candidate.width}w`)
         .join(', ');
 };
 
@@ -186,15 +249,25 @@ export const normalizeBannerRecord = (banner: Banner): Banner => ({
 
 export const getAdaptiveBannerSrc = (source: string, options?: { priority?: boolean }) => {
     const normalizedSource = normalizeBannerSource(source);
-    if (!isDriveThumbnailBanner(normalizedSource)) return normalizedSource;
-    return replaceDriveThumbnailWidth(normalizedSource, getViewportScaledWidth(Boolean(options?.priority)));
+    const requestedWidth = isDriveThumbnailBanner(normalizedSource)
+        ? getViewportScaledWidth(Boolean(options?.priority))
+        : undefined;
+    const sizedSource = requestedWidth
+        ? replaceDriveThumbnailWidth(normalizedSource, requestedWidth)
+        : normalizedSource;
+    return buildBannerProxyUrl(sizedSource, requestedWidth);
 };
 
 export const getTinyBannerSrc = (source: string) => {
     const normalizedSource = normalizeBannerSource(source);
-    if (!isDriveThumbnailBanner(normalizedSource)) return normalizedSource;
     const viewportWidth = typeof window === 'undefined' ? 640 : Math.max(window.innerWidth, 360);
-    return replaceDriveThumbnailWidth(normalizedSource, roundBannerWidth(Math.max(180, Math.min(Math.ceil(viewportWidth * 0.28), 360))));
+    const requestedWidth = isDriveThumbnailBanner(normalizedSource)
+        ? roundBannerWidth(Math.max(180, Math.min(Math.ceil(viewportWidth * 0.28), 360)))
+        : undefined;
+    const sizedSource = requestedWidth
+        ? replaceDriveThumbnailWidth(normalizedSource, requestedWidth)
+        : normalizedSource;
+    return buildBannerProxyUrl(sizedSource, requestedWidth);
 };
 
 export const getBannerWarmSources = (source: BannerImageSource, options?: { priority?: boolean }) => {
@@ -207,7 +280,7 @@ export const getBannerWarmSources = (source: BannerImageSource, options?: { prio
 export const getBannerResponsiveSrcSet = (source: BannerImageSource, options?: { priority?: boolean }) => {
     const banner = asBannerImageObject(source);
     if (banner.responsiveSrcSet?.trim()) {
-        return banner.responsiveSrcSet.trim();
+        return proxyResponsiveSrcSet(banner.responsiveSrcSet.trim());
     }
 
     const explicitResponsiveSet = createExplicitResponsiveSrcSet(source);
@@ -221,7 +294,7 @@ export const getBannerResponsiveSrcSet = (source: BannerImageSource, options?: {
     }
 
     return getResponsiveBannerWidths(Boolean(options?.priority))
-        .map((width) => `${replaceDriveThumbnailWidth(normalizedSource, width)} ${width}w`)
+        .map((width) => `${buildBannerProxyUrl(replaceDriveThumbnailWidth(normalizedSource, width), width)} ${width}w`)
         .join(', ');
 };
 
