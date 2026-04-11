@@ -406,6 +406,13 @@ button {
   min-width: 0;
 }
 
+.resident-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .resident-header-title {
   margin: 0;
   font-size: 24px;
@@ -414,6 +421,8 @@ button {
   overflow-wrap: normal;
   word-break: keep-all;
   text-wrap: balance;
+  min-width: 0;
+  flex: 1;
 }
 
 .resident-header-meta {
@@ -443,6 +452,10 @@ button {
   align-items: center;
   gap: 8px;
   justify-self: end;
+}
+
+.resident-header-logout {
+  flex-shrink: 0;
 }
 
 .grid-auto-fit {

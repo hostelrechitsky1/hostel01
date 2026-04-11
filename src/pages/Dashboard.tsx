@@ -1149,9 +1149,26 @@ export default function Dashboard() {
                     </div>
 
                     <div className="resident-header-copy">
-                        <h2 className="resident-header-title">
-                            {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)} 👋
-                        </h2>
+                        <div className="resident-header-title-row">
+                            <h2 className="resident-header-title">
+                                {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)} 👋
+                            </h2>
+                            <button
+                                onClick={handleLogout}
+                                className="glass-button resident-header-logout"
+                                style={{
+                                    padding: '8px',
+                                    borderRadius: '50%',
+                                    width: '40px',
+                                    height: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <LogOut size={20} />
+                            </button>
+                        </div>
                         <div className="resident-header-meta">
                             <p className="resident-header-room">
                                 {t.roomLabel(user.roomNumber)}
@@ -1185,13 +1202,6 @@ export default function Dashboard() {
                     >
                         <Languages size={16} />
                         <span style={{ fontSize: '13px', fontWeight: 600 }}>{t.switchLanguage}</span>
-                    </button>
-                    <button
-                        onClick={handleLogout}
-                        className="glass-button"
-                        style={{ padding: '8px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        <LogOut size={20} />
                     </button>
                 </div>
             </header>
