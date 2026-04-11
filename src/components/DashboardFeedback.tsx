@@ -157,12 +157,12 @@ export default function DashboardFeedback() {
                     padding: '16px',
                     borderRadius: '18px',
                     marginBottom: '18px',
-                    background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(20, 24, 58, 0.92) 100%)',
-                    border: '1px solid rgba(129, 140, 248, 0.18)',
-                    boxShadow: '0 16px 32px rgba(12, 18, 42, 0.28)'
+                    background: 'var(--glass-bg)',
+                    border: '1px solid var(--glass-border)',
+                    boxShadow: '0 10px 24px rgba(15, 23, 42, 0.12)'
                 }}
             >
-                <p style={{ margin: '0 0 12px', color: 'rgba(255,255,255,0.72)', fontSize: '13px', lineHeight: 1.5 }}>
+                <p style={{ margin: '0 0 12px', color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
                     Have a suggestion or found a bug? Let us know directly.
                 </p>
 
@@ -173,8 +173,8 @@ export default function DashboardFeedback() {
                         alignItems: 'center',
                         padding: '8px',
                         borderRadius: '16px',
-                        background: 'rgba(13, 18, 44, 0.56)',
-                        border: '1px solid rgba(129, 140, 248, 0.12)'
+                        background: 'rgba(148, 163, 184, 0.12)',
+                        border: '1px solid rgba(148, 163, 184, 0.22)'
                     }}
                 >
                     <input
@@ -192,11 +192,11 @@ export default function DashboardFeedback() {
                         style={{
                             flex: 1,
                             height: '44px',
-                            background: 'rgba(255,255,255,0.03)',
-                            border: '1px solid rgba(255,255,255,0.06)',
+                            background: 'rgba(148, 163, 184, 0.12)',
+                            border: '1px solid rgba(148, 163, 184, 0.22)',
                             borderRadius: '12px',
                             padding: '0 14px',
-                            color: 'white',
+                            color: 'var(--text-main)',
                             outline: 'none',
                             fontSize: '14px'
                         }}
@@ -214,8 +214,8 @@ export default function DashboardFeedback() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'linear-gradient(135deg, #7c7cff 0%, #8b5cf6 100%)',
-                            boxShadow: '0 8px 20px rgba(124, 124, 255, 0.38)',
+                            background: 'linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%)',
+                            boxShadow: '0 8px 20px var(--primary-glow)',
                             opacity: loading || !text.trim() ? 0.72 : 1
                         }}
                     >
@@ -230,7 +230,7 @@ export default function DashboardFeedback() {
 
             {repliedFeedbacks.length > 0 && (
                 <div style={{ display: 'grid', gap: '14px' }}>
-                    {repliedFeedbacks.map((feedback, index) => {
+                    {repliedFeedbacks.map((feedback) => {
                         return (
                             <div
                                 key={feedback.id}
@@ -238,10 +238,9 @@ export default function DashboardFeedback() {
                                 style={{
                                     padding: '18px',
                                     borderRadius: '20px',
-                                    border: '1px solid rgba(129, 140, 248, 0.18)',
-                                    background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(20, 24, 58, 0.92) 52%, rgba(88, 28, 135, 0.24) 100%)',
-                                    boxShadow: '0 20px 36px rgba(8, 12, 32, 0.3)',
-                                    animationDelay: `${Math.min(index * 0.08, 0.18)}s`
+                                    border: '1px solid rgba(99, 102, 241, 0.18)',
+                                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(14, 165, 233, 0.05) 100%)',
+                                    boxShadow: '0 12px 26px rgba(15, 23, 42, 0.12)'
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
@@ -254,16 +253,16 @@ export default function DashboardFeedback() {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.24) 0%, rgba(217, 70, 239, 0.2) 100%)',
-                                                border: '1px solid rgba(196, 181, 253, 0.2)',
-                                                boxShadow: '0 10px 24px rgba(124, 58, 237, 0.2)'
+                                                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(14, 165, 233, 0.14) 100%)',
+                                                border: '1px solid rgba(99, 102, 241, 0.22)',
+                                                boxShadow: '0 8px 18px rgba(79, 70, 229, 0.14)'
                                             }}
                                         >
-                                            <Reply size={18} color="#ddd6fe" />
+                                            <Reply size={18} color="var(--primary)" />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: 700, color: 'white' }}>Hostel Team</div>
-                                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.62)' }}>
+                                            <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>Hostel Team</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                                                 Replied to your feedback
                                             </div>
                                         </div>
@@ -274,9 +273,9 @@ export default function DashboardFeedback() {
                                             padding: '6px 10px',
                                             borderRadius: '999px',
                                             fontSize: '12px',
-                                            color: '#e9d5ff',
-                                            background: 'rgba(139, 92, 246, 0.14)',
-                                            border: '1px solid rgba(196, 181, 253, 0.14)'
+                                            color: 'var(--primary)',
+                                            background: 'rgba(99, 102, 241, 0.1)',
+                                            border: '1px solid rgba(99, 102, 241, 0.16)'
                                         }}
                                     >
                                         {formatBelarusCompactTimestamp(new Date(feedback.adminReply!.repliedAt))}
@@ -288,9 +287,9 @@ export default function DashboardFeedback() {
                                         position: 'relative',
                                         padding: '16px 16px 16px 18px',
                                         borderRadius: '18px',
-                                        background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.18) 0%, rgba(76, 29, 149, 0.18) 100%)',
-                                        border: '1px solid rgba(196, 181, 253, 0.12)',
-                                        color: 'white',
+                                        background: 'rgba(99, 102, 241, 0.1)',
+                                        border: '1px solid rgba(99, 102, 241, 0.16)',
+                                        color: 'var(--text-main)',
                                         lineHeight: 1.7,
                                         whiteSpace: 'pre-wrap',
                                         overflow: 'hidden'
@@ -304,7 +303,7 @@ export default function DashboardFeedback() {
                                             bottom: 12,
                                             width: '4px',
                                             borderRadius: '999px',
-                                            background: 'linear-gradient(180deg, rgba(196, 181, 253, 0.95) 0%, rgba(129, 140, 248, 0.35) 100%)'
+                                            background: 'linear-gradient(180deg, rgba(99, 102, 241, 0.9) 0%, rgba(14, 165, 233, 0.35) 100%)'
                                         }}
                                     />
                                     {feedback.adminReply?.text}
@@ -315,14 +314,14 @@ export default function DashboardFeedback() {
                                         marginTop: '12px',
                                         padding: '12px 14px',
                                         borderRadius: '16px',
-                                        background: 'rgba(8, 12, 32, 0.34)',
-                                        border: '1px solid rgba(255,255,255,0.06)'
+                                        background: 'rgba(148, 163, 184, 0.1)',
+                                        border: '1px solid rgba(148, 163, 184, 0.2)'
                                     }}
                                 >
-                                    <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.48)', marginBottom: '6px' }}>
+                                    <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>
                                         Your feedback
                                     </div>
-                                    <div style={{ color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap', fontSize: '14px' }}>
+                                    <div style={{ color: 'var(--text-main)', lineHeight: 1.55, whiteSpace: 'pre-wrap', fontSize: '14px' }}>
                                         {feedback.text}
                                     </div>
                                 </div>
