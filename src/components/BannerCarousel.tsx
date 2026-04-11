@@ -15,7 +15,21 @@ interface InternalBannerCarouselProps {
 }
 
 // Helper component to handle image loading and retries
-const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
+const SmartImage = ({
+    src,
+    alt,
+    className,
+    style,
+    priority,
+    shouldLoad
+}: {
+    src: string;
+    alt: string;
+    className?: string;
+    style?: any;
+    priority?: boolean;
+    shouldLoad?: boolean;
+}) => {
     const initialAdaptiveSrc = getAdaptiveBannerSrc(src, { priority });
     const initialPreviewSrc = priority ? initialAdaptiveSrc : getTinyBannerSrc(src);
     const [imgSrc, setImgSrc] = useState(initialPreviewSrc);
@@ -38,11 +52,16 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
         setImgSrc(nextPreviewSrc);
         setError(false);
 
+        if (!shouldLoad) {
+            return;
+        }
+
         ensureBannerPreloadLink(optimizedSrc);
         void preloadBannerImage(priority ? optimizedSrc : nextPreviewSrc);
-    }, [priority, src]);
+    }, [priority, shouldLoad, src]);
 
     useEffect(() => {
+        if (!shouldLoad) return;
         if (!previewLoaded || !adaptiveSrcRef.current || !previewSrcRef.current) return;
         if (previewSrcRef.current === adaptiveSrcRef.current) return;
         if (imgSrc === adaptiveSrcRef.current) return;
@@ -58,14 +77,15 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
         return () => {
             isActive = false;
         };
-    }, [imgSrc, previewLoaded]);
+    }, [imgSrc, previewLoaded, shouldLoad]);
 
     useEffect(() => {
+        if (!shouldLoad) return;
         if (imgRef.current?.complete && hasWarmBannerImage(imgSrc)) {
             setLoaded(true);
             setPreviewLoaded(true);
         }
-    }, [imgSrc]);
+    }, [imgSrc, shouldLoad]);
 
     const handleError = () => {
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
@@ -84,6 +104,9 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     };
 
     if (error) return null;
+    if (!shouldLoad) {
+        return null;
+    }
 
     return (
         <>
@@ -147,6 +170,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState(0);
+    const [activatedIndexes, setActivatedIndexes] = useState<Set<number>>(() => new Set([0]));
 
     // Minimum swipe distance to trigger slide change
     const minSwipeDistance = 50;
@@ -194,18 +218,25 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         };
     }, [activeBanners.length, isDragging, isPageVisible, isVisible]);
 
-    // Preload current + next banner only to reduce bandwidth spikes on slow networks
     useEffect(() => {
         if (activeBanners.length === 0 || !isVisible) return;
 
-        const preloadIndexes = [currentIndex, (currentIndex + 1) % activeBanners.length];
-        preloadIndexes.forEach((index) => {
-            const banner = activeBanners[index];
-            if (!banner?.imageUrl) return;
-            const source = getAdaptiveBannerSrc(banner.imageUrl, { priority: index === currentIndex });
-            ensureBannerPreloadLink(source);
-            void preloadBannerImage(source);
+        setActivatedIndexes((currentIndexes) => {
+            if (currentIndexes.has(currentIndex)) {
+                return currentIndexes;
+            }
+
+            const nextIndexes = new Set(currentIndexes);
+            nextIndexes.add(currentIndex);
+            return nextIndexes;
         });
+
+        const banner = activeBanners[currentIndex];
+        if (!banner?.imageUrl) return;
+
+        const source = getAdaptiveBannerSrc(banner.imageUrl, { priority: true });
+        ensureBannerPreloadLink(source);
+        void preloadBannerImage(source);
     }, [activeBanners, currentIndex, isVisible]);
 
     const onTouchStart = (e: React.TouchEvent) => {
@@ -349,7 +380,8 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                             <SmartImage
                                 src={banner.imageUrl}
                                 alt={showTitle ? banner.title : 'Banner'}
-                                priority={index === currentIndex} // Prioritize loading visible slide
+                                priority={index === currentIndex}
+                                shouldLoad={activatedIndexes.has(index) || index === currentIndex}
                                 style={{
                                     width: '100%',
                                     height: '100%',

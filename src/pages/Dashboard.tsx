@@ -202,7 +202,7 @@ export default function Dashboard() {
                 startTransition(() => {
                     setBanners(fetchedBanners);
                 });
-                warmBannerImages(fetchedBanners, 2);
+                warmBannerImages(fetchedBanners, 1);
             })
             .catch((error) => {
                 console.error('Failed to refresh dashboard banners', error);

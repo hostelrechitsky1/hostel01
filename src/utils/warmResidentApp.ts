@@ -33,7 +33,7 @@ export const warmResidentAppData = (studentId?: string) => {
             return Promise.allSettled(tasks).then((results) => {
                 const bannersResult = results[2];
                 if (bannersResult?.status === 'fulfilled') {
-                    warmBannerImages(bannersResult.value as Banner[], 2);
+                    warmBannerImages(bannersResult.value as Banner[], 1);
                 }
             });
         })
