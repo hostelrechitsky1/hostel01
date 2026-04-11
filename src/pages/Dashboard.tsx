@@ -16,6 +16,7 @@ import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
+import { getResidentInitials, getResidentShortName } from '../utils/residentNames';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
@@ -32,25 +33,43 @@ const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     return [...withoutExisting, nextBooking];
 };
 
-const getResidentInitials = (name: string) => {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return 'R';
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
+const dedupeRoommates = (students: Student[]) => {
+    const seenIds = new Set<string>();
+
+    return students.filter((student) => {
+        const identity = student.id || `${student.roomNumber}:${student.name.trim().toLowerCase()}`;
+        if (seenIds.has(identity)) {
+            return false;
+        }
+
+        seenIds.add(identity);
+        return true;
+    });
 };
 
-const getResidentShortName = (name: string) => {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length <= 2) return parts.join(' ');
-    return `${parts[0]} ${parts[parts.length - 1]}`;
+const buildRoommateList = (currentUser: Student | null, students: Student[]) => {
+    if (!currentUser?.roomNumber) return [];
+
+    const sameRoomResidents = dedupeRoommates(
+        students.filter((student) => student.roomNumber === currentUser.roomNumber)
+    );
+
+    if (sameRoomResidents.length === 0) {
+        return [currentUser];
+    }
+
+    const hasCurrentResident = sameRoomResidents.some((student) => student.id === currentUser.id);
+    if (hasCurrentResident) {
+        return sameRoomResidents;
+    }
+
+    return dedupeRoommates([currentUser, ...sameRoomResidents]);
 };
 
 const getInitialRoommates = (currentUser: Student | null) => {
     if (!currentUser?.roomNumber) return [];
 
-    const cachedRoommates = bookingService
-        .getCurrentRoommates()
-        .filter((student) => student.roomNumber === currentUser.roomNumber);
+    const cachedRoommates = buildRoommateList(currentUser, bookingService.getCurrentRoommates());
 
     if (cachedRoommates.length > 0) {
         return cachedRoommates;
@@ -569,8 +588,7 @@ export default function Dashboard() {
 
         void residentFirestoreService.getStudentsByRoom(user.roomNumber)
             .then((fetchedRoommates) => {
-                const sameRoomResidents = fetchedRoommates.filter((student) => student.roomNumber === user.roomNumber);
-                const nextRoommates = sameRoomResidents.length > 0 ? sameRoomResidents : [user];
+                const nextRoommates = buildRoommateList(user, fetchedRoommates);
                 setRoommates(nextRoommates);
                 bookingService.setCurrentRoommates(nextRoommates);
             })
