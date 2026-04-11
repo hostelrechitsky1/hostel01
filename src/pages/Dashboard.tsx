@@ -17,6 +17,17 @@ import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 
 const RECENT_BOOKINGS_LIMIT = 12;
+const scrollRevealViewport = { once: true, amount: 0.18 };
+const sectionReveal = {
+    initial: { opacity: 0, y: 28, scale: 0.985 },
+    whileInView: { opacity: 1, y: 0, scale: 1 },
+    transition: { duration: 0.56, ease: [0.16, 1, 0.3, 1] }
+} as const;
+const cardReveal = {
+    initial: { opacity: 0, y: 24, scale: 0.97 },
+    whileInView: { opacity: 1, y: 0, scale: 1 },
+    transition: { duration: 0.48, ease: [0.16, 1, 0.3, 1] }
+} as const;
 
 const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
@@ -560,11 +571,18 @@ export default function Dashboard() {
             )}
 
             {/* Announcements Carousel */}
-            <BannerCarousel banners={banners} isLoading={bannersLoading} />
+            <motion.div
+                {...sectionReveal}
+                viewport={scrollRevealViewport}
+            >
+                <BannerCarousel banners={banners} isLoading={bannersLoading} />
+            </motion.div>
 
             {/* Main Action */}
-            <div
+            <motion.div
                 className="glass-panel main-action-layout"
+                {...sectionReveal}
+                viewport={scrollRevealViewport}
                 style={{
                     padding: '20px 24px',
                     borderRadius: '16px',
@@ -601,138 +619,151 @@ export default function Dashboard() {
                 >
                     {mainActionLabel}
                 </button>
-            </div>
+            </motion.div>
 
 
             {/* Machine Status - Live View */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Status
-                    <span style={{
-                        fontSize: '12px',
-                        fontWeight: 'normal',
-                        background: 'var(--glass-button-bg)',
-                        border: '1px solid var(--glass-border)',
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        color: 'var(--text-muted)'
-                    }}>
-                        {format(new Date(), 'h:mm a')}
-                    </span>
-                </h3>
-            </div>
-
-            <div className="glass-panel" style={{
-                marginBottom: '20px',
-                padding: '20px',
-                borderRadius: '16px',
-                position: 'relative',
-                overflow: 'hidden',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
-                border: '1px solid rgba(99, 102, 241, 0.2)'
-            }}>
-                <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{
-                            background: 'rgba(99, 102, 241, 0.15)',
-                            padding: '12px',
-                            borderRadius: '14px',
-                            display: 'flex',
-                            position: 'relative'
+            <motion.section
+                {...sectionReveal}
+                viewport={scrollRevealViewport}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Status
+                        <span style={{
+                            fontSize: '12px',
+                            fontWeight: 'normal',
+                            background: 'var(--glass-button-bg)',
+                            border: '1px solid var(--glass-border)',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            color: 'var(--text-muted)'
                         }}>
-                            {/* Pulse effect */}
-                            <div className="skeleton-pulse" style={{
-                                position: 'absolute', inset: 0, borderRadius: '14px',
-                                background: 'var(--primary)', opacity: 0.25, zIndex: 0
-                            }}></div>
-                            <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
-                            <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{
-                                    width: '8px', height: '8px', borderRadius: '50%',
-                                    background: isSystemClosed ? 'var(--error)' : 'var(--success)',
-                                    boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
-                                }}></span>
-                                {isSystemClosed ? 'Closed' : 'Active'}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
-                            <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
-                                {slotCapacity.remainingSlots}
-                            </span>
-                            <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                / {slotCapacity.totalSlots}
-                            </span>
-                        </div>
-                    </div>
+                            {format(new Date(), 'h:mm a')}
+                        </span>
+                    </h3>
                 </div>
 
-                {/* Progress Bar background effect */}
-                <div style={{
-                    position: 'absolute', bottom: 0, left: 0, height: '4px',
-                    background: 'var(--glass-border)', width: '100%'
+                <div className="glass-panel" style={{
+                    marginBottom: '20px',
+                    padding: '20px',
+                    borderRadius: '16px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                    border: '1px solid rgba(99, 102, 241, 0.2)'
                 }}>
-                    <div style={{
-                        height: '100%',
-                        background: 'var(--primary)',
-                        width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
-                        transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                        boxShadow: '0 0 12px var(--primary-glow)'
-                    }}></div>
-                </div>
-            </div>
-            <div className="grid-cols-2">
-                {machines.map(machine => {
-                    const status = getMachineRealTimeStatus(machine);
-                    return (
-                        <div
-                            key={machine.id}
-                            className="glass-panel"
-                            style={{
-                                padding: '16px',
-                                borderRadius: '16px',
+                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                padding: '12px',
+                                borderRadius: '14px',
                                 display: 'flex',
-                                flexDirection: 'column',
-                                gap: '12px'
-                            }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div style={{
-                                    background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.2)`,
-                                    padding: '8px',
-                                    borderRadius: '10px'
-                                }}>
-                                    {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
-                                </div>
-                                <span style={{
-                                    fontSize: '12px',
-                                    padding: '4px 8px',
-                                    borderRadius: '10px',
-                                    background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`,
-                                    color: status.color
-                                }}>
-                                    {status.label}
-                                </span>
+                                position: 'relative'
+                            }}>
+                                {/* Pulse effect */}
+                                <div className="skeleton-pulse" style={{
+                                    position: 'absolute', inset: 0, borderRadius: '14px',
+                                    background: 'var(--primary)', opacity: 0.25, zIndex: 0
+                                }}></div>
+                                <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
                             </div>
                             <div>
-                                <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
-                                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                    {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
-                                </p>
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
+                                <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{
+                                        width: '8px', height: '8px', borderRadius: '50%',
+                                        background: isSystemClosed ? 'var(--error)' : 'var(--success)',
+                                        boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
+                                    }}></span>
+                                    {isSystemClosed ? 'Closed' : 'Active'}
+                                </div>
                             </div>
                         </div>
-                    );
-                })}
-            </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                    {slotCapacity.remainingSlots}
+                                </span>
+                                <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                    / {slotCapacity.totalSlots}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Progress Bar background effect */}
+                    <div style={{
+                        position: 'absolute', bottom: 0, left: 0, height: '4px',
+                        background: 'var(--glass-border)', width: '100%'
+                    }}>
+                        <div style={{
+                            height: '100%',
+                            background: 'var(--primary)',
+                            width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
+                            transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                            boxShadow: '0 0 12px var(--primary-glow)'
+                        }}></div>
+                    </div>
+                </div>
+                <div className="grid-cols-2">
+                    {machines.map((machine, index) => {
+                        const status = getMachineRealTimeStatus(machine);
+                        return (
+                            <motion.div
+                                key={machine.id}
+                                className="glass-panel"
+                                initial={cardReveal.initial}
+                                whileInView={cardReveal.whileInView}
+                                viewport={scrollRevealViewport}
+                                transition={{ ...cardReveal.transition, delay: Math.min(index * 0.06, 0.18) }}
+                                style={{
+                                    padding: '16px',
+                                    borderRadius: '16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px'
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{
+                                        background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.2)`,
+                                        padding: '8px',
+                                        borderRadius: '10px'
+                                    }}>
+                                        {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
+                                    </div>
+                                    <span style={{
+                                        fontSize: '12px',
+                                        padding: '4px 8px',
+                                        borderRadius: '10px',
+                                        background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`,
+                                        color: status.color
+                                    }}>
+                                        {status.label}
+                                    </span>
+                                </div>
+                                <div>
+                                    <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
+                                    <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
+                                    </p>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            </motion.section>
 
             {/* Your Bookings */}
-            <div style={{ marginTop: '32px' }}>
+            <motion.div
+                {...sectionReveal}
+                viewport={scrollRevealViewport}
+                style={{ marginTop: '32px' }}
+            >
                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={20} /> Your Upcoming Booking
                 </h3>
@@ -964,23 +995,31 @@ export default function Dashboard() {
                     </div>
                 )
                 }
-            </div >
+            </motion.div>
 
             {/* History */}
             {
                 history.length > 0 && (
-                    <div style={{ marginTop: '32px' }}>
+                    <motion.div
+                        {...sectionReveal}
+                        viewport={scrollRevealViewport}
+                        style={{ marginTop: '32px' }}
+                    >
                         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <History size={20} /> Past Bookings
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {history.slice(0, 3).map((booking) => {
+                            {history.slice(0, 3).map((booking, index) => {
                                 const machine = machines.find((m) => m.id === booking.machineId);
                                 const machineLabel = machine?.name || `Machine ${booking.machineId}`;
                                 return (
-                                    <div
+                                    <motion.div
                                         key={booking.id}
                                         className="glass-panel hover-card"
+                                        initial={cardReveal.initial}
+                                        whileInView={cardReveal.whileInView}
+                                        viewport={scrollRevealViewport}
+                                        transition={{ ...cardReveal.transition, delay: Math.min(index * 0.07, 0.16) }}
                                         style={{
                                             padding: '20px',
                                             borderRadius: '16px',
@@ -1076,11 +1115,11 @@ export default function Dashboard() {
                                                 )}
                                             </button>
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 );
                             })}
                         </div>
-                    </div>
+                    </motion.div>
                 )
             }
 
@@ -1164,7 +1203,12 @@ export default function Dashboard() {
             )}
 
             {/* Inline Feedback Section */}
-            <DashboardFeedback />
+            <motion.div
+                {...sectionReveal}
+                viewport={scrollRevealViewport}
+            >
+                <DashboardFeedback />
+            </motion.div>
         </div>
     );
 }

@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
     MessageSquare,
     Reply,
-    Send,
-    Sparkles
+    Send
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
 import { firestoreService } from '../services/firestoreService';
 import type { Feedback, FeedbackType } from '../types';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
+const scrollRevealViewport = { once: true, amount: 0.24 };
 
 const inferFeedbackType = (text: string): FeedbackType => {
     const normalized = text.trim().toLowerCase();
@@ -41,8 +42,6 @@ export default function DashboardFeedback() {
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
     const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
-    const bottomFlourishRef = useRef<HTMLDivElement | null>(null);
-    const [bottomFlourishVisible, setBottomFlourishVisible] = useState(false);
     const repliedFeedbacks = useMemo(() => {
         return [...feedbacks]
             .filter((feedback) => Boolean(feedback.adminReply?.text?.trim()))
@@ -67,29 +66,6 @@ export default function DashboardFeedback() {
             }
         );
     }, [user?.id, user?.name, user?.roomNumber]);
-
-    useEffect(() => {
-        const node = bottomFlourishRef.current;
-        if (!node) return;
-
-        if (typeof IntersectionObserver === 'undefined') {
-            setBottomFlourishVisible(true);
-            return;
-        }
-
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                setBottomFlourishVisible(entry.isIntersecting);
-            },
-            {
-                threshold: 0.7,
-                rootMargin: '0px 0px -4% 0px'
-            }
-        );
-
-        observer.observe(node);
-        return () => observer.disconnect();
-    }, []);
 
     const handleSubmit = async () => {
         const trimmedText = text.trim();
@@ -128,8 +104,12 @@ export default function DashboardFeedback() {
                 Feedback
             </h3>
 
-            <div
+            <motion.div
                 className="glass-panel"
+                initial={{ opacity: 0, y: 26, scale: 0.985 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={scrollRevealViewport}
+                transition={{ duration: 0.52, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                     padding: '16px',
                     borderRadius: '18px',
@@ -203,15 +183,23 @@ export default function DashboardFeedback() {
                 <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
                     Room {user.roomNumber} • {user.name}
                 </div>
-            </div>
+            </motion.div>
 
             {repliedFeedbacks.length > 0 && (
                 <div style={{ display: 'grid', gap: '14px' }}>
-                    {repliedFeedbacks.map((feedback) => {
+                    {repliedFeedbacks.map((feedback, index) => {
                         return (
-                            <div
+                            <motion.div
                                 key={feedback.id}
                                 className="glass-panel"
+                                initial={{ opacity: 0, y: 28, scale: 0.97 }}
+                                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                                viewport={scrollRevealViewport}
+                                transition={{
+                                    duration: 0.56,
+                                    delay: Math.min(index * 0.08, 0.18),
+                                    ease: [0.16, 1, 0.3, 1]
+                                }}
                                 style={{
                                     padding: '18px',
                                     borderRadius: '20px',
@@ -302,28 +290,11 @@ export default function DashboardFeedback() {
                                         {feedback.text}
                                     </div>
                                 </div>
-                            </div>
+                            </motion.div>
                         );
                     })}
                 </div>
             )}
-
-            <div
-                ref={bottomFlourishRef}
-                className={`feedback-bottom-delight${bottomFlourishVisible ? ' feedback-bottom-delight--visible' : ''}`}
-                aria-hidden="true"
-            >
-                <div className="feedback-bottom-delight__orb feedback-bottom-delight__orb--left" />
-                <div className="feedback-bottom-delight__orb feedback-bottom-delight__orb--right" />
-                <div className="feedback-bottom-delight__orb feedback-bottom-delight__orb--center" />
-                <div className="feedback-bottom-delight__line" />
-                <div className="feedback-bottom-delight__spark feedback-bottom-delight__spark--left" />
-                <div className="feedback-bottom-delight__spark feedback-bottom-delight__spark--right" />
-                <div className="feedback-bottom-delight__spark feedback-bottom-delight__spark--center" />
-                <div className="feedback-bottom-delight__core">
-                    <Sparkles size={16} />
-                </div>
-            </div>
         </div>
     );
 }
