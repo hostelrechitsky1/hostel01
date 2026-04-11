@@ -31,7 +31,14 @@ import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptic
 import { ActionSpinner } from '../components/ActionSpinner';
 import { finishResidentPerfSpan } from '../utils/performance';
 
-const LazyConfetti = lazy(() => import('react-confetti'));
+let confettiPromise: Promise<typeof import('react-confetti')> | null = null;
+
+const preloadConfetti = () => {
+    confettiPromise ??= import('react-confetti');
+    return confettiPromise;
+};
+
+const LazyConfetti = lazy(() => preloadConfetti());
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
 let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
 
@@ -90,6 +97,7 @@ export default function BookingFlow() {
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
+    const [pendingBooking, setPendingBooking] = useState<Booking | null>(null);
     const [loading, setLoading] = useState(() => Boolean(userId) && (!hasCachedMachines || !hasCachedWeekBookings));
     const [submitting, setSubmitting] = useState(false);
     const [liveSyncRequested, setLiveSyncRequested] = useState(false);
@@ -382,6 +390,11 @@ export default function BookingFlow() {
         return () => window.clearTimeout(timer);
     }, [showConfirmation]);
 
+    useEffect(() => {
+        if (!showConfirmModal) return;
+        void preloadConfetti();
+    }, [showConfirmModal]);
+
     const availability = useMemo(() => {
         const dateStr = formatBelarusDate(selectedDate);
         const dateBookings = bookings.filter(b => b.date === dateStr);
@@ -451,11 +464,14 @@ export default function BookingFlow() {
             weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now()
         };
+        let bookingSucceeded = false;
+        setPendingBooking(bookingData);
 
         try {
             const { residentMutationsService } = await loadResidentMutationsService();
             const result = await residentMutationsService.createBooking(bookingData);
             if (result.success) {
+                bookingSucceeded = true;
                 const createdBooking = result.booking ?? {
                     ...bookingData,
                     id: `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`,
@@ -467,6 +483,7 @@ export default function BookingFlow() {
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
                 setSelectedMachine(null);
+                setPendingBooking(null);
             } else {
                 toast.error(result.error || 'Booking failed');
             }
@@ -475,6 +492,9 @@ export default function BookingFlow() {
             console.error('Error details:', e.message, e.code);
             toast.error(`System error: ${e.message || 'Please try again.'}`);
         } finally {
+            if (!bookingSucceeded) {
+                setPendingBooking(null);
+            }
             setSubmitting(false);
         }
     };
@@ -689,7 +709,7 @@ export default function BookingFlow() {
     const confettiHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
 
     return (
-        <div className="container animate-fade-in" style={{ paddingBottom: '100px' }}>
+        <div className="container" style={{ paddingBottom: '100px' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
                 <button
@@ -844,6 +864,7 @@ export default function BookingFlow() {
                                         if (!isFull && !isPassed) {
                                             requestLiveSync('interaction');
                                             void loadResidentMutationsService();
+                                            void preloadConfetti();
                                             if (selectedSlot === time) {
                                                 setSelectedSlot(null);
                                             } else {
@@ -886,8 +907,11 @@ export default function BookingFlow() {
                                     <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
                                         {activeMachines.map(m => {
                                             const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
-                                            const isBooked = Boolean(bookingForMachine);
-                                            const isBookedByUser = bookingForMachine?.studentId === user?.id;
+                                            const isPendingBooking = pendingBooking?.date === formatBelarusDate(selectedDate)
+                                                && pendingBooking.startTime === time
+                                                && pendingBooking.machineId === m.id;
+                                            const isBooked = Boolean(bookingForMachine) || isPendingBooking;
+                                            const isBookedByUser = bookingForMachine?.studentId === user?.id || isPendingBooking;
                                             return (
                                                 <button
                                                     key={m.id}
@@ -896,6 +920,7 @@ export default function BookingFlow() {
                                                         if (!isBooked) {
                                                             requestLiveSync('interaction');
                                                             void loadResidentMutationsService();
+                                                            void preloadConfetti();
                                                             hapticSoftPulse();
                                                             setSelectedMachine(m);
                                                             setShowConfirmModal(true);
@@ -916,7 +941,12 @@ export default function BookingFlow() {
                                                     }}
                                                 >
                                                     {m.name}
-                                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
+                                                    {isBooked && (
+                                                        <div style={{ fontSize: '10px', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                            {isPendingBooking ? <ActionSpinner size={10} tone="neutral" /> : null}
+                                                            <span>{isPendingBooking ? 'Reserving...' : isBookedByUser ? '(Booked by you)' : '(Booked)'}</span>
+                                                        </div>
+                                                    )}
                                                 </button>
                                             );
                                         })}

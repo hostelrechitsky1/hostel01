@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Toaster } from 'sonner';
 import { PrivateRoute } from './components/PrivateRoute';
 import { RouteFallback } from './components/RouteFallback';
 import { bookingService } from './services/bookingService';
@@ -17,6 +16,7 @@ const PrintSchedule = lazyRoute(() => import('./pages/PrintSchedule'));
 const PrintCredentials = lazyRoute(() => import('./pages/PrintCredentials'));
 const HostelAdminLogin = lazyRoute(() => import('./pages/HostelAdminLogin'));
 const HostelAdminDashboard = lazyRoute(() => import('./pages/HostelAdminDashboard'));
+const LazyToaster = lazy(() => import('sonner').then((module) => ({ default: module.Toaster })));
 const LazyResidentPerfDebug = lazy(() =>
   import('./components/ResidentPerfDebug').then((module) => ({ default: module.ResidentPerfDebug }))
 );
@@ -104,7 +104,7 @@ function ScrollToTopOnRouteChange() {
 }
 
 const PageWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div className="animate-fade-in" style={{ width: '100%', height: '100%' }}>
+  <div style={{ width: '100%', height: '100%' }}>
     {children}
   </div>
 );
@@ -207,19 +207,21 @@ function App() {
       <RouteWarmup />
       <AnimatedRoutes />
       <PerfDebugGate />
-      <Toaster
-        position="top-center"
-        richColors
-        theme="system"
-        toastOptions={{
-          style: {
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid var(--glass-border)',
-          },
-          className: 'glass-panel'
-        }}
-      />
+      <Suspense fallback={null}>
+        <LazyToaster
+          position="top-center"
+          richColors
+          theme="system"
+          toastOptions={{
+            style: {
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid var(--glass-border)',
+            },
+            className: 'glass-panel'
+          }}
+        />
+      </Suspense>
     </Router>
   );
 }

@@ -776,7 +776,7 @@ export default function Dashboard() {
             : 'var(--primary)';
 
     return (
-        <div className="container animate-fade-in">
+        <div className="container">
             {/* Top Alert Banner */}
             {settings.topAlert?.isActive && settings.topAlert.message && (
                 <div
