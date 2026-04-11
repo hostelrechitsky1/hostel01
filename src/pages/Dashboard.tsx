@@ -15,12 +15,12 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
-import { notifyInfo } from '../utils/notify';
+import { notifySuccess } from '../utils/notify';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { getResidentInitials, getResidentShortName } from '../utils/residentNames';
 
 const RECENT_BOOKINGS_LIMIT = 12;
-const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v1:';
+const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
 const LazyDashboardBookingSummary = lazy(() => import('../components/DashboardBookingSummary'));
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -228,10 +228,10 @@ export default function Dashboard() {
         }
 
         const timeoutId = window.setTimeout(() => {
-            notifyInfo('New: you can now cancel your own upcoming bookings directly from the dashboard.');
+            notifySuccess('New: you can now cancel your own upcoming bookings directly from the dashboard.');
             window.localStorage.setItem(storageKey, '1');
             cancelToastSeenRef.current = storageKey;
-        }, 560);
+        }, 900);
 
         return () => {
             window.clearTimeout(timeoutId);
