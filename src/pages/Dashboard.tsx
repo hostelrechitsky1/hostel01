@@ -15,10 +15,12 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
+import { notifyInfo } from '../utils/notify';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { getResidentInitials, getResidentShortName } from '../utils/residentNames';
 
 const RECENT_BOOKINGS_LIMIT = 12;
+const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v1:';
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
 const LazyDashboardBookingSummary = lazy(() => import('../components/DashboardBookingSummary'));
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -162,6 +164,7 @@ export default function Dashboard() {
     const dashboardShellMetricRef = useRef(false);
     const dashboardDataMetricRef = useRef(false);
     const bannerReadyMetricRef = useRef(false);
+    const cancelToastSeenRef = useRef<string | null>(null);
 
     useEffect(() => {
         coreResidentSnapshotRef.current = hasCoreResidentSnapshot;
@@ -203,6 +206,37 @@ export default function Dashboard() {
             banners: 0,
         });
     }, [banners.length, bannersLoading]);
+
+    useEffect(() => {
+        if (!userId || loading) {
+            return;
+        }
+
+        if (loadIssue === 'error' && !hasCoreResidentSnapshot) {
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const storageKey = `${CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX}${userId}`;
+
+        if (cancelToastSeenRef.current === storageKey || window.localStorage.getItem(storageKey) === '1') {
+            cancelToastSeenRef.current = storageKey;
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            notifyInfo('New: you can now cancel your own upcoming bookings directly from the dashboard.');
+            window.localStorage.setItem(storageKey, '1');
+            cancelToastSeenRef.current = storageKey;
+        }, 560);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [hasCoreResidentSnapshot, loadIssue, loading, userId]);
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
