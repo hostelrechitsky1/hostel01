@@ -76,6 +76,23 @@ button {
   animation: fadeIn 0.4s ease-out forwards;
 }
 
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(0.99);
+  filter: blur(1.5px);
+  transition:
+    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 320ms ease;
+  will-change: transform, opacity;
+}
+
+.scroll-reveal--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
 @keyframes pulse {
 
   0%,
@@ -191,6 +208,16 @@ button {
 
   50% {
     box-shadow: 0 25px 60px rgba(16, 185, 129, 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-reveal,
+  .scroll-reveal--visible {
+    transition: none;
+    transform: none;
+    opacity: 1;
+    filter: none;
   }
 }
 

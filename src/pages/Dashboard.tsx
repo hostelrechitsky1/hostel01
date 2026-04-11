@@ -720,6 +720,17 @@ export default function Dashboard() {
             setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
         });
     };
+    const topAlertType = settings.topAlert?.type ?? 'info';
+    const topAlertBackground = topAlertType === 'urgent'
+        ? 'rgba(239, 68, 68, 0.2)'
+        : topAlertType === 'warning'
+            ? 'rgba(245, 158, 11, 0.2)'
+            : 'rgba(59, 130, 246, 0.2)';
+    const topAlertIconColor = topAlertType === 'urgent'
+        ? 'var(--error)'
+        : topAlertType === 'warning'
+            ? '#d97706'
+            : 'var(--primary)';
 
     return (
         <div className="container animate-fade-in">
@@ -734,11 +745,7 @@ export default function Dashboard() {
                         right: 0,
                         zIndex: 100,
                         padding: '12px 16px',
-                        background: settings.topAlert.type === 'urgent'
-                            ? 'rgba(239, 68, 68, 0.25)' // Red glass
-                            : settings.topAlert.type === 'warning'
-                                ? 'rgba(245, 158, 11, 0.25)' // Amber glass
-                                : 'rgba(59, 130, 246, 0.25)', // Blue glass
+                        background: topAlertBackground,
                         backdropFilter: 'blur(12px)',
                         WebkitBackdropFilter: 'blur(12px)',
                         display: 'flex',
@@ -746,22 +753,23 @@ export default function Dashboard() {
                         justifyContent: 'center',
                         gap: '8px',
                         color: 'var(--text-main)',
-                        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                        boxShadow: '0 4px 22px rgba(15, 23, 42, 0.14)',
+                        borderBottom: '1px solid var(--glass-border)'
                     }}
                 >
                     <div style={{
-                        background: 'rgba(255,255,255,0.2)',
+                        background: 'rgba(148, 163, 184, 0.14)',
                         padding: '4px',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        border: '1px solid rgba(148, 163, 184, 0.2)',
+                        color: topAlertIconColor
                     }}>
-                        {settings.topAlert.type === 'urgent' && <AlertTriangle size={16} fill="white" />}
-                        {settings.topAlert.type === 'info' && <Info size={16} />}
-                        {settings.topAlert.type === 'warning' && <AlertTriangle size={16} />}
+                        {topAlertType === 'urgent' && <AlertTriangle size={16} />}
+                        {topAlertType === 'info' && <Info size={16} />}
+                        {topAlertType === 'warning' && <AlertTriangle size={16} />}
                     </div>
                     <span style={{ fontWeight: 600, fontSize: '14px', textAlign: 'center', letterSpacing: '0.01em' }}>
                         {settings.topAlert.message}
@@ -800,14 +808,14 @@ export default function Dashboard() {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 position: 'relative',
-                                background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.28) 0%, rgba(59, 130, 246, 0.18) 100%)',
-                                border: '1px solid rgba(196, 181, 253, 0.2)',
-                                boxShadow: '0 10px 24px rgba(37, 99, 235, 0.16)',
+                                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.12) 100%)',
+                                border: '1px solid rgba(99, 102, 241, 0.22)',
+                                boxShadow: '0 10px 24px rgba(37, 99, 235, 0.14)',
                                 cursor: canOpenRoommateMenu ? 'pointer' : 'default'
                             }}
                             aria-label={canOpenRoommateMenu ? 'Switch roommate profile' : 'Current resident profile'}
                         >
-                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'white', letterSpacing: '0.04em' }}>
+                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.04em' }}>
                                 {getResidentInitials(user.name)}
                             </span>
                             {canOpenRoommateMenu && (
@@ -819,12 +827,12 @@ export default function Dashboard() {
                                         width: '20px',
                                         height: '20px',
                                         borderRadius: '999px',
-                                        background: 'rgba(15, 23, 42, 0.94)',
-                                        border: '1px solid rgba(196, 181, 253, 0.24)',
+                                        background: 'var(--glass-bg)',
+                                        border: '1px solid var(--glass-border)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        color: '#ddd6fe'
+                                        color: 'var(--primary)'
                                     }}
                                 >
                                     <ChevronDown size={12} />
@@ -843,13 +851,13 @@ export default function Dashboard() {
                                     borderRadius: '20px',
                                     padding: '14px',
                                     zIndex: 120,
-                                    background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.92) 100%)',
-                                    border: '1px solid rgba(196, 181, 253, 0.14)',
-                                    boxShadow: '0 20px 40px rgba(2, 6, 23, 0.32)'
+                                    background: 'var(--glass-bg)',
+                                    border: '1px solid var(--glass-border)',
+                                    boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)'
                                 }}
                             >
                                     <div style={{ marginBottom: '10px' }}>
-                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>Book For Roommate</div>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>Book For Roommate</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
                                             Only residents from Room {user.roomNumber} can be selected here.
                                         </div>
@@ -873,11 +881,11 @@ export default function Dashboard() {
                                                         justifyContent: 'space-between',
                                                         gap: '10px',
                                                         background: isActiveResident
-                                                            ? 'linear-gradient(135deg, rgba(129, 140, 248, 0.18) 0%, rgba(59, 130, 246, 0.12) 100%)'
-                                                            : 'rgba(255,255,255,0.04)',
+                                                            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(14, 165, 233, 0.12) 100%)'
+                                                            : 'rgba(148, 163, 184, 0.08)',
                                                         border: isActiveResident
-                                                            ? '1px solid rgba(196, 181, 253, 0.2)'
-                                                            : '1px solid rgba(255,255,255,0.06)',
+                                                            ? '1px solid rgba(99, 102, 241, 0.22)'
+                                                            : '1px solid rgba(148, 163, 184, 0.2)',
                                                         textAlign: 'left'
                                                     }}
                                                 >
@@ -890,16 +898,17 @@ export default function Dashboard() {
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
-                                                                background: isActiveResident ? 'rgba(129, 140, 248, 0.2)' : 'rgba(255,255,255,0.08)',
-                                                                color: 'white',
+                                                                background: isActiveResident ? 'rgba(99, 102, 241, 0.2)' : 'rgba(148, 163, 184, 0.16)',
+                                                                color: 'var(--text-main)',
                                                                 fontWeight: 700,
+                                                                border: '1px solid rgba(148, 163, 184, 0.24)',
                                                                 flexShrink: 0
                                                             }}
                                                         >
                                                             {getResidentInitials(resident.name)}
                                                         </div>
                                                         <div style={{ minWidth: 0 }}>
-                                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                 {getResidentShortName(resident.name)}
                                                             </div>
                                                             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -915,7 +924,7 @@ export default function Dashboard() {
                                                                 height: '24px',
                                                                 borderRadius: '999px',
                                                                 background: 'rgba(16, 185, 129, 0.16)',
-                                                                color: '#86efac',
+                                                                color: 'var(--success)',
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
@@ -1163,7 +1172,11 @@ export default function Dashboard() {
                 )}
             </section>
 
-            <div ref={bookingSummarySectionRef} style={{ minHeight: '220px' }}>
+            <div
+                ref={bookingSummarySectionRef}
+                className={`scroll-reveal${isBookingSummaryActive ? ' scroll-reveal--visible' : ''}`}
+                style={{ minHeight: '220px' }}
+            >
                 {isBookingSummaryActive ? (
                     <Suspense fallback={bookingsFallback}>
                         <LazyDashboardBookingSummary
@@ -1182,7 +1195,11 @@ export default function Dashboard() {
             </div>
 
             {/* Inline Feedback Section */}
-            <div ref={feedbackSectionRef} style={{ minHeight: '132px' }}>
+            <div
+                ref={feedbackSectionRef}
+                className={`scroll-reveal${isFeedbackActive ? ' scroll-reveal--visible' : ''}`}
+                style={{ minHeight: '132px' }}
+            >
                 {isFeedbackActive ? (
                     <Suspense fallback={feedbackFallback}>
                         <LazyDashboardFeedback />
