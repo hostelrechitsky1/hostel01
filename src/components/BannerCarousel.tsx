@@ -239,6 +239,24 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         void preloadBannerImage(source);
     }, [activeBanners, currentIndex, isVisible]);
 
+    useEffect(() => {
+        if (activeBanners.length <= 1 || !isVisible || !isPageVisible) return;
+
+        const nextIndex = (currentIndex + 1) % activeBanners.length;
+        const nextBanner = activeBanners[nextIndex];
+        if (!nextBanner?.imageUrl) return;
+
+        const warmNextBannerTimer = window.setTimeout(() => {
+            const source = getAdaptiveBannerSrc(nextBanner.imageUrl, { priority: true });
+            ensureBannerPreloadLink(source);
+            void preloadBannerImage(source);
+        }, 900);
+
+        return () => {
+            window.clearTimeout(warmNextBannerTimer);
+        };
+    }, [activeBanners, currentIndex, isPageVisible, isVisible]);
+
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
         setTouchEnd(null);

@@ -35,7 +35,10 @@ function ScrollToTopOnRouteChange() {
   }, []);
 
   const forceScrollToTop = () => {
+    const scrollingElement = document.scrollingElement ?? document.documentElement;
+
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    scrollingElement.scrollTop = 0;
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
   };
@@ -47,17 +50,36 @@ function ScrollToTopOnRouteChange() {
   useEffect(() => {
     forceScrollToTop();
 
-    const rafId = requestAnimationFrame(() => {
-      forceScrollToTop();
+    const rafIds = [
+      requestAnimationFrame(() => {
+        forceScrollToTop();
+      }),
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          forceScrollToTop();
+        });
+      })
+    ];
+
+    const timeoutIds = [60, 180, 320, 520].map((delay) => {
+      return window.setTimeout(() => {
+        forceScrollToTop();
+      }, delay);
     });
 
-    const timeoutId = window.setTimeout(() => {
+    const visualViewport = window.visualViewport;
+    const handleViewportShift = () => {
       forceScrollToTop();
-    }, 100);
+    };
+
+    visualViewport?.addEventListener('resize', handleViewportShift);
+    visualViewport?.addEventListener('scroll', handleViewportShift);
 
     return () => {
-      cancelAnimationFrame(rafId);
-      window.clearTimeout(timeoutId);
+      rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      visualViewport?.removeEventListener('resize', handleViewportShift);
+      visualViewport?.removeEventListener('scroll', handleViewportShift);
     };
   }, [pathname, key]);
 

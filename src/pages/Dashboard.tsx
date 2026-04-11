@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, firestoreService } from '../services/firestoreService';
-import type { Machine, Booking, Banner, AppSettings } from '../types';
+import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight, ChevronDown, Check } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
 import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
@@ -15,6 +15,8 @@ import { warmBannerImages } from '../utils/bannerImages';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
 import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
+import { warmResidentAppData } from '../utils/warmResidentApp';
+import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const scrollRevealViewport = { once: true, amount: 0.18 };
@@ -34,10 +36,29 @@ const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     return [...withoutExisting, nextBooking];
 };
 
+const getResidentInitials = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'R';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
+};
+
 export default function Dashboard() {
     const navigate = useNavigate();
-    const user = bookingService.getCurrentUser();
+    const [user, setUser] = useState<Student | null>(() => bookingService.getCurrentUser());
     const userId = user?.id ?? '';
+    const [roommates, setRoommates] = useState<Student[]>(() => {
+        const currentUser = bookingService.getCurrentUser();
+        if (!currentUser?.roomNumber) return [];
+        return bookingService
+            .getCurrentRoommates()
+            .filter((student) => student.roomNumber === currentUser.roomNumber);
+    });
+    const [roommatesLoading, setRoommatesLoading] = useState(false);
+    const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
+    const roommateMenuRef = useRef<HTMLDivElement>(null);
+    const roommateHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const suppressRoommateClickRef = useRef(false);
     const dashboardWeekIds = useMemo(() => {
         const currentWeekStart = getBelarusWeekStart(getBelarusDate());
         return [
@@ -88,6 +109,60 @@ export default function Dashboard() {
     useEffect(() => {
         residentSnapshotRef.current = hasResidentSnapshot;
     }, [hasResidentSnapshot]);
+
+    useEffect(() => {
+        if (!user?.roomNumber) return;
+
+        let isMounted = true;
+        setRoommatesLoading(true);
+
+        void firestoreService.getStudentsByRoom(user.roomNumber)
+            .then((fetchedRoommates) => {
+                if (!isMounted) return;
+                const sameRoomResidents = fetchedRoommates.filter((student) => student.roomNumber === user.roomNumber);
+                setRoommates(sameRoomResidents);
+                bookingService.setCurrentRoommates(sameRoomResidents);
+            })
+            .catch((error) => {
+                console.error('Failed to load roommates for current room', error);
+            })
+            .finally(() => {
+                if (isMounted) {
+                    setRoommatesLoading(false);
+                }
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user?.roomNumber]);
+
+    useEffect(() => {
+        if (!isRoommateMenuOpen) return;
+
+        const handleOutsidePress = (event: MouseEvent | TouchEvent) => {
+            if (roommateMenuRef.current?.contains(event.target as Node)) {
+                return;
+            }
+            setIsRoommateMenuOpen(false);
+        };
+
+        document.addEventListener('mousedown', handleOutsidePress);
+        document.addEventListener('touchstart', handleOutsidePress);
+
+        return () => {
+            document.removeEventListener('mousedown', handleOutsidePress);
+            document.removeEventListener('touchstart', handleOutsidePress);
+        };
+    }, [isRoommateMenuOpen]);
+
+    useEffect(() => {
+        return () => {
+            if (roommateHoldTimerRef.current) {
+                window.clearTimeout(roommateHoldTimerRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (!residentLoadSlow || !loading || !hasResidentSnapshot) {
@@ -295,6 +370,62 @@ export default function Dashboard() {
     const handleLogout = () => {
         bookingService.logout();
         navigate('/login');
+    };
+
+    const clearRoommateHold = () => {
+        if (roommateHoldTimerRef.current) {
+            window.clearTimeout(roommateHoldTimerRef.current);
+            roommateHoldTimerRef.current = null;
+        }
+    };
+
+    const startRoommateHold = () => {
+        if (roommates.length <= 1) return;
+
+        clearRoommateHold();
+        roommateHoldTimerRef.current = window.setTimeout(() => {
+            suppressRoommateClickRef.current = true;
+            setIsRoommateMenuOpen(true);
+            hapticSoftPulse();
+        }, 420);
+    };
+
+    const handleRoommateButtonClick = () => {
+        if (roommates.length <= 1) return;
+
+        if (suppressRoommateClickRef.current) {
+            suppressRoommateClickRef.current = false;
+            return;
+        }
+
+        setIsRoommateMenuOpen((current) => !current);
+        hapticSelection();
+    };
+
+    const handleRoommateSwitch = (nextResident: Student) => {
+        if (!user || nextResident.id === user.id) {
+            setIsRoommateMenuOpen(false);
+            return;
+        }
+
+        const cachedBookings = firestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
+
+        bookingService.setCurrentUser(nextResident);
+        startTransition(() => {
+            setUser(nextResident);
+            setRecentBookings(cachedBookings ?? []);
+        });
+        setLoading(cachedBookings === undefined);
+        setLoadIssue(null);
+        setLoadErrorMessage(null);
+        setQuickBookModalBooking(null);
+        setQuickBookModalMessage(null);
+        setQuickBookingId(null);
+        setIsRoommateMenuOpen(false);
+        preloadBookingRoute();
+        void warmResidentAppData(nextResident.id);
+        hapticSelection();
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     };
 
     const retryDashboardData = () => {
@@ -543,11 +674,183 @@ export default function Dashboard() {
                 alignItems: 'center',
                 marginBottom: '32px',
                 marginTop: settings.topAlert?.isActive ? '48px' : '16px', // Push down if alert is visible
-                transition: 'margin-top 0.3s ease'
+                transition: 'margin-top 0.3s ease',
+                gap: '14px'
             }}>
-                <div>
-                    <h2 style={{ margin: 0, fontSize: '24px' }}>Hello, {user.name.split(' ')[0]} 👋</h2>
-                    <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>Room {user.roomNumber}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                    <div ref={roommateMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+                        <button
+                            type="button"
+                            onClick={handleRoommateButtonClick}
+                            onTouchStart={startRoommateHold}
+                            onTouchEnd={clearRoommateHold}
+                            onTouchCancel={clearRoommateHold}
+                            onMouseDown={startRoommateHold}
+                            onMouseUp={clearRoommateHold}
+                            onMouseLeave={clearRoommateHold}
+                            className="glass-button"
+                            style={{
+                                width: '52px',
+                                height: '52px',
+                                borderRadius: '50%',
+                                padding: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.28) 0%, rgba(59, 130, 246, 0.18) 100%)',
+                                border: '1px solid rgba(196, 181, 253, 0.2)',
+                                boxShadow: '0 10px 24px rgba(37, 99, 235, 0.16)',
+                                cursor: roommates.length > 1 ? 'pointer' : 'default'
+                            }}
+                            aria-label={roommates.length > 1 ? 'Switch roommate profile' : 'Current resident profile'}
+                        >
+                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'white', letterSpacing: '0.04em' }}>
+                                {getResidentInitials(user.name)}
+                            </span>
+                            {roommates.length > 1 && (
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        right: '-2px',
+                                        bottom: '-2px',
+                                        width: '20px',
+                                        height: '20px',
+                                        borderRadius: '999px',
+                                        background: 'rgba(15, 23, 42, 0.94)',
+                                        border: '1px solid rgba(196, 181, 253, 0.24)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#ddd6fe'
+                                    }}
+                                >
+                                    <ChevronDown size={12} />
+                                </span>
+                            )}
+                        </button>
+
+                        <AnimatePresence>
+                            {isRoommateMenuOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                                    className="glass-panel"
+                                    style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + 12px)',
+                                        left: 0,
+                                        width: 'min(320px, calc(100vw - 40px))',
+                                        borderRadius: '20px',
+                                        padding: '14px',
+                                        zIndex: 120,
+                                        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.92) 100%)',
+                                        border: '1px solid rgba(196, 181, 253, 0.14)',
+                                        boxShadow: '0 20px 40px rgba(2, 6, 23, 0.32)'
+                                    }}
+                                >
+                                    <div style={{ marginBottom: '10px' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>Book For Roommate</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                                            Only residents from Room {user.roomNumber} can be selected here.
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gap: '8px' }}>
+                                        {roommates.map((resident) => {
+                                            const isActiveResident = resident.id === user.id;
+                                            return (
+                                                <button
+                                                    key={resident.id}
+                                                    type="button"
+                                                    onClick={() => handleRoommateSwitch(resident)}
+                                                    className="glass-button"
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '12px 14px',
+                                                        borderRadius: '16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        gap: '10px',
+                                                        background: isActiveResident
+                                                            ? 'linear-gradient(135deg, rgba(129, 140, 248, 0.18) 0%, rgba(59, 130, 246, 0.12) 100%)'
+                                                            : 'rgba(255,255,255,0.04)',
+                                                        border: isActiveResident
+                                                            ? '1px solid rgba(196, 181, 253, 0.2)'
+                                                            : '1px solid rgba(255,255,255,0.06)',
+                                                        textAlign: 'left'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                        <div
+                                                            style={{
+                                                                width: '36px',
+                                                                height: '36px',
+                                                                borderRadius: '50%',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                background: isActiveResident ? 'rgba(129, 140, 248, 0.2)' : 'rgba(255,255,255,0.08)',
+                                                                color: 'white',
+                                                                fontWeight: 700,
+                                                                flexShrink: 0
+                                                            }}
+                                                        >
+                                                            {getResidentInitials(resident.name)}
+                                                        </div>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {resident.name}
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                                Room {resident.roomNumber}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {isActiveResident && (
+                                                        <span
+                                                            style={{
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                borderRadius: '999px',
+                                                                background: 'rgba(16, 185, 129, 0.16)',
+                                                                color: '#86efac',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0
+                                                            }}
+                                                        >
+                                                            <Check size={14} />
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+
+                                        {roommatesLoading && (
+                                            <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                Refreshing roommate list...
+                                            </div>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    <div style={{ minWidth: 0 }}>
+                        <h2 style={{ margin: 0, fontSize: '24px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            Hello, {user.name.split(' ')[0]} 👋
+                        </h2>
+                        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
+                            Room {user.roomNumber}{roommates.length > 1 ? ' • Tap avatar to switch resident' : ''}
+                        </p>
+                    </div>
                 </div>
                 <button
                     onClick={handleLogout}

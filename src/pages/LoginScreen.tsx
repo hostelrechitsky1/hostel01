@@ -27,6 +27,7 @@ export default function LoginScreen() {
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
+                bookingService.setCurrentRoommates(roomStudents);
                 preloadResidentRoutes();
                 void warmResidentAppData();
                 // Check if Room has PIN protection
@@ -69,6 +70,7 @@ export default function LoginScreen() {
 
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
+        bookingService.setCurrentRoommates(roommates);
         preloadResidentRoutes();
         void warmResidentAppData(student.id);
 

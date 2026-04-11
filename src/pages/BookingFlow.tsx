@@ -29,6 +29,7 @@ import {
 } from '../utils/time';
 import { preloadDashboardRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
+import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 
 const LazyConfetti = lazy(() => import('react-confetti'));
 
@@ -212,15 +213,9 @@ export default function BookingFlow() {
         };
     }, [showConfirmModal, showConfirmation]);
 
-    const triggerHaptic = (pattern: number | number[]) => {
-        if ('vibrate' in navigator) {
-            navigator.vibrate(pattern);
-        }
-    };
-
     useEffect(() => {
         if (showConfirmation) {
-            triggerHaptic([30, 40, 30, 60, 30]);
+            hapticSuccess();
         }
     }, [showConfirmation]);
 
@@ -307,7 +302,6 @@ export default function BookingFlow() {
                 startTransition(() => {
                     setBookings((currentBookings) => upsertBooking(currentBookings, { ...bookingData, id: createdSlotId }));
                 });
-                triggerHaptic([20, 40, 20, 80, 20]);
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
                 setSelectedMachine(null);
@@ -697,6 +691,7 @@ export default function BookingFlow() {
                                             if (selectedSlot === time) {
                                                 setSelectedSlot(null);
                                             } else {
+                                                hapticSelection();
                                                 setSelectedSlot(time);
                                                 setSelectedMachine(null);
                                             }
@@ -743,6 +738,7 @@ export default function BookingFlow() {
                                                     disabled={isBooked}
                                                     onClick={() => {
                                                         if (!isBooked) {
+                                                            hapticSoftPulse();
                                                             setSelectedMachine(m);
                                                             setShowConfirmModal(true);
                                                         }

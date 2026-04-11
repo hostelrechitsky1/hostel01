@@ -1,7 +1,8 @@
 import type { Student } from '../types';
 
 const STORAGE_KEYS = {
-    CURRENT_USER: 'hostel_current_user'
+    CURRENT_USER: 'hostel_current_user',
+    CURRENT_ROOMMATES: 'hostel_current_roommates'
 };
 
 /**
@@ -23,12 +24,21 @@ class BookingService {
         this.set(STORAGE_KEYS.CURRENT_USER, student);
     }
 
+    setCurrentRoommates(students: Student[]) {
+        this.set(STORAGE_KEYS.CURRENT_ROOMMATES, students);
+    }
+
     getCurrentUser(): Student | null {
         return this.get(STORAGE_KEYS.CURRENT_USER, null);
     }
 
+    getCurrentRoommates(): Student[] {
+        return this.get(STORAGE_KEYS.CURRENT_ROOMMATES, []);
+    }
+
     logout() {
         localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_ROOMMATES);
     }
 }
 
