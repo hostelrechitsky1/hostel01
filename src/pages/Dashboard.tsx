@@ -88,15 +88,21 @@ export default function Dashboard() {
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
     }, []);
-    const cachedMachines = useMemo(() => residentFirestoreService.getCachedMachines(), []);
-    const cachedWeekBookings = useMemo(() => residentFirestoreService.getCachedBookingsForWeekIds(dashboardWeekIds), [dashboardWeekIds]);
-    const cachedRecentBookings = useMemo(() => (
+    const cachedDashboardSnapshot = useMemo(
+        () => residentSnapshotService.getCachedDashboardSnapshot(dashboardWeekIds),
+        [dashboardWeekIds]
+    );
+    const cachedWarmSnapshot = useMemo(() => (
         userId
-            ? residentFirestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+            ? residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, userId, true)
             : undefined
-    ), [userId]);
-    const cachedSettings = useMemo(() => residentFirestoreService.getCachedSettings(), []);
-    const cachedBanners = useMemo(() => residentFirestoreService.getCachedBanners(), []);
+    ), [dashboardWeekIds, userId]);
+    const cachedMachines = cachedDashboardSnapshot?.machines;
+    const cachedWeekBookings = cachedDashboardSnapshot?.weekBookings;
+    const cachedSettings = cachedDashboardSnapshot?.settings;
+    const cachedBanners = cachedDashboardSnapshot?.banners;
+    const cachedRecentBookings = cachedWarmSnapshot?.recentBookings
+        ?? (userId ? residentFirestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT) : undefined);
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
     const hasCachedRecentBookings = cachedRecentBookings !== undefined;
@@ -146,8 +152,9 @@ export default function Dashboard() {
         dashboardShellMetricRef.current = true;
         finishResidentPerfSpan('resident:login-to-dashboard-shell', {
             cachedCore: hasCoreResidentSnapshot,
+            source: cachedDashboardSnapshot ? 'snapshot' : 'resource-cache',
         });
-    }, [hasCoreResidentSnapshot, userId]);
+    }, [cachedDashboardSnapshot, hasCoreResidentSnapshot, userId]);
 
     useEffect(() => {
         if (!userId || loading || dashboardDataMetricRef.current) return;
@@ -155,8 +162,9 @@ export default function Dashboard() {
         finishResidentPerfSpan('resident:login-to-dashboard-data', {
             cachedCore: hasCoreResidentSnapshot,
             cachedRecentBookings: hasCachedRecentBookings,
+            source: cachedWarmSnapshot ? 'warm-snapshot' : (cachedDashboardSnapshot ? 'snapshot' : 'resource-cache'),
         });
-    }, [hasCachedRecentBookings, hasCoreResidentSnapshot, loading, userId]);
+    }, [cachedDashboardSnapshot, cachedWarmSnapshot, hasCachedRecentBookings, hasCoreResidentSnapshot, loading, userId]);
 
     useEffect(() => {
         if (bannersLoading || bannerReadyMetricRef.current) return;
@@ -572,7 +580,8 @@ export default function Dashboard() {
             return;
         }
 
-        const cachedBookings = residentFirestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
+        const cachedBookings = residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, nextResident.id, true)?.recentBookings
+            ?? residentFirestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
 
         bookingService.setCurrentUser(nextResident);
         startTransition(() => {
@@ -586,7 +595,10 @@ export default function Dashboard() {
         setLoadErrorMessage(null);
         setIsRoommateMenuOpen(false);
         preloadBookingRoute();
-        void warmResidentAppData(nextResident.id);
+        void warmResidentAppData(nextResident.id, {
+            includeRecentBookings: true,
+            roomNumber: nextResident.roomNumber,
+        });
         hapticSelection();
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     };

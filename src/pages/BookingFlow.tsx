@@ -2,7 +2,7 @@ import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState }
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
+import { DEFAULT_APP_SETTINGS } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
@@ -61,9 +61,13 @@ export default function BookingFlow() {
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
     }, []);
-    const cachedMachines = useMemo(() => residentFirestoreService.getCachedMachines(), []);
-    const cachedWeekBookings = useMemo(() => residentFirestoreService.getCachedBookingsForWeekIds(bookingWeekIds), [bookingWeekIds]);
-    const cachedSettings = useMemo(() => residentFirestoreService.getCachedSettings(), []);
+    const cachedBookingSnapshot = useMemo(
+        () => residentSnapshotService.getCachedBookingSnapshot(bookingWeekIds),
+        [bookingWeekIds]
+    );
+    const cachedMachines = cachedBookingSnapshot?.machines;
+    const cachedWeekBookings = cachedBookingSnapshot?.weekBookings;
+    const cachedSettings = cachedBookingSnapshot?.settings;
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
 
@@ -114,16 +118,18 @@ export default function BookingFlow() {
         bookingShellMetricRef.current = true;
         finishResidentPerfSpan('resident:dashboard-to-booking-shell', {
             cachedCore: hasBookingSnapshot,
+            source: cachedBookingSnapshot ? 'snapshot' : 'resource-cache',
         });
-    }, [hasBookingSnapshot, userId]);
+    }, [cachedBookingSnapshot, hasBookingSnapshot, userId]);
 
     useEffect(() => {
         if (!userId || loading || bookingDataMetricRef.current) return;
         bookingDataMetricRef.current = true;
         finishResidentPerfSpan('resident:booking-data-ready', {
             cachedCore: hasBookingSnapshot,
+            source: cachedBookingSnapshot ? 'snapshot' : 'resource-cache',
         });
-    }, [hasBookingSnapshot, loading, userId]);
+    }, [cachedBookingSnapshot, hasBookingSnapshot, loading, userId]);
 
     useEffect(() => {
         if (!userId || !liveSyncAttached || bookingLiveMetricRef.current) return;

@@ -66,7 +66,7 @@ export default function LoginScreen() {
                 setRoommates(roomStudents);
                 bookingService.setCurrentRoommates(roomStudents);
                 preloadResidentRoutes();
-                void warmResidentAppData();
+                void warmResidentAppData(undefined, { roomNumber: roomStudents[0].roomNumber });
                 // Check if Room has PIN protection
                 const roomPin = roomStudents[0].pin;
                 if (roomPin) {
@@ -112,7 +112,10 @@ export default function LoginScreen() {
         bookingService.setCurrentUser(student);
         bookingService.setCurrentRoommates(roommates);
         preloadResidentRoutes();
-        void warmResidentAppData(student.id);
+        void warmResidentAppData(student.id, {
+            includeRecentBookings: true,
+            roomNumber: student.roomNumber,
+        });
         startResidentPerfSpan('resident:login-to-dashboard-shell');
         startResidentPerfSpan('resident:login-to-dashboard-data');
         startResidentPerfSpan('resident:dashboard-banner-ready');

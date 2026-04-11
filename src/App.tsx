@@ -115,7 +115,10 @@ function RouteWarmup() {
       const currentUser = bookingService.getCurrentUser();
       if (currentUser) {
         preloadResidentRoutes();
-        void import('./utils/warmResidentApp').then(({ warmResidentAppData }) => warmResidentAppData(currentUser.id));
+        void import('./utils/warmResidentApp').then(({ warmResidentAppData }) => warmResidentAppData(currentUser.id, {
+          includeRecentBookings: true,
+          roomNumber: currentUser.roomNumber,
+        }));
         return;
       }
 
