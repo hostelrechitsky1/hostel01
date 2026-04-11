@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
-    Bug,
-    CheckCircle2,
-    Clock3,
-    Lightbulb,
     MessageSquare,
     Reply,
     Send,
@@ -17,31 +13,18 @@ import type { Feedback, FeedbackType } from '../types';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
 
-const feedbackTypeMeta: Record<FeedbackType, { label: string; color: string; background: string; border: string }> = {
-    bug: {
-        label: 'Bug',
-        color: '#f87171',
-        background: 'rgba(239, 68, 68, 0.14)',
-        border: 'rgba(239, 68, 68, 0.22)'
-    },
-    feature: {
-        label: 'Suggestion',
-        color: '#60a5fa',
-        background: 'rgba(59, 130, 246, 0.14)',
-        border: 'rgba(59, 130, 246, 0.22)'
-    },
-    other: {
-        label: 'Feedback',
-        color: '#c4b5fd',
-        background: 'rgba(139, 92, 246, 0.14)',
-        border: 'rgba(139, 92, 246, 0.22)'
-    }
-};
+const inferFeedbackType = (text: string): FeedbackType => {
+    const normalized = text.trim().toLowerCase();
 
-const getFeedbackTypeIcon = (type: FeedbackType) => {
-    if (type === 'bug') return Bug;
-    if (type === 'feature') return Lightbulb;
-    return Sparkles;
+    if (/(bug|broken|issue|problem|error|fail|crash|not working)/.test(normalized)) {
+        return 'bug';
+    }
+
+    if (/(feature|suggest|idea|improve|add|please make|can you)/.test(normalized)) {
+        return 'feature';
+    }
+
+    return 'other';
 };
 
 export default function DashboardFeedback() {
@@ -55,11 +38,14 @@ export default function DashboardFeedback() {
             FEEDBACK_HISTORY_LIMIT
         );
     }, [user?.id, user?.name, user?.roomNumber]);
-    const [type, setType] = useState<FeedbackType>('feature');
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
     const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
+    const repliedFeedbacks = useMemo(() => {
+        return [...feedbacks]
+            .filter((feedback) => Boolean(feedback.adminReply?.text?.trim()))
+            .sort((left, right) => (right.adminReply?.repliedAt ?? 0) - (left.adminReply?.repliedAt ?? 0));
+    }, [feedbacks]);
 
     useEffect(() => {
         setFeedbacks(cachedFeedbacks ?? []);
@@ -81,7 +67,8 @@ export default function DashboardFeedback() {
     }, [user?.id, user?.name, user?.roomNumber]);
 
     const handleSubmit = async () => {
-        if (!text.trim() || !user) return;
+        const trimmedText = text.trim();
+        if (!trimmedText || !user) return;
 
         setLoading(true);
 
@@ -91,17 +78,14 @@ export default function DashboardFeedback() {
                 studentId: user.id,
                 studentName: user.name,
                 roomNumber: user.roomNumber,
-                text: text.trim(),
-                type,
+                text: trimmedText,
+                type: inferFeedbackType(trimmedText),
                 timestamp: Date.now(),
                 read: false
             });
 
-            setSuccess(true);
             setText('');
-            setType('feature');
-            toast.success('Feedback sent! Replies will appear here.');
-            window.setTimeout(() => setSuccess(false), 2400);
+            toast.success('Feedback sent. Admin replies will appear below.');
         } catch (error) {
             console.error('Failed to send feedback', error);
             toast.error('Failed to send feedback.');
@@ -114,139 +98,111 @@ export default function DashboardFeedback() {
 
     return (
         <div style={{ marginTop: '40px', paddingBottom: '40px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <MessageSquare size={20} /> Feedback Center
-                </h3>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Admin replies will show up here automatically
-                </div>
-            </div>
+            <h3 style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MessageSquare size={18} />
+                Feedback
+            </h3>
 
             <div
                 className="glass-panel"
                 style={{
-                    padding: '20px',
-                    borderRadius: '20px',
+                    padding: '16px',
+                    borderRadius: '18px',
                     marginBottom: '18px',
-                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.35) 100%)',
-                    border: '1px solid rgba(96, 165, 250, 0.2)'
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(20, 24, 58, 0.92) 100%)',
+                    border: '1px solid rgba(129, 140, 248, 0.18)',
+                    boxShadow: '0 16px 32px rgba(12, 18, 42, 0.28)'
                 }}
             >
-                <p style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.5 }}>
-                    Share a bug, suggestion, or any issue with the hostel app. When the team replies, the answer will appear below.
+                <p style={{ margin: '0 0 12px', color: 'rgba(255,255,255,0.72)', fontSize: '13px', lineHeight: 1.5 }}>
+                    Have a suggestion or found a bug? Let us know directly.
                 </p>
 
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
-                    {(Object.keys(feedbackTypeMeta) as FeedbackType[]).map((option) => {
-                        const meta = feedbackTypeMeta[option];
-                        const Icon = getFeedbackTypeIcon(option);
-
-                        return (
-                            <button
-                                key={option}
-                                onClick={() => setType(option)}
-                                className={type === option ? 'primary-button' : 'glass-button'}
-                                style={{
-                                    padding: '9px 14px',
-                                    borderRadius: '999px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    background: type === option ? meta.color : meta.background,
-                                    color: 'white',
-                                    border: type === option ? 'none' : `1px solid ${meta.border}`
-                                }}
-                            >
-                                <Icon size={15} />
-                                {meta.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                <div style={{ display: 'grid', gap: '12px' }}>
-                    <textarea
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: '10px',
+                        alignItems: 'center',
+                        padding: '8px',
+                        borderRadius: '16px',
+                        background: 'rgba(13, 18, 44, 0.56)',
+                        border: '1px solid rgba(129, 140, 248, 0.12)'
+                    }}
+                >
+                    <input
                         value={text}
                         onChange={(event) => setText(event.target.value)}
-                        placeholder="Tell us what happened or what you would like to improve..."
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                if (!loading && text.trim()) {
+                                    void handleSubmit();
+                                }
+                            }
+                        }}
+                        placeholder="Type your feedback here..."
                         style={{
-                            width: '100%',
-                            minHeight: '110px',
-                            background: 'rgba(0,0,0,0.18)',
-                            border: '1px solid var(--glass-border)',
-                            borderRadius: '16px',
-                            padding: '14px 16px',
+                            flex: 1,
+                            height: '44px',
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.06)',
+                            borderRadius: '12px',
+                            padding: '0 14px',
                             color: 'white',
                             outline: 'none',
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                            fontSize: '15px',
-                            lineHeight: 1.5
+                            fontSize: '14px'
                         }}
                     />
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Room {user.roomNumber} • {user.name}
-                        </div>
-                        <button
-                            onClick={handleSubmit}
-                            disabled={loading || !text.trim() || success}
-                            className="primary-button"
-                            style={{
-                                padding: '12px 18px',
-                                borderRadius: '14px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                minWidth: '150px',
-                                opacity: loading || !text.trim() ? 0.75 : 1,
-                                background: success ? 'var(--success)' : 'var(--primary)'
-                            }}
-                        >
-                            {success ? (
-                                <>
-                                    <CheckCircle2 size={18} />
-                                    Sent
-                                </>
-                            ) : (
-                                <>
-                                    <Send size={18} />
-                                    {loading ? 'Sending...' : 'Send Feedback'}
-                                </>
-                            )}
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => void handleSubmit()}
+                        disabled={loading || !text.trim()}
+                        className="primary-button"
+                        style={{
+                            width: '48px',
+                            height: '48px',
+                            minWidth: '48px',
+                            borderRadius: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'linear-gradient(135deg, #7c7cff 0%, #8b5cf6 100%)',
+                            boxShadow: '0 8px 20px rgba(124, 124, 255, 0.38)',
+                            opacity: loading || !text.trim() ? 0.72 : 1
+                        }}
+                    >
+                        <Send size={18} />
+                    </button>
+                </div>
+
+                <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Room {user.roomNumber} • {user.name}
                 </div>
             </div>
 
             <div style={{ display: 'grid', gap: '14px' }}>
-                {feedbacks.length === 0 ? (
+                {repliedFeedbacks.length === 0 ? (
                     <div
                         className="glass-panel"
                         style={{
-                            padding: '24px',
+                            padding: '20px',
                             borderRadius: '18px',
                             textAlign: 'center',
-                            color: 'var(--text-muted)'
+                            color: 'var(--text-muted)',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(20, 24, 58, 0.72) 100%)',
+                            border: '1px solid rgba(255,255,255,0.06)'
                         }}
                     >
-                        <MessageSquare size={20} style={{ marginBottom: '10px' }} />
+                        <Sparkles size={18} style={{ marginBottom: '10px' }} />
                         <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
-                            No feedback yet
+                            Admin replies will appear here
                         </div>
                         <div style={{ fontSize: '14px' }}>
-                            Your sent messages and admin replies will appear here.
+                            Once the hostel team answers, you’ll see the reply in this section.
                         </div>
                     </div>
                 ) : (
-                    feedbacks.map((feedback) => {
-                        const meta = feedbackTypeMeta[feedback.type];
-                        const Icon = getFeedbackTypeIcon(feedback.type);
-                        const hasReply = Boolean(feedback.adminReply?.text?.trim());
-
+                    repliedFeedbacks.map((feedback) => {
                         return (
                             <div
                                 key={feedback.id}
@@ -254,94 +210,79 @@ export default function DashboardFeedback() {
                                 style={{
                                     padding: '18px',
                                     borderRadius: '18px',
-                                    border: hasReply ? '1px solid rgba(16, 185, 129, 0.25)' : `1px solid ${meta.border}`,
-                                    background: hasReply
-                                        ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.28) 100%)'
-                                        : 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(15, 23, 42, 0.24) 100%)'
+                                    border: '1px solid rgba(129, 140, 248, 0.18)',
+                                    background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.12) 0%, rgba(20, 24, 58, 0.9) 100%)',
+                                    boxShadow: '0 18px 30px rgba(12, 18, 42, 0.22)'
                                 }}
                             >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                        <span
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div
                                             style={{
-                                                display: 'inline-flex',
+                                                width: '42px',
+                                                height: '42px',
+                                                borderRadius: '14px',
+                                                display: 'flex',
                                                 alignItems: 'center',
-                                                gap: '6px',
-                                                padding: '6px 10px',
-                                                borderRadius: '999px',
-                                                fontSize: '12px',
-                                                fontWeight: 700,
-                                                color: meta.color,
-                                                background: meta.background,
-                                                border: `1px solid ${meta.border}`
+                                                justifyContent: 'center',
+                                                background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.22) 0%, rgba(168, 85, 247, 0.18) 100%)',
+                                                border: '1px solid rgba(129, 140, 248, 0.2)'
                                             }}
                                         >
-                                            <Icon size={14} />
-                                            {meta.label}
-                                        </span>
-                                        <span
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                                padding: '6px 10px',
-                                                borderRadius: '999px',
-                                                fontSize: '12px',
-                                                fontWeight: 700,
-                                                color: hasReply ? '#6ee7b7' : '#fbbf24',
-                                                background: hasReply ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
-                                                border: hasReply ? '1px solid rgba(16, 185, 129, 0.22)' : '1px solid rgba(245, 158, 11, 0.22)'
-                                            }}
-                                        >
-                                            {hasReply ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}
-                                            {hasReply ? 'Admin replied' : 'Waiting for reply'}
-                                        </span>
+                                            <Reply size={18} color="#c4b5fd" />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 700, color: 'white' }}>Admin Reply</div>
+                                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.68)' }}>
+                                                Hostel team response
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                        {format(feedback.timestamp, 'MMM d, HH:mm')}
+                                    <div
+                                        style={{
+                                            padding: '6px 10px',
+                                            borderRadius: '999px',
+                                            fontSize: '12px',
+                                            color: '#d6bcfa',
+                                            background: 'rgba(129, 140, 248, 0.12)',
+                                            border: '1px solid rgba(129, 140, 248, 0.16)'
+                                        }}
+                                    >
+                                        {format(feedback.adminReply!.repliedAt, 'MMM d, HH:mm')}
                                     </div>
                                 </div>
 
                                 <div
                                     style={{
-                                        padding: '14px 16px',
-                                        borderRadius: '14px',
-                                        background: 'rgba(255,255,255,0.04)',
-                                        border: '1px solid rgba(255,255,255,0.06)',
-                                        color: 'var(--text-main)',
+                                        padding: '16px',
+                                        borderRadius: '16px',
+                                        background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(109, 40, 217, 0.08) 100%)',
+                                        border: '1px solid rgba(129, 140, 248, 0.14)',
+                                        color: 'white',
                                         lineHeight: 1.6,
                                         whiteSpace: 'pre-wrap'
                                     }}
                                 >
-                                    {feedback.text}
+                                    {feedback.adminReply?.text}
                                 </div>
 
-                                {hasReply && (
-                                    <div
-                                        style={{
-                                            marginTop: '14px',
-                                            padding: '16px',
-                                            borderRadius: '16px',
-                                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0.06) 100%)',
-                                            border: '1px solid rgba(16, 185, 129, 0.2)'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#a7f3d0' }}>
-                                                <Reply size={16} />
-                                                Hostel reply
-                                            </div>
-                                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.72)' }}>
-                                                {format(feedback.adminReply!.repliedAt, 'MMM d, HH:mm')}
-                                            </div>
-                                        </div>
-
-                                        <div style={{ color: 'white', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                                            {feedback.adminReply?.text}
-                                        </div>
+                                <div
+                                    style={{
+                                        marginTop: '12px',
+                                        padding: '12px 14px',
+                                        borderRadius: '14px',
+                                        background: 'rgba(10, 14, 38, 0.44)',
+                                        border: '1px solid rgba(255,255,255,0.06)'
+                                    }}
+                                >
+                                    <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.48)', marginBottom: '6px' }}>
+                                        Your message
                                     </div>
-                                )}
+                                    <div style={{ color: 'rgba(255,255,255,0.78)', lineHeight: 1.55, whiteSpace: 'pre-wrap', fontSize: '14px' }}>
+                                        {feedback.text}
+                                    </div>
+                                </div>
                             </div>
                         );
                     })
