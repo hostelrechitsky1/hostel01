@@ -4,12 +4,49 @@ import { vi, describe, it, expect } from 'vitest';
 import BookingFlow from '../BookingFlow';
 import * as timeUtils from '../../utils/time';
 
-vi.mock('../../services/firestoreService', () => ({
-    firestoreService: {
-        getAppSettings: vi.fn(),
-        subscribeToAppSettings: vi.fn(),
-        subscribeToMachines: vi.fn(),
-        subscribeToBookings: vi.fn(),
+vi.mock('../../services/residentFirestoreService', () => ({
+    DEFAULT_APP_SETTINGS: {
+        forceShowNextWeek: false,
+        forceCloseBookings: false,
+        maintenanceDay: 3,
+        autoOpenWeekday: 6,
+        autoOpenTime: '16:00',
+        autoOpenDurationHours: 28,
+        vipAutoEnabled: true,
+        vipLastAppliedWeekId: '',
+        topAlert: { message: '', isActive: false, type: 'info' }
+    },
+    residentFirestoreService: {
+        getCachedMachines: vi.fn(() => undefined),
+        getCachedBookingsForWeekIds: vi.fn(() => undefined),
+        getCachedSettings: vi.fn(() => undefined),
+        getMachines: vi.fn(() => Promise.resolve([])),
+        getBookingsForWeekIds: vi.fn(() => Promise.resolve([])),
+        getSettings: vi.fn(() => Promise.resolve({
+            forceShowNextWeek: false,
+            forceCloseBookings: false,
+            maintenanceDay: 3,
+            autoOpenWeekday: 6,
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+            vipAutoEnabled: true,
+            vipLastAppliedWeekId: '',
+            topAlert: { message: '', isActive: false, type: 'info' }
+        })),
+    }
+}));
+
+vi.mock('../../services/residentLiveService', () => ({
+    residentLiveService: {
+        subscribeToMachines: vi.fn(() => () => {}),
+        subscribeToBookingsForWeekIds: vi.fn(() => () => {}),
+    }
+}));
+
+vi.mock('../../services/residentMutationsService', () => ({
+    residentMutationsService: {
+        createBooking: vi.fn(() => Promise.resolve({ success: true })),
+        addFeedback: vi.fn(() => Promise.resolve()),
     }
 }));
 

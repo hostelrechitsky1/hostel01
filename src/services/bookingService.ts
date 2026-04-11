@@ -1,7 +1,9 @@
 import type { Student } from '../types';
+import { clearResidentPortalLanguage } from '../utils/residentPortalLanguage';
 
 const STORAGE_KEYS = {
-    CURRENT_USER: 'hostel_current_user'
+    CURRENT_USER: 'hostel_current_user',
+    CURRENT_ROOMMATES: 'hostel_current_roommates'
 };
 
 /**
@@ -14,7 +16,7 @@ class BookingService {
         return data ? JSON.parse(data) : defaultValue;
     }
 
-    private set(key: string, value: any) {
+    private set<T>(key: string, value: T) {
         localStorage.setItem(key, JSON.stringify(value));
     }
 
@@ -23,12 +25,22 @@ class BookingService {
         this.set(STORAGE_KEYS.CURRENT_USER, student);
     }
 
+    setCurrentRoommates(students: Student[]) {
+        this.set(STORAGE_KEYS.CURRENT_ROOMMATES, students);
+    }
+
     getCurrentUser(): Student | null {
         return this.get(STORAGE_KEYS.CURRENT_USER, null);
     }
 
+    getCurrentRoommates(): Student[] {
+        return this.get(STORAGE_KEYS.CURRENT_ROOMMATES, []);
+    }
+
     logout() {
         localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_ROOMMATES);
+        clearResidentPortalLanguage();
     }
 }
 

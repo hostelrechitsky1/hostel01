@@ -1,122 +1,172 @@
-import { memo, useState, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Banner } from '../types';
+import {
+    ensureBannerPreloadLink,
+    getBannerWarmSources,
+    getRememberedBannerDisplaySource,
+    getBannerResponsiveSizes,
+    getBannerResponsiveSrcSet,
+    hasWarmBannerImage,
+    markBannerImageLoaded,
+    preloadBannerImage,
+    rememberBannerDisplaySource,
+    warmBannerSource,
+} from '../utils/bannerImages';
 
 interface InternalBannerCarouselProps {
     banners: Banner[];
     isLoading?: boolean;
+    onPrimaryBannerReady?: () => void;
 }
-
-interface NetworkInformation {
-    effectiveType?: string;
-    saveData?: boolean;
-}
-
-type NavigatorWithConnection = Navigator & {
-    connection?: NetworkInformation;
-    mozConnection?: NetworkInformation;
-    webkitConnection?: NetworkInformation;
-};
-
-const getConnectionInfo = () => {
-    const navigatorConnection = navigator as NavigatorWithConnection;
-    return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
-};
-
-const getAdaptiveBannerSrc = (source: string) => {
-    if (!source.includes('drive.google.com/thumbnail')) return source;
-
-    const connection = getConnectionInfo();
-    const effectiveType = connection?.effectiveType;
-    const saveData = connection?.saveData === true;
-    const isMobile = window.innerWidth < 768;
-
-    let qualityWidth = 'w1920';
-
-    if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
-        qualityWidth = isMobile ? 'w360' : 'w640';
-    } else if (effectiveType === '3g') {
-        qualityWidth = isMobile ? 'w480' : 'w960';
-    } else if (isMobile) {
-        qualityWidth = 'w800';
-    }
-
-    return source.replace(/sz=w\d+/, `sz=${qualityWidth}`);
-};
-
-const getTinyBannerSrc = (source: string) => {
-    if (!source.includes('drive.google.com/thumbnail')) return source;
-    const isMobile = window.innerWidth < 768;
-    const tinyWidth = isMobile ? 'w240' : 'w480';
-    return source.replace(/sz=w\d+/, `sz=${tinyWidth}`);
-};
-
-const shouldUpgradeToFullQuality = () => {
-    const connection = getConnectionInfo();
-    const effectiveType = connection?.effectiveType;
-    const saveData = connection?.saveData === true;
-    return !saveData && effectiveType !== 'slow-2g' && effectiveType !== '2g' && effectiveType !== '3g';
-};
 
 // Helper component to handle image loading and retries
-const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt: string, className?: string, style?: any, priority?: boolean }) => {
-    const [imgSrc, setImgSrc] = useState(() => getTinyBannerSrc(src));
+const SmartImage = ({
+    source,
+    alt,
+    className,
+    style,
+    priority,
+    shouldLoad,
+    onDisplayReady,
+    onFullLoad
+}: {
+    source: Banner;
+    alt: string;
+    className?: string;
+    style?: CSSProperties;
+    priority?: boolean;
+    shouldLoad?: boolean;
+    onDisplayReady?: () => void;
+    onFullLoad?: () => void;
+}) => {
+    const initialSources = getBannerWarmSources(source, { priority });
+    const initialPreviewSrc = initialSources.previewSource;
+    const initialAdaptiveSrc = initialSources.fullSource;
+    const initialRememberedSrc = getRememberedBannerDisplaySource(source);
+    const initialDisplaySrc = hasWarmBannerImage(initialAdaptiveSrc)
+        ? initialAdaptiveSrc
+        : (initialRememberedSrc ?? initialPreviewSrc);
+    const [imgSrc, setImgSrc] = useState(initialDisplaySrc);
     const [error, setError] = useState(false);
-    const [loaded, setLoaded] = useState(false);
-    const [tinyLoaded, setTinyLoaded] = useState(false);
+    const [loaded, setLoaded] = useState(() => hasWarmBannerImage(initialDisplaySrc) || initialRememberedSrc === initialDisplaySrc);
+    const [previewLoaded, setPreviewLoaded] = useState(() => (
+        hasWarmBannerImage(initialPreviewSrc)
+        || initialRememberedSrc === initialPreviewSrc
+        || initialRememberedSrc === initialAdaptiveSrc
+    ));
     const imgRef = useRef<HTMLImageElement>(null);
-    const adaptiveSrcRef = useRef<string | null>(null);
-    const highQualitySrcRef = useRef<string | null>(null);
+    const displayReadySourceRef = useRef<string | null>(null);
+    const [adaptiveSrc, setAdaptiveSrc] = useState(initialAdaptiveSrc);
+    const [previewSrc, setPreviewSrc] = useState(initialPreviewSrc);
+    const [rememberedDisplaySrc, setRememberedDisplaySrc] = useState<string | undefined>(initialRememberedSrc);
+    const [responsiveSrcSet, setResponsiveSrcSet] = useState<string | undefined>(getBannerResponsiveSrcSet(source, { priority }));
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
-        const tinySrc = getTinyBannerSrc(src);
-        const optimizedSrc = getAdaptiveBannerSrc(src);
-        adaptiveSrcRef.current = optimizedSrc;
-        highQualitySrcRef.current = src;
-        setTinyLoaded(false);
+        const { previewSource, fullSource } = getBannerWarmSources(source, { priority });
+        const rememberedDisplaySrc = getRememberedBannerDisplaySource(source);
+        const nextDisplaySrc = hasWarmBannerImage(fullSource)
+            ? fullSource
+            : (rememberedDisplaySrc ?? previewSource);
 
-        // Only reset loaded state if the source is actually changing to a new URL.
-        if (tinySrc !== imgSrc) {
-            setLoaded(false);
-            setImgSrc(tinySrc);
-        } else {
-            // If source is same, check if already complete (e.g. from cache or instant load).
-            if (imgRef.current?.complete) {
-                setLoaded(true);
-                setTinyLoaded(true);
-            }
+        setAdaptiveSrc(fullSource);
+        setPreviewSrc(previewSource);
+        setRememberedDisplaySrc(rememberedDisplaySrc);
+        setResponsiveSrcSet(getBannerResponsiveSrcSet(source, { priority }));
+        displayReadySourceRef.current = null;
+        setPreviewLoaded(
+            hasWarmBannerImage(previewSource)
+            || rememberedDisplaySrc === previewSource
+            || rememberedDisplaySrc === fullSource
+        );
+        setLoaded(hasWarmBannerImage(nextDisplaySrc) || rememberedDisplaySrc === nextDisplaySrc);
+        setImgSrc(nextDisplaySrc);
+        setError(false);
+
+        if (!shouldLoad) {
+            return;
         }
 
-        setError(false);
-    }, [src]);
+        ensureBannerPreloadLink(previewSource);
+        void preloadBannerImage(previewSource);
+
+        if (previewSource === fullSource) {
+            ensureBannerPreloadLink(fullSource);
+            void preloadBannerImage(fullSource);
+            return;
+        }
+
+        if (priority || hasWarmBannerImage(previewSource)) {
+            ensureBannerPreloadLink(fullSource);
+            void preloadBannerImage(fullSource);
+            return;
+        }
+
+        void preloadBannerImage(previewSource).then(() => {
+            ensureBannerPreloadLink(fullSource);
+            return preloadBannerImage(fullSource);
+        });
+    }, [priority, shouldLoad, source]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
-        if (!tinyLoaded || !adaptiveSrcRef.current) return;
+        if (!shouldLoad) return;
+        if (!previewLoaded || !adaptiveSrc || !previewSrc) return;
+        if (previewSrc === adaptiveSrc) return;
+        if (imgSrc === adaptiveSrc) return;
 
-        const nextAdaptiveSrc = adaptiveSrcRef.current;
-        if (imgSrc === nextAdaptiveSrc) return;
+        const nextAdaptiveSrc = adaptiveSrc;
+        let isActive = true;
 
-        const adaptiveImage = new Image();
-        adaptiveImage.src = nextAdaptiveSrc;
-        adaptiveImage.onload = () => setImgSrc(nextAdaptiveSrc);
-    }, [tinyLoaded, imgSrc]);
+        void preloadBannerImage(nextAdaptiveSrc).then(() => {
+            if (!isActive) return;
+            setImgSrc((currentSrc) => currentSrc === nextAdaptiveSrc ? currentSrc : nextAdaptiveSrc);
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [adaptiveSrc, imgSrc, previewLoaded, previewSrc, shouldLoad]);
+
+    /* eslint-disable react-hooks/set-state-in-effect */
+    useEffect(() => {
+        if (!shouldLoad) return;
+        if (imgRef.current?.complete && hasWarmBannerImage(imgSrc)) {
+            setLoaded(true);
+            setPreviewLoaded(true);
+        }
+    }, [imgSrc, shouldLoad]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
-        if (!loaded || !priority || !highQualitySrcRef.current || !shouldUpgradeToFullQuality()) return;
+        if (!loaded) return;
+        if (displayReadySourceRef.current === imgSrc) return;
+        displayReadySourceRef.current = imgSrc;
+        onDisplayReady?.();
+    }, [imgSrc, loaded, onDisplayReady]);
 
-        const nextHighQualitySrc = highQualitySrcRef.current;
-        if (imgSrc === nextHighQualitySrc) return;
-
-        const highQualityImage = new Image();
-        highQualityImage.src = nextHighQualitySrc;
-        highQualityImage.onload = () => setImgSrc(nextHighQualitySrc);
-    }, [loaded, priority, imgSrc]);
+    useEffect(() => {
+        if (!loaded) return;
+        if (!adaptiveSrc) return;
+        if (imgSrc !== adaptiveSrc) return;
+        onFullLoad?.();
+    }, [adaptiveSrc, imgSrc, loaded, onFullLoad]);
 
     const handleError = () => {
+        if (rememberedDisplaySrc && imgSrc === rememberedDisplaySrc && previewSrc && previewSrc !== imgSrc) {
+            setImgSrc(previewSrc);
+            setLoaded(false);
+            setError(false);
+            return;
+        }
+
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
         if (imgSrc.includes('drive.google.com/thumbnail')) {
             const idMatch = imgSrc.match(/id=([^&]+)/);
             if (idMatch && idMatch[1]) {
                 const newSrc = `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
+                setAdaptiveSrc(newSrc);
+                setPreviewSrc(newSrc);
                 setImgSrc(newSrc);
                 // We are trying a new source, so we are "loading" again
                 setLoaded(false);
@@ -128,19 +178,29 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
     };
 
     if (error) return null;
+    if (!shouldLoad) {
+        return null;
+    }
+
+    const shouldUseResponsiveSourceSet = Boolean(
+        loaded
+        && adaptiveSrc
+        && imgSrc === adaptiveSrc
+        && responsiveSrcSet
+    );
 
     return (
         <>
             {/* Skeleton Loader - Visible while image is loading */}
             {!loaded && (
-                <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 1.5s infinite',
-                    zIndex: 0
-                }} />
+                <div
+                    className="banner-shimmer-surface"
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        zIndex: 0
+                    }}
+                />
             )}
             <img
                 ref={imgRef}
@@ -154,46 +214,155 @@ const SmartImage = ({ src, alt, className, style, priority }: { src: string, alt
                     zIndex: 1
                 }}
                 onLoad={() => {
-                    setTinyLoaded(true);
+                    markBannerImageLoaded(imgSrc);
+                    rememberBannerDisplaySource(source, imgSrc);
+                    setPreviewLoaded(true);
                     setLoaded(true);
                 }}
                 onError={handleError}
                 referrerPolicy="no-referrer"
+                decoding={priority ? 'sync' : 'async'}
+                draggable={false}
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
+                srcSet={shouldUseResponsiveSourceSet ? responsiveSrcSet : undefined}
+                sizes={shouldUseResponsiveSourceSet ? getBannerResponsiveSizes(source) : undefined}
             />
-            <style>{`
-                @keyframes shimmer {
-                    0% { background-position: 200% 0; }
-                    100% { background-position: -200% 0; }
-                }
-            `}</style>
         </>
     );
 };
 
-function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselProps) {
-    // Filter    // activeBanners filtering is redundant if done inside the component, but good to keep clean
-    const activeBanners = banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority);
+function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: InternalBannerCarouselProps) {
+    const activeBanners = useMemo(
+        () => banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority),
+        [banners]
+    );
     const [currentIndex, setCurrentIndex] = useState(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isVisible, setIsVisible] = useState(true);
+    const [isPageVisible, setIsPageVisible] = useState(() => typeof document === 'undefined' || document.visibilityState === 'visible');
 
     // Swipe State
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState(0);
+    const [activatedIndexes, setActivatedIndexes] = useState<Set<number>>(() => new Set([0]));
+    const [fullyReadyIndexes, setFullyReadyIndexes] = useState<Set<number>>(() => new Set());
+    const [pendingAutoAdvanceIndex, setPendingAutoAdvanceIndex] = useState<number | null>(null);
+    const pendingAutoAdvanceIndexRef = useRef<number | null>(null);
 
     // Minimum swipe distance to trigger slide change
     const minSwipeDistance = 50;
 
+    const requestIndexTransition = (index: number) => {
+        const nextBanner = activeBanners[index];
+        if (!nextBanner?.imageUrl) {
+            return;
+        }
+
+        prepareBannerIndex(index, true);
+
+        const { fullSource } = getBannerWarmSources(nextBanner, { priority: true });
+        if (hasWarmBannerImage(fullSource) || fullyReadyIndexes.has(index)) {
+            setCurrentIndex(index);
+            setPendingAutoAdvanceIndex(null);
+            return;
+        }
+
+        setPendingAutoAdvanceIndex(index);
+    };
+
+    const markIndexActivated = (index: number) => {
+        setActivatedIndexes((currentIndexes) => {
+            if (currentIndexes.has(index)) {
+                return currentIndexes;
+            }
+
+            const nextIndexes = new Set(currentIndexes);
+            nextIndexes.add(index);
+            return nextIndexes;
+        });
+    };
+
+    const markIndexReady = (index: number) => {
+        setFullyReadyIndexes((currentIndexes) => {
+            if (currentIndexes.has(index)) {
+                return currentIndexes;
+            }
+
+            const nextIndexes = new Set(currentIndexes);
+            nextIndexes.add(index);
+            return nextIndexes;
+        });
+
+        if (pendingAutoAdvanceIndexRef.current === index) {
+            setCurrentIndex(index);
+            setPendingAutoAdvanceIndex(null);
+        }
+    };
+
+    const prepareBannerIndex = (index: number, priority = false, previewOnly = false) => {
+        const banner = activeBanners[index];
+        if (!banner?.imageUrl) return;
+
+        markIndexActivated(index);
+
+        const { fullSource } = getBannerWarmSources(banner, { priority });
+        if (!previewOnly && hasWarmBannerImage(fullSource)) {
+            markIndexReady(index);
+        }
+
+        void warmBannerSource(banner, {
+            priority,
+            eagerFull: priority,
+            previewOnly
+        }).then(() => {
+            if (!previewOnly) {
+                markIndexReady(index);
+            }
+        });
+    };
+
     // Auto-play
     useEffect(() => {
-        if (activeBanners.length <= 1 || isDragging) return;
+        if (typeof document === 'undefined') return;
+
+        const handleVisibilityChange = () => {
+            setIsPageVisible(document.visibilityState === 'visible');
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!containerRef.current || typeof IntersectionObserver === 'undefined') return;
+
+        const observer = new IntersectionObserver(([entry]) => {
+            setIsVisible(entry.isIntersecting);
+        }, { rootMargin: '160px 0px' });
+
+        observer.observe(containerRef.current);
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    useEffect(() => {
+        pendingAutoAdvanceIndexRef.current = pendingAutoAdvanceIndex;
+    }, [pendingAutoAdvanceIndex]);
+
+    useEffect(() => {
+        if (activeBanners.length <= 1 || isDragging || !isVisible || !isPageVisible || pendingAutoAdvanceIndex !== null) return;
 
         const startInterval = () => {
             intervalRef.current = setInterval(() => {
-                setCurrentIndex(prev => (prev + 1) % activeBanners.length);
+                const nextIndex = (currentIndex + 1) % activeBanners.length;
+                requestIndexTransition(nextIndex);
             }, 5000); // 5 seconds
         };
 
@@ -202,21 +371,28 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [activeBanners.length, isDragging]);
+    }, [activeBanners, currentIndex, fullyReadyIndexes, isDragging, isPageVisible, isVisible, pendingAutoAdvanceIndex]);
 
-    // Preload current + next banner only to reduce bandwidth spikes on slow networks
     useEffect(() => {
-        if (activeBanners.length === 0) return;
+        if (activeBanners.length === 0 || !isVisible) return;
+        prepareBannerIndex(currentIndex, true);
+    }, [activeBanners, currentIndex, isVisible]);
 
-        const preloadIndexes = [currentIndex, (currentIndex + 1) % activeBanners.length];
-        preloadIndexes.forEach((index) => {
-            const banner = activeBanners[index];
-            if (!banner?.imageUrl) return;
+    useEffect(() => {
+        if (activeBanners.length <= 1 || !isVisible || !isPageVisible) return;
 
-            const img = new Image();
-            img.src = getAdaptiveBannerSrc(banner.imageUrl);
-        });
-    }, [activeBanners, currentIndex]);
+        const nextIndex = (currentIndex + 1) % activeBanners.length;
+        const nextBanner = activeBanners[nextIndex];
+        if (!nextBanner?.imageUrl) return;
+
+        const warmNextBannerTimer = window.setTimeout(() => {
+            prepareBannerIndex(nextIndex, false, true);
+        }, 900);
+
+        return () => {
+            window.clearTimeout(warmNextBannerTimer);
+        };
+    }, [activeBanners, currentIndex, isPageVisible, isVisible]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
@@ -253,10 +429,12 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
 
         if (isLeftSwipe) {
             // Next slide
-            setCurrentIndex(prev => (prev + 1) % activeBanners.length);
+            const nextIndex = (currentIndex + 1) % activeBanners.length;
+            requestIndexTransition(nextIndex);
         } else if (isRightSwipe) {
             // Prev slide
-            setCurrentIndex(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
+            const previousIndex = (currentIndex - 1 + activeBanners.length) % activeBanners.length;
+            requestIndexTransition(previousIndex);
         }
 
         // Reset drag offset - CSS transition will handle the snap
@@ -265,7 +443,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         setTouchEnd(null);
     };
 
-    if (isLoading) {
+    if (isLoading && activeBanners.length === 0) {
         return (
             <div
                 className="banner-carousel-container"
@@ -281,19 +459,13 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                     background: '#1f2937'
                 }}
             >
-                <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 1.5s infinite'
-                }} />
-                <style>{`
-                    @keyframes shimmer {
-                        0% { background-position: 200% 0; }
-                        100% { background-position: -200% 0; }
-                    }
-                `}</style>
+                <div
+                    className="banner-shimmer-surface"
+                    style={{
+                        position: 'absolute',
+                        inset: 0
+                    }}
+                />
             </div>
         );
     }
@@ -302,6 +474,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
 
     return (
         <div
+            ref={containerRef}
             className="banner-carousel-container"
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
@@ -356,9 +529,12 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                             }}
                         >
                             <SmartImage
-                                src={banner.imageUrl}
+                                source={banner}
                                 alt={showTitle ? banner.title : 'Banner'}
-                                priority={index === currentIndex} // Prioritize loading visible slide
+                                priority={index === currentIndex}
+                                shouldLoad={activatedIndexes.has(index) || index === currentIndex}
+                                onDisplayReady={index === 0 ? onPrimaryBannerReady : undefined}
+                                onFullLoad={() => markIndexReady(index)}
                                 style={{
                                     width: '100%',
                                     height: '100%',
@@ -414,11 +590,11 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                     gap: '6px',
                     zIndex: 10
                 }}>
-                    {activeBanners.map((_, idx) => (
+                {activeBanners.map((_, idx) => (
                         <div
                             key={idx}
                             onClick={() => {
-                                setCurrentIndex(idx);
+                                requestIndexTransition(idx);
                                 if (intervalRef.current) clearInterval(intervalRef.current);
                             }}
                             style={{

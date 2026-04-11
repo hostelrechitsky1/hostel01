@@ -7,9 +7,10 @@ import { useAdminDialog } from '../components/useAdminDialog';
 
 export default function HostelAdminDashboard() {
     const navigate = useNavigate();
-    const [students, setStudents] = useState<Student[]>([]);
+    const cachedStudents = useMemo(() => firestoreService.getCachedStudents(), []);
+    const [students, setStudents] = useState<Student[]>(() => cachedStudents ?? []);
     const [searchTerm, setSearchTerm] = useState('');
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => cachedStudents === undefined);
     const [isRussian, setIsRussian] = useState(() => sessionStorage.getItem('hostel_admin_lang') === 'ru');
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 

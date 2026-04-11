@@ -15,7 +15,7 @@ export function parseRawStudentData(rawData: string): Student[] {
 
         // If it's a name line (usually starts with * or just text if cleaned)
         // User input has "* Name", so remove leading * and whitespace
-        let name = line.replace(/^\*\s*/, '').trim();
+        const name = line.replace(/^\*\s*/, '').trim();
 
         if (name && currentRoom) {
             // Generate a simple ID (e.g., room-name-slug)

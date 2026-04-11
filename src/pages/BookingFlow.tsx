@@ -1,18 +1,15 @@
-import { useState, useMemo, useEffect } from 'react';
+import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking, AppSettings } from '../types';
+import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
+import { residentSnapshotService } from '../services/residentSnapshotService';
+import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
-import { isAfter } from 'date-fns';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
-import clsx from 'clsx';
-import { motion, AnimatePresence } from 'framer-motion';
-import Confetti from 'react-confetti';
-import { toast } from 'sonner';
-import { useWindowSize } from 'react-use';
+import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
+    addMinutesToTimeString,
     addBelarusDays,
     formatBelarusDate,
     formatBelarusMonthDayLabel,
@@ -20,6 +17,7 @@ import {
     getBelarusDate,
     getBelarusNow,
     getBelarusWeekEnd,
+    getBelarusWeekStart,
     getBelarusWeekday,
     getBelarusWeekId,
     isAutoBookingWindowOpen,
@@ -27,11 +25,73 @@ import {
     getNextAutoOpenDate,
     getAutoOpenWindowDisplay
 } from '../utils/time';
+import { preloadDashboardRoute } from '../utils/preloadRoutes';
+import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
+import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
+import { ActionSpinner } from '../components/ActionSpinner';
+import { finishResidentPerfSpan } from '../utils/performance';
+import { notifyError, notifyInfo } from '../utils/notify';
+import { getBookNowFailureMessage, isBookingAvailabilityConflict } from '../utils/bookingMutations';
+
+let confettiPromise: Promise<typeof import('react-confetti')> | null = null;
+
+const preloadConfetti = () => {
+    confettiPromise ??= import('react-confetti');
+    return confettiPromise;
+};
+
+const LazyConfetti = lazy(() => preloadConfetti());
+let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
+let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
+
+const loadResidentLiveService = () => {
+    residentLiveServicePromise ??= import('../services/residentLiveService');
+    return residentLiveServicePromise;
+};
+
+const loadResidentMutationsService = () => {
+    residentMutationsServicePromise ??= import('../services/residentMutationsService');
+    return residentMutationsServicePromise;
+};
+
+const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
+    const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
+    return [...withoutExisting, nextBooking];
+};
+
+const replaceBookingsForDate = (bookings: Booking[], date: string, nextDateBookings: Booking[]) => {
+    const bookingsForOtherDates = bookings.filter((booking) => booking.date !== date);
+    return [...bookingsForOtherDates, ...nextDateBookings];
+};
 
 export default function BookingFlow() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
-    const { width, height } = useWindowSize();
+    const userId = user?.id ?? '';
+    const bookingWeekIds = useMemo(() => {
+        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        return [
+            getBelarusWeekId(currentWeekStart),
+            getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
+        ];
+    }, []);
+    const cachedBookingSnapshot = useMemo(
+        () => residentSnapshotService.getCachedBookingSnapshot(bookingWeekIds),
+        [bookingWeekIds]
+    );
+    const cachedDashboardSnapshot = useMemo(
+        () => residentSnapshotService.getCachedDashboardSnapshot(bookingWeekIds),
+        [bookingWeekIds]
+    );
+    const cachedCoreWarmSnapshot = useMemo(
+        () => (userId ? residentSnapshotService.getCachedWarmSnapshot(bookingWeekIds, userId, false) : undefined),
+        [bookingWeekIds, userId]
+    );
+    const cachedMachines = cachedBookingSnapshot?.machines ?? cachedDashboardSnapshot?.machines ?? cachedCoreWarmSnapshot?.machines;
+    const cachedWeekBookings = cachedBookingSnapshot?.weekBookings ?? cachedDashboardSnapshot?.weekBookings ?? cachedCoreWarmSnapshot?.weekBookings;
+    const cachedSettings = cachedBookingSnapshot?.settings ?? cachedDashboardSnapshot?.settings ?? cachedCoreWarmSnapshot?.settings;
+    const hasCachedMachines = cachedMachines !== undefined;
+    const hasCachedWeekBookings = cachedWeekBookings !== undefined;
 
     // Hooks must be called unconditionally
     const [selectedDate, setSelectedDate] = useState(getBelarusDate());
@@ -39,63 +99,277 @@ export default function BookingFlow() {
     const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [pendingBooking, setPendingBooking] = useState<Booking | null>(null);
+    const [loading, setLoading] = useState(() => Boolean(userId) && (!hasCachedMachines || !hasCachedWeekBookings));
     const [submitting, setSubmitting] = useState(false);
-    const [settings, setSettings] = useState<Partial<AppSettings>>({
-        forceShowNextWeek: false,
-        forceCloseBookings: false,
-        maintenanceDay: 3,
-        autoOpenWeekday: 6,
-        autoOpenTime: '16:00',
-        autoOpenDurationHours: 28
-    });
+    const [liveSyncRequested, setLiveSyncRequested] = useState(false);
+    const [liveSyncAttached, setLiveSyncAttached] = useState(false);
+    const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
+    const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
 
     // Async State
-    const [machines, setMachines] = useState<Machine[]>([]);
-    const [bookings, setBookings] = useState<Booking[]>([]);
+    const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
+    const [bookings, setBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const selectedDateKey = useMemo(() => formatBelarusDate(selectedDate), [selectedDate]);
+    const hasBookingSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || machines.length > 0
+        || bookings.length > 0;
+    const bookingLoadSlow = useSlowLoadFlag(loading, 4500);
+    const bookingSnapshotRef = useRef(hasBookingSnapshot);
+    const liveSyncReasonRef = useRef<'interaction' | 'idle' | 'retry' | null>(null);
+    const bookingShellMetricRef = useRef(false);
+    const bookingDataMetricRef = useRef(false);
+    const bookingLiveMetricRef = useRef(false);
 
     useEffect(() => {
-        if (!user) {
+        bookingSnapshotRef.current = hasBookingSnapshot;
+    }, [hasBookingSnapshot]);
+
+    useEffect(() => {
+        bookingShellMetricRef.current = false;
+        bookingDataMetricRef.current = false;
+        bookingLiveMetricRef.current = false;
+        liveSyncReasonRef.current = null;
+        setLiveSyncRequested(false);
+        setLiveSyncAttached(false);
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId || bookingShellMetricRef.current) return;
+        bookingShellMetricRef.current = true;
+        finishResidentPerfSpan('resident:dashboard-to-booking-shell', {
+            cachedCore: hasBookingSnapshot,
+            source: cachedBookingSnapshot
+                ? 'snapshot'
+                : (cachedDashboardSnapshot ? 'dashboard-snapshot' : (cachedCoreWarmSnapshot ? 'warm-snapshot' : 'resource-cache')),
+        });
+    }, [cachedBookingSnapshot, cachedCoreWarmSnapshot, cachedDashboardSnapshot, hasBookingSnapshot, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || bookingDataMetricRef.current) return;
+        bookingDataMetricRef.current = true;
+        finishResidentPerfSpan('resident:booking-data-ready', {
+            cachedCore: hasBookingSnapshot,
+            source: cachedBookingSnapshot
+                ? 'snapshot'
+                : (cachedDashboardSnapshot ? 'dashboard-snapshot' : (cachedCoreWarmSnapshot ? 'warm-snapshot' : 'resource-cache')),
+        });
+    }, [cachedBookingSnapshot, cachedCoreWarmSnapshot, cachedDashboardSnapshot, hasBookingSnapshot, loading, userId]);
+
+    useEffect(() => {
+        if (!userId || !liveSyncAttached || bookingLiveMetricRef.current) return;
+        bookingLiveMetricRef.current = true;
+        finishResidentPerfSpan('resident:booking-live-ready', {
+            source: liveSyncReasonRef.current ?? 'unknown',
+        });
+    }, [liveSyncAttached, userId]);
+
+    useEffect(() => {
+        if (!bookingLoadSlow || !loading || !hasBookingSnapshot) {
+            return;
+        }
+
+        setLoadIssue('saved');
+        setLoadErrorMessage('Showing saved slot data while live availability reconnects in the background.');
+        setLoading(false);
+    }, [bookingLoadSlow, hasBookingSnapshot, loading]);
+
+    const requestLiveSync = (reason: 'interaction' | 'idle' | 'retry') => {
+        if (!liveSyncReasonRef.current || liveSyncReasonRef.current === 'idle') {
+            liveSyncReasonRef.current = reason;
+        }
+
+        if (reason !== 'idle') {
+            void loadResidentLiveService();
+        }
+
+        setLiveSyncRequested(true);
+    };
+
+    useEffect(() => {
+        if (!userId) {
             navigate('/login');
             return;
         }
-        let unsubscribeBookings = () => { };
-        let unsubscribeMachines = () => { };
+        preloadDashboardRoute();
 
-        const load = async () => {
-            try {
-                const st = await firestoreService.getSettings();
-                setSettings(st);
+        let isMounted = true;
+        let machinesReady = hasCachedMachines;
+        let bookingsReady = hasCachedWeekBookings;
 
-                unsubscribeMachines = firestoreService.subscribeToMachines((ms) => {
-                    setMachines(ms);
-                }, (err) => {
-                    console.error("Machine fetching error:", err);
-                    toast.error("Failed to subscribe to machines.");
-                    setLoading(false);
-                });
-
-                unsubscribeBookings = firestoreService.subscribeToBookings((bs) => {
-                    setBookings(bs);
-                    setLoading(false);
-                }, (err) => {
-                    console.error("Booking streaming error:", err);
-                    toast.error("Failed to get live booking data. Please check connection.");
-                    setLoading(false);
-                });
-            } catch (e) {
-                console.error("Failed to load booking data", e);
-                toast.error("Failed to load data. Please refresh.");
+        const finishLoadingIfReady = () => {
+            if (isMounted && machinesReady && bookingsReady) {
+                setLoadIssue(null);
+                setLoadErrorMessage(null);
                 setLoading(false);
             }
         };
-        load();
+
+        const handleBookingLoadError = (label: string, error: unknown) => {
+            console.error(label, error);
+            if (!isMounted) return;
+            setLoadErrorMessage('We could not refresh live slot data right now. Retry to reconnect.');
+            setLoadIssue(bookingSnapshotRef.current ? 'saved' : 'error');
+            setLoading(false);
+        };
+
+        finishLoadingIfReady();
+
+        void residentSnapshotService.getBookingSnapshot(bookingWeekIds)
+            .then((snapshot) => {
+                if (!isMounted) return;
+
+                machinesReady = true;
+                bookingsReady = true;
+
+                startTransition(() => {
+                    setMachines(snapshot.machines);
+                    setBookings(snapshot.weekBookings);
+                    setSettings(snapshot.settings);
+                });
+
+                finishLoadingIfReady();
+            })
+            .catch((error) => {
+                handleBookingLoadError('Booking snapshot fetch error:', error);
+                notifyError('Failed to load booking settings. Using saved defaults.');
+            });
 
         return () => {
+            isMounted = false;
+        };
+    }, [bookingWeekIds, navigate, reloadKey, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || liveSyncRequested) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            requestLiveSync('idle');
+        }, 2200);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [liveSyncRequested, loading, reloadKey, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || typeof window === 'undefined') {
+            return;
+        }
+
+        let idleHandle: number | null = null;
+        let timeoutHandle: number | null = null;
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        const prewarmBookingInteractions = () => {
+            void loadResidentMutationsService();
+            void preloadConfetti();
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleHandle = idleWindow.requestIdleCallback(() => {
+                idleHandle = null;
+                prewarmBookingInteractions();
+            }, { timeout: 1200 });
+        } else {
+            timeoutHandle = window.setTimeout(prewarmBookingInteractions, 320);
+        }
+
+        return () => {
+            if (idleHandle !== null) {
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            if (timeoutHandle !== null) {
+                window.clearTimeout(timeoutHandle);
+            }
+        };
+    }, [loading, userId]);
+
+    useEffect(() => {
+        if (!userId || !liveSyncRequested) {
+            return;
+        }
+
+        let isMounted = true;
+        let unsubscribeMachines = () => { /* noop */ };
+        let unsubscribeBookings = () => { /* noop */ };
+        let idleHandle: number | null = null;
+        let liveAttachTimeoutId: number | null = null;
+        const liveSyncReason = liveSyncReasonRef.current;
+
+        const attachLiveStreams = () => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    setLiveSyncAttached(true);
+
+                    unsubscribeMachines = residentLiveService.subscribeToMachines((nextMachines) => {
+                        if (!isMounted) return;
+                        startTransition(() => {
+                            setMachines(nextMachines);
+                        });
+                    }, (error) => {
+                        console.error('Machine streaming error:', error);
+                    });
+
+                    unsubscribeBookings = residentLiveService.subscribeToBookingsForDate(selectedDateKey, (nextBookings) => {
+                        if (!isMounted) return;
+                        startTransition(() => {
+                            setBookings((currentBookings) => replaceBookingsForDate(currentBookings, selectedDateKey, nextBookings));
+                        });
+                    }, (error) => {
+                        console.error('Booking streaming error:', error);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident live booking streams', error);
+                });
+        };
+
+        if (typeof window === 'undefined') {
+            attachLiveStreams();
+        } else if (liveSyncReason === 'interaction' || liveSyncReason === 'retry') {
+            attachLiveStreams();
+        } else {
+            const idleWindow = window as Window & typeof globalThis & {
+                requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (typeof idleWindow.requestIdleCallback === 'function') {
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    attachLiveStreams();
+                }, { timeout: 900 });
+            } else {
+                liveAttachTimeoutId = window.setTimeout(attachLiveStreams, 120);
+            }
+        }
+
+        return () => {
+            isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
+            }
+            if (idleHandle !== null) {
+                const idleWindow = window as Window & typeof globalThis & {
+                    cancelIdleCallback?: (handle: number) => void;
+                };
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [user?.id, navigate]);
+    }, [liveSyncRequested, reloadKey, selectedDateKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -108,7 +382,7 @@ export default function BookingFlow() {
 
         if (isNextWeekOpen) {
             const nextMonday = addBelarusDays(currentWeekEnd, 1);
-            if (!isAfter(start, currentWeekEnd)) {
+            if (start.getTime() <= currentWeekEnd.getTime()) {
                 start = nextMonday;
             }
             maxDate = addBelarusDays(currentWeekEnd, 7);
@@ -116,7 +390,7 @@ export default function BookingFlow() {
 
         const dates = [];
         let current = start;
-        while (!isAfter(current, maxDate)) {
+        while (current.getTime() <= maxDate.getTime()) {
             dates.push(current);
             current = addBelarusDays(current, 1);
         }
@@ -148,27 +422,19 @@ export default function BookingFlow() {
         };
     }, [showConfirmModal, showConfirmation]);
 
-    const triggerHaptic = (pattern: number | number[]) => {
-        if ('vibrate' in navigator) {
-            navigator.vibrate(pattern);
-        }
-    };
-
-    useEffect(() => {
-        if (showConfirmation) {
-            triggerHaptic([30, 40, 30, 60, 30]);
-        }
-    }, [showConfirmation]);
-
     useEffect(() => {
         if (!showConfirmation) return;
         const timer = window.setTimeout(() => setShowConfirmation(false), 1800);
         return () => window.clearTimeout(timer);
     }, [showConfirmation]);
 
+    useEffect(() => {
+        if (!showConfirmModal) return;
+        void preloadConfetti();
+    }, [showConfirmModal]);
+
     const availability = useMemo(() => {
-        const dateStr = formatBelarusDate(selectedDate);
-        const dateBookings = bookings.filter(b => b.date === dateStr);
+        const dateBookings = bookings.filter(b => b.date === selectedDateKey);
         const now = getBelarusNow();
         const isToday = isSameBelarusDay(selectedDate, getBelarusDate());
         const currentHour = now.getUTCHours();
@@ -190,7 +456,7 @@ export default function BookingFlow() {
             const isFull = bookedMachineIds.length >= activeMachines.length;
             return { time, bookedMachineIds, isFull, isPassed };
         });
-    }, [selectedDate, activeMachines, bookings]);
+    }, [activeMachines, bookings, selectedDate, selectedDateKey]);
 
 
     const totalSlotsPerTime = activeMachines.length;
@@ -201,6 +467,21 @@ export default function BookingFlow() {
             return sum + remaining;
         }, 0);
     }, [availability, totalSlotsPerTime]);
+
+    const refreshDateAvailability = async (dateKey: string) => {
+        requestLiveSync('interaction');
+
+        try {
+            const latestDateBookings = await residentFirestoreService.getBookingsForDate(dateKey);
+            startTransition(() => {
+                setBookings((currentBookings) => replaceBookingsForDate(currentBookings, dateKey, latestDateBookings));
+            });
+            return true;
+        } catch (error) {
+            console.error('Failed to refresh selected date availability', error);
+            return false;
+        }
+    };
 
     const handleBook = async () => {
         if (!selectedSlot || !selectedMachine || !user || submitting) return;
@@ -213,15 +494,13 @@ export default function BookingFlow() {
             const now = getBelarusNow();
             const [h, m] = startTime.split(':').map(Number);
             if (h < now.getUTCHours() || (h === now.getUTCHours() && m < now.getUTCMinutes())) {
-                toast.error('This slot has already passed. Please refresh.');
+                notifyError('This slot has already passed. Please refresh.');
                 setSubmitting(false);
                 return;
             }
         }
 
-        const [h, m] = startTime.split(':').map(Number);
-        const endMinutes = h * 60 + m + 90;
-        const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+        const endTime = addMinutesToTimeString(startTime, 90);
 
         const bookingData: Booking = {
             id: Date.now().toString(),
@@ -229,30 +508,68 @@ export default function BookingFlow() {
             studentId: user.id,
             studentName: user.name,
             roomNumber: user.roomNumber,
-            date: formatBelarusDate(selectedDate),
+            date: selectedDateKey,
             startTime,
             endTime,
             weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now()
         };
+        let bookingSucceeded = false;
+        setPendingBooking(bookingData);
 
         try {
-            const result = await firestoreService.createBooking(bookingData);
+            const { residentMutationsService } = await loadResidentMutationsService();
+            const result = await residentMutationsService.createBooking(bookingData);
             if (result.success) {
-                const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
-                setBookings(prev => [...prev, { ...bookingData, id: createdSlotId }]);
-                triggerHaptic([20, 40, 20, 80, 20]);
+                bookingSucceeded = true;
+                const createdBooking = result.booking ?? {
+                    ...bookingData,
+                    id: `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`,
+                };
+                hapticSuccess();
+                startTransition(() => {
+                    setBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
+                });
                 setShowConfirmModal(false);
                 setShowConfirmation(true);
                 setSelectedMachine(null);
+                setPendingBooking(null);
+                requestLiveSync('interaction');
+                void refreshDateAvailability(createdBooking.date);
             } else {
-                toast.error(result.error || 'Booking failed');
+                const isAvailabilityConflict = isBookingAvailabilityConflict(result.errorCode, result.error);
+
+                if (isAvailabilityConflict) {
+                    const refreshed = await refreshDateAvailability(bookingData.date);
+                    setShowConfirmModal(false);
+                    setSelectedMachine(null);
+                    notifyInfo(
+                        refreshed
+                            ? 'That slot was just booked by another resident. Availability refreshed.'
+                            : 'That slot is no longer available. Live availability is reconnecting.'
+                    );
+                    return;
+                }
+
+                if (result.errorCode === 'weekly_limit') {
+                    setShowConfirmModal(false);
+                    setSelectedMachine(null);
+                }
+
+                notifyError(getBookNowFailureMessage(result.errorCode, result.error));
             }
-        } catch (e: any) {
-            console.error('Booking transaction failed:', e);
-            console.error('Error details:', e.message, e.code);
-            toast.error(`System error: ${e.message || 'Please try again.'}`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Please try again.';
+            const errorCode = typeof error === 'object' && error !== null && 'code' in error
+                ? String((error as { code?: unknown }).code ?? '')
+                : '';
+            console.error('Booking transaction failed:', error);
+            console.error('Error details:', errorMessage, errorCode);
+            notifyError(`System error: ${errorMessage}`);
         } finally {
+            if (!bookingSucceeded) {
+                setPendingBooking(null);
+            }
             setSubmitting(false);
         }
     };
@@ -260,6 +577,18 @@ export default function BookingFlow() {
     const maintenanceDay = typeof settings.maintenanceDay === 'number' ? settings.maintenanceDay : 3;
     const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
+    const retryBookingData = () => {
+        requestLiveSync('retry');
+        if (hasBookingSnapshot) {
+            setLoadIssue('saved');
+            setLoadErrorMessage('Reconnecting to live slot updates...');
+        } else {
+            setLoadIssue(null);
+            setLoadErrorMessage(null);
+            setLoading(true);
+        }
+        setReloadKey((current) => current + 1);
+    };
 
     // --- RENDER ---
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -293,9 +622,12 @@ export default function BookingFlow() {
 
     const windowDisplay = getAutoOpenWindowDisplay(settings);
 
-    if (loading) {
+    const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
+        || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
+
+    if (loading && !showBlockingBookingNotice) {
         return (
-            <div className="container animate-fade-in" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="container" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
                     <div style={{ width: '150px', height: '28px', borderRadius: '8px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
@@ -314,6 +646,23 @@ export default function BookingFlow() {
         );
     }
 
+    if (showBlockingBookingNotice) {
+        return (
+            <div
+                className="container flex-center"
+                style={{ minHeight: '100vh', padding: '24px', textAlign: 'left' }}
+            >
+                <DataLoadNotice
+                    tone="error"
+                    title={bookingLoadSlow ? 'Booking page is taking longer than usual' : 'Unable to load live booking data'}
+                    description={loadErrorMessage ?? 'Retry to reconnect and fetch the latest machine availability.'}
+                    onRetry={retryBookingData}
+                    retryLabel="Retry Slots"
+                />
+            </div>
+        );
+    }
+
     if (settings.forceCloseBookings || !isNextWeekOpen) {
         return (
             <div className="container flex-center" style={{
@@ -323,10 +672,8 @@ export default function BookingFlow() {
                 color: 'var(--text-main)',
                 padding: '20px'
             }}>
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.4, type: 'spring' }}
+                <div
+                    className="animate-fade-in"
                     style={{
                         background: 'rgba(239, 68, 68, 0.1)',
                         padding: '32px',
@@ -335,7 +682,7 @@ export default function BookingFlow() {
                         border: '1px solid rgba(239, 68, 68, 0.2)'
                     }}>
                     <AlertCircle size={48} color="#ef4444" />
-                </motion.div>
+                </div>
 
                 <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
                     {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
@@ -347,10 +694,8 @@ export default function BookingFlow() {
                 </p>
 
                 {!settings.forceCloseBookings && (
-                    <motion.div
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
+                    <div
+                        className="animate-fade-in"
                         style={{
                             display: 'flex',
                             flexWrap: 'wrap',
@@ -388,29 +733,19 @@ export default function BookingFlow() {
                                     justifyContent: 'center',
                                     alignItems: 'center'
                                 }}>
-                                    <AnimatePresence mode="popLayout">
-                                        <motion.span
-                                            key={item.value}
-                                            initial={{ y: 20, opacity: 0, filter: 'blur(4px)' }}
-                                            animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
-                                            exit={{ y: -20, opacity: 0, filter: 'blur(4px)' }}
-                                            transition={{
-                                                type: 'spring',
-                                                stiffness: 300,
-                                                damping: 25,
-                                                mass: 0.8
-                                            }}
-                                            style={{
-                                                fontSize: '32px',
-                                                fontWeight: 800,
-                                                color: 'var(--primary)',
-                                                lineHeight: 1,
-                                                fontVariantNumeric: 'tabular-nums',
-                                            }}
-                                        >
-                                            {String(item.value).padStart(2, '0')}
-                                        </motion.span>
-                                    </AnimatePresence>
+                                    <span
+                                        key={item.value}
+                                        className="animate-fade-in"
+                                        style={{
+                                            fontSize: '32px',
+                                            fontWeight: 800,
+                                            color: 'var(--primary)',
+                                            lineHeight: 1,
+                                            fontVariantNumeric: 'tabular-nums',
+                                        }}
+                                    >
+                                        {String(item.value).padStart(2, '0')}
+                                    </span>
                                 </div>
                                 <span style={{
                                     fontSize: '12px',
@@ -422,7 +757,7 @@ export default function BookingFlow() {
                                 </span>
                             </div>
                         ))}
-                    </motion.div>
+                    </div>
                 )}
 
                 <button
@@ -445,16 +780,36 @@ export default function BookingFlow() {
     }
 
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
+    const confettiWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const confettiHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
 
     return (
-        <div className="container animate-fade-in" style={{ paddingBottom: '100px' }}>
+        <div className="container" style={{ paddingBottom: '100px' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                <button onClick={() => navigate(-1)} className="glass-button" style={{ borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <button
+                    onClick={() => navigate(-1)}
+                    onMouseEnter={preloadDashboardRoute}
+                    onTouchStart={preloadDashboardRoute}
+                    className="glass-button"
+                    style={{ borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
                     <ChevronLeft size={24} />
                 </button>
                 <h2 style={{ margin: 0, fontSize: '20px' }}>Select a Slot</h2>
             </div>
+
+            {loadIssue === 'saved' && (
+                <div style={{ marginBottom: '16px' }}>
+                    <DataLoadNotice
+                        compact
+                        title="Showing saved slot data"
+                        description={loadErrorMessage ?? 'Live slot availability is reconnecting in the background. You can keep browsing.'}
+                        onRetry={retryBookingData}
+                        retryLabel="Refresh Slots"
+                    />
+                </div>
+            )}
 
             {/* Date Selector */}
             {dateOptions.length === 0 ? (
@@ -469,8 +824,13 @@ export default function BookingFlow() {
                         return (
                             <button
                                 key={date.toISOString()}
-                                onClick={() => { setSelectedDate(date); setSelectedSlot(null); setSelectedMachine(null); }}
-                                className={clsx('glass-panel')}
+                                onClick={() => {
+                                    requestLiveSync('interaction');
+                                    setSelectedDate(date);
+                                    setSelectedSlot(null);
+                                    setSelectedMachine(null);
+                                }}
+                                className="glass-panel"
                                 style={{
                                     minWidth: '80px',
                                     padding: '16px 12px',
@@ -577,9 +937,13 @@ export default function BookingFlow() {
                                     disabled={isFull || isPassed}
                                     onClick={() => {
                                         if (!isFull && !isPassed) {
+                                            requestLiveSync('interaction');
+                                            void loadResidentMutationsService();
+                                            void preloadConfetti();
                                             if (selectedSlot === time) {
                                                 setSelectedSlot(null);
                                             } else {
+                                                hapticSelection();
                                                 setSelectedSlot(time);
                                                 setSelectedMachine(null);
                                             }
@@ -617,15 +981,22 @@ export default function BookingFlow() {
                                 {selectedSlot === time && (
                                     <div style={{ padding: '12px 0 12px 12px', display: 'flex', gap: '12px', overflowX: 'auto', animation: 'fadeIn 0.3s' }}>
                                         {activeMachines.map(m => {
-                                            const bookingForMachine = bookings.find(b => b.date === formatBelarusDate(selectedDate) && b.startTime === time && b.machineId === m.id);
-                                            const isBooked = Boolean(bookingForMachine);
-                                            const isBookedByUser = bookingForMachine?.studentId === user?.id;
+                                            const bookingForMachine = bookings.find(b => b.date === selectedDateKey && b.startTime === time && b.machineId === m.id);
+                                            const isPendingBooking = pendingBooking?.date === selectedDateKey
+                                                && pendingBooking.startTime === time
+                                                && pendingBooking.machineId === m.id;
+                                            const isBooked = Boolean(bookingForMachine) || isPendingBooking;
+                                            const isBookedByUser = bookingForMachine?.studentId === user?.id || isPendingBooking;
                                             return (
                                                 <button
                                                     key={m.id}
                                                     disabled={isBooked}
                                                     onClick={() => {
                                                         if (!isBooked) {
+                                                            requestLiveSync('interaction');
+                                                            void loadResidentMutationsService();
+                                                            void preloadConfetti();
+                                                            hapticSoftPulse();
                                                             setSelectedMachine(m);
                                                             setShowConfirmModal(true);
                                                         }
@@ -645,7 +1016,12 @@ export default function BookingFlow() {
                                                     }}
                                                 >
                                                     {m.name}
-                                                    {isBooked && <div style={{ fontSize: '10px', marginTop: '4px' }}>{isBookedByUser ? '(Booked by you)' : '(Booked)'}</div>}
+                                                    {isBooked && (
+                                                        <div style={{ fontSize: '10px', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                            {isPendingBooking ? <ActionSpinner size={10} tone="neutral" /> : null}
+                                                            <span>{isPendingBooking ? 'Reserving...' : isBookedByUser ? '(Booked by you)' : '(Booked)'}</span>
+                                                        </div>
+                                                    )}
                                                 </button>
                                             );
                                         })}
@@ -669,11 +1045,33 @@ export default function BookingFlow() {
                                 </p>
                                 <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
 
+                                {submitting && (
+                                    <div
+                                        style={{
+                                            marginBottom: '18px',
+                                            padding: '12px 14px',
+                                            borderRadius: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            background: 'linear-gradient(135deg, rgba(124, 124, 255, 0.16) 0%, rgba(59, 130, 246, 0.1) 100%)',
+                                            border: '1px solid rgba(129, 140, 248, 0.18)',
+                                            color: 'rgba(255,255,255,0.9)'
+                                        }}
+                                    >
+                                        <ActionSpinner size={18} tone="primary" />
+                                        <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                                            Locking your slot and checking for conflicts...
+                                        </span>
+                                    </div>
+                                )}
+
                                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                                     <button
                                         onClick={() => setShowConfirmModal(false)}
+                                        disabled={submitting}
                                         className="glass-button"
-                                        style={{ padding: '12px 24px', borderRadius: '12px' }}
+                                        style={{ padding: '12px 24px', borderRadius: '12px', opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }}
                                     >
                                         Cancel
                                     </button>
@@ -691,7 +1089,12 @@ export default function BookingFlow() {
                                             cursor: submitting ? 'not-allowed' : 'pointer'
                                         }}
                                     >
-                                        {submitting ? 'Processing...' : 'Confirm'}
+                                        {submitting ? (
+                                            <>
+                                                <ActionSpinner size={16} tone="inverted" />
+                                                Processing...
+                                            </>
+                                        ) : 'Confirm'}
                                     </button>
                                 </div>
                             </div>
@@ -702,39 +1105,36 @@ export default function BookingFlow() {
                     {showConfirmation && (
                         <div className="modal-overlay modal-overlay--success">
                             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, pointerEvents: 'none' }}>
-                                <Confetti
-                                    width={width}
-                                    height={height}
-                                    recycle={false}
-                                    numberOfPieces={400}
-                                    gravity={0.15}
-                                    colors={['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']}
-                                />
+                                <Suspense fallback={null}>
+                                    <LazyConfetti
+                                        width={confettiWidth}
+                                        height={confettiHeight}
+                                        recycle={false}
+                                        numberOfPieces={400}
+                                        gravity={0.15}
+                                        colors={['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6']}
+                                    />
+                                </Suspense>
                             </div>
                             <div className="glass-panel modal-card modal-card--success" style={{ zIndex: 100 }}>
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', delay: 0.1, damping: 20, stiffness: 250 }}
+                                <div
+                                    className="animate-fade-in"
                                     style={{
                                         background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
                                     }}
                                 >
                                     <svg viewBox="0 0 50 50" width="40" height="40">
-                                        <motion.path
+                                        <path
                                             fill="none"
                                             stroke="#10b981"
                                             strokeWidth="5"
                                             d="M 14.1 27.2 l 7.1 7.2 16.7-16.8"
-                                            initial={{ pathLength: 0 }}
-                                            animate={{ pathLength: 1 }}
-                                            transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
                                         />
                                     </svg>
-                                </motion.div>
+                                </div>
                                 <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
                                 <p style={{ color: 'var(--text-muted)' }}>Slot booked. You can continue browsing other available slots.</p>
                             </div>

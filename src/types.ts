@@ -50,6 +50,12 @@ export interface Banner {
   id: string;
   title: string;
   imageUrl: string;
+  previewImageUrl?: string;
+  optimizedImageUrl?: string;
+  mobileImageUrl?: string;
+  desktopImageUrl?: string;
+  responsiveSrcSet?: string;
+  responsiveSizes?: string;
   linkUrl?: string; // Optional external link
   isActive: boolean;
   createdAt: number;
@@ -60,6 +66,12 @@ export interface Banner {
 
 export type FeedbackType = 'bug' | 'feature' | 'other';
 
+export interface FeedbackReply {
+  text: string;
+  repliedAt: number;
+  repliedBy: string;
+}
+
 export interface Feedback {
   id: string;
   studentId?: string;
@@ -69,6 +81,7 @@ export interface Feedback {
   type: 'bug' | 'feature' | 'other';
   timestamp: number;
   read: boolean;
+  adminReply?: FeedbackReply;
 }
 
 export interface TopAlert {

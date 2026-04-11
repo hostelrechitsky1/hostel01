@@ -12,6 +12,7 @@ import {
     formatBelarusWeekdayLabel,
     getBelarusDate,
     getBelarusWeekEnd,
+    getBelarusWeekId,
     getBelarusWeekStart,
     getBelarusWeekday,
     isAutoBookingWindowOpen
@@ -59,6 +60,11 @@ export default function PrintSchedule() {
     useEffect(() => {
         const isManager = sessionStorage.getItem('manager_auth');
         const isStaff = sessionStorage.getItem('hostel_admin_auth');
+        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        const relevantWeekIds = [
+            getBelarusWeekId(currentWeekStart),
+            getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
+        ];
 
         if (!isManager && !isStaff) {
             navigate('/manager');
@@ -69,7 +75,7 @@ export default function PrintSchedule() {
             try {
                 const [ms, bs, ss, settings] = await Promise.all([
                     firestoreService.getMachines(),
-                    firestoreService.getBookings(),
+                    firestoreService.getBookingsForWeekIds(relevantWeekIds),
                     firestoreService.getAllStudents(),
                     firestoreService.getSettings()
                 ]);

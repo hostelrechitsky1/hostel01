@@ -1,127 +1,740 @@
-import { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { firestoreService } from '../services/firestoreService';
-import type { Machine, Booking, Banner, AppSettings } from '../types';
+import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
+import { residentSnapshotService } from '../services/residentSnapshotService';
+import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
-import DashboardFeedback from '../components/DashboardFeedback';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
-import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
+import { DataLoadNotice } from '../components/DataLoadNotice';
+import { warmBannerImages } from '../utils/bannerImages';
+import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
+import { preloadBookingRoute } from '../utils/preloadRoutes';
+import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
+import { useViewportActivation } from '../utils/useViewportActivation';
+import { warmResidentAppData } from '../utils/warmResidentApp';
+import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
+import { notifySuccess } from '../utils/notify';
+import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
+import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getResidentShortNameForLanguage } from '../utils/residentNames';
+import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
+
+const RECENT_BOOKINGS_LIMIT = 12;
+const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
+const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
+let dashboardFeedbackModulePromise: Promise<typeof import('../components/DashboardFeedback')> | null = null;
+let dashboardBookingSummaryModulePromise: Promise<typeof import('../components/DashboardBookingSummary')> | null = null;
+let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
+
+const loadDashboardFeedback = () => {
+    dashboardFeedbackModulePromise ??= import('../components/DashboardFeedback');
+    return dashboardFeedbackModulePromise;
+};
+
+const loadDashboardBookingSummary = () => {
+    dashboardBookingSummaryModulePromise ??= import('../components/DashboardBookingSummary');
+    return dashboardBookingSummaryModulePromise;
+};
+
+const LazyDashboardFeedback = lazy(loadDashboardFeedback);
+const LazyDashboardBookingSummary = lazy(loadDashboardBookingSummary);
+
+const loadResidentLiveService = () => {
+    residentLiveServicePromise ??= import('../services/residentLiveService');
+    return residentLiveServicePromise;
+};
+
+const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
+    const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
+    return [...withoutExisting, nextBooking];
+};
+
+const dedupeRoommates = (students: Student[]) => {
+    const seenIds = new Set<string>();
+
+    return students.filter((student) => {
+        const identity = student.id || `${student.roomNumber}:${student.name.trim().toLowerCase()}`;
+        if (seenIds.has(identity)) {
+            return false;
+        }
+
+        seenIds.add(identity);
+        return true;
+    });
+};
+
+const buildRoommateList = (currentUser: Student | null, students: Student[]) => {
+    if (!currentUser?.roomNumber) return [];
+
+    const sameRoomResidents = dedupeRoommates(
+        students.filter((student) => student.roomNumber === currentUser.roomNumber)
+    );
+
+    if (sameRoomResidents.length === 0) {
+        return [currentUser];
+    }
+
+    const hasCurrentResident = sameRoomResidents.some((student) => student.id === currentUser.id);
+    if (hasCurrentResident) {
+        return sameRoomResidents;
+    }
+
+    return dedupeRoommates([currentUser, ...sameRoomResidents]);
+};
+
+const getInitialRoommates = (currentUser: Student | null) => {
+    if (!currentUser?.roomNumber) return [];
+
+    const cachedRoommates = buildRoommateList(currentUser, bookingService.getCurrentRoommates());
+
+    if (cachedRoommates.length > 0) {
+        return cachedRoommates;
+    }
+
+    return [currentUser];
+};
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const user = bookingService.getCurrentUser();
-    const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
-    const [history, setHistory] = useState<Booking[]>([]);
-    const [machines, setMachines] = useState<Machine[]>([]);
-    const [allBookings, setAllBookings] = useState<Booking[]>([]);
-    const [banners, setBanners] = useState<Banner[]>([]);
-    const [bannersLoading, setBannersLoading] = useState(true);
-    const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState<AppSettings>({
-        forceShowNextWeek: false,
-        forceCloseBookings: false,
-        maintenanceDay: 3,
-        autoOpenWeekday: 6,
-        autoOpenTime: '16:00',
-        autoOpenDurationHours: 28,
-        topAlert: { message: '', isActive: false, type: 'info' }
+    const [language, setLanguage] = useState<ResidentPortalLanguage>(() => getResidentPortalLanguage());
+    const [user, setUser] = useState<Student | null>(() => bookingService.getCurrentUser());
+    const isRussian = language === 'ru';
+    const dateLocale = getResidentPortalDateLocale(language);
+    const t = isRussian
+        ? {
+            switchLanguage: 'English',
+            hello: 'Здравствуйте',
+            roomLabel: (roomNumber: string) => `Комната ${roomNumber}`,
+            tapAvatarToSwitch: 'Нажмите на аватар, чтобы сменить жильца',
+            switchRoommateProfile: 'Сменить профиль жильца',
+            currentResidentProfile: 'Текущий профиль жильца',
+            bookForRoommate: 'Бронировать для соседа',
+            roommatesOnly: (roomNumber: string) => `Здесь можно выбрать только жильцов из комнаты ${roomNumber}.`,
+            refreshingRoommates: 'Обновляем список соседей...',
+            noOtherRoommates: 'Сейчас нет других соседей для переключения.',
+            showingSavedTitle: 'Показаны сохранённые данные панели',
+            showingSavedDescription: 'Живые обновления переподключаются в фоновом режиме. Вы можете продолжать пользоваться страницей.',
+            refreshData: 'Обновить данные',
+            dashboardSlowTitle: 'Панель загружается дольше обычного',
+            dashboardFailedTitle: 'Не удалось загрузить панель',
+            dashboardRetryDescription: 'Соединение может быть медленным. Попробуйте снова, чтобы обновить панель жильца.',
+            retryDashboard: 'Повторить',
+            needToWash: 'Нужно постирать?',
+            bookNow: 'Забронировать',
+            bookSubtitle: 'Забронируйте слот на следующую неделю',
+            checkStatus: 'Проверить статус',
+            bookingsClosed: 'Бронирование сейчас закрыто',
+            booked: 'Забронировано',
+            bookedSubtitle: 'У вас уже есть бронь. Вы всё ещё можете открыть страницу слотов и посмотреть свободные места.',
+            openSlots: 'Открыть слоты',
+            loadingLatest: 'Мы загружаем ваш актуальный статус бронирования в фоне.',
+            status: 'Статус',
+            systemStatus: 'Статус системы',
+            active: 'Активно',
+            closed: 'Закрыто',
+            weekSlots: 'Слоты недели',
+            readyToUse: 'Готово к использованию',
+            inUse: 'Занято',
+            maintenanceDay: 'День обслуживания',
+            underMaintenance: 'На обслуживании',
+            ready: 'Готово',
+            finishesSoon: 'Скоро освободится',
+            closedShort: 'Закрыто',
+            toastNewCancel: 'Новинка: теперь вы можете отменять свои будущие бронирования прямо с панели.',
+        }
+        : {
+            switchLanguage: 'Русский',
+            hello: 'Hello',
+            roomLabel: (roomNumber: string) => `Room ${roomNumber}`,
+            tapAvatarToSwitch: 'Tap avatar to switch resident',
+            switchRoommateProfile: 'Switch roommate profile',
+            currentResidentProfile: 'Current resident profile',
+            bookForRoommate: 'Book For Roommate',
+            roommatesOnly: (roomNumber: string) => `Only residents from Room ${roomNumber} can be selected here.`,
+            refreshingRoommates: 'Refreshing roommate list...',
+            noOtherRoommates: 'No other roommates are available for switching right now.',
+            showingSavedTitle: 'Showing saved dashboard data',
+            showingSavedDescription: 'Live updates are reconnecting in the background. You can keep using the page.',
+            refreshData: 'Refresh Data',
+            dashboardSlowTitle: 'Dashboard is taking longer than usual',
+            dashboardFailedTitle: 'Unable to load dashboard',
+            dashboardRetryDescription: 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.',
+            retryDashboard: 'Retry Dashboard',
+            needToWash: 'Need to wash?',
+            bookNow: 'Book Now',
+            bookSubtitle: 'Book your slot for next week',
+            checkStatus: 'Check Status',
+            bookingsClosed: 'Bookings are currently closed',
+            booked: 'Booked',
+            bookedSubtitle: 'You already booked. You can still open slots page to browse remaining slots.',
+            openSlots: 'Open Slots',
+            loadingLatest: 'We’re loading your latest booking status in the background.',
+            status: 'Status',
+            systemStatus: 'System Status',
+            active: 'Active',
+            closed: 'Closed',
+            weekSlots: 'Week Slots',
+            readyToUse: 'Ready to use',
+            inUse: 'In Use',
+            maintenanceDay: 'Maintenance Day',
+            underMaintenance: 'Under Maintenance',
+            ready: 'Ready',
+            finishesSoon: 'Finishes soon',
+            closedShort: 'Closed',
+            toastNewCancel: 'New: you can now cancel your own upcoming bookings directly from the dashboard.',
+        };
+    const userId = user?.id ?? '';
+    const {
+        ref: bookingSummarySectionRef,
+        isActive: isBookingSummaryActive,
+    } = useViewportActivation<HTMLDivElement>({
+        rootMargin: '0px 0px -6% 0px',
+        idleTimeout: null,
+        threshold: 0.01,
     });
-    const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
-    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-    const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
+    const {
+        ref: feedbackSectionRef,
+        isActive: isFeedbackActive,
+    } = useViewportActivation<HTMLDivElement>({
+        rootMargin: '0px 0px -6% 0px',
+        idleTimeout: null,
+        threshold: 0.01,
+    });
+    const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
+    const [roommatesLoading, setRoommatesLoading] = useState(false);
+    const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
+    const roommateMenuRef = useRef<HTMLDivElement>(null);
+    const roommateHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const suppressRoommateClickRef = useRef(false);
+    const dashboardWeekIds = useMemo(() => {
+        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        return [
+            getBelarusWeekId(currentWeekStart),
+            getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
+        ];
+    }, []);
+    const cachedDashboardSnapshot = useMemo(
+        () => residentSnapshotService.getCachedDashboardSnapshot(dashboardWeekIds),
+        [dashboardWeekIds]
+    );
+    const cachedCoreWarmSnapshot = useMemo(() => (
+        userId
+            ? residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, userId, false)
+            : undefined
+    ), [dashboardWeekIds, userId]);
+    const cachedRecentWarmSnapshot = useMemo(() => (
+        userId
+            ? residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, userId, true)
+            : undefined
+    ), [dashboardWeekIds, userId]);
+    const cachedMachines = cachedDashboardSnapshot?.machines ?? cachedCoreWarmSnapshot?.machines;
+    const cachedWeekBookings = cachedDashboardSnapshot?.weekBookings ?? cachedCoreWarmSnapshot?.weekBookings;
+    const cachedSettings = cachedDashboardSnapshot?.settings ?? cachedCoreWarmSnapshot?.settings;
+    const cachedBanners = cachedDashboardSnapshot?.banners ?? cachedCoreWarmSnapshot?.banners;
+    const cachedRecentBookings = cachedRecentWarmSnapshot?.recentBookings
+        ?? (userId ? residentFirestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT) : undefined);
+    const hasCachedMachines = cachedMachines !== undefined;
+    const hasCachedWeekBookings = cachedWeekBookings !== undefined;
+    const hasCachedRecentBookings = cachedRecentBookings !== undefined;
+    const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
+    const [weekBookings, setWeekBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const [recentBookings, setRecentBookings] = useState<Booking[]>(() => cachedRecentBookings ?? []);
+    const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
+    const [bannersLoading, setBannersLoading] = useState(() => cachedBanners === undefined);
+    const [loading, setLoading] = useState(() => Boolean(userId) && !hasCachedMachines && !hasCachedWeekBookings);
+    const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && !hasCachedRecentBookings);
+    const [recentBookingsHydrated, setRecentBookingsHydrated] = useState(() => hasCachedRecentBookings);
+    const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
+    const [reloadKey, setReloadKey] = useState(0);
+    const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
+    const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+    const canOpenRoommateMenu = Boolean(user?.roomNumber);
+    const hasResidentSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || hasCachedRecentBookings
+        || cachedBanners !== undefined
+        || machines.length > 0
+        || weekBookings.length > 0
+        || recentBookings.length > 0
+        || banners.length > 0;
+    const hasCoreResidentSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || machines.length > 0
+        || weekBookings.length > 0;
+    const residentLoadSlow = useSlowLoadFlag(loading, 4500);
+    const coreResidentSnapshotRef = useRef(hasCoreResidentSnapshot);
+    const dashboardShellMetricRef = useRef(false);
+    const dashboardDataMetricRef = useRef(false);
+    const bannerReadyMetricRef = useRef(false);
+    const cancelToastSeenRef = useRef<string | null>(null);
 
     useEffect(() => {
-        const ensureTop = () => {
+        if (typeof window === 'undefined') return;
+        if (window.sessionStorage.getItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY) !== '1') return;
+
+        let cancelled = false;
+        const forceScrollToTop = () => {
+            if (cancelled) return;
+            const scrollingElement = document.scrollingElement ?? document.documentElement;
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            scrollingElement.scrollTop = 0;
             document.documentElement.scrollTop = 0;
             document.body.scrollTop = 0;
         };
+        const markUserScroll = () => {
+            cancelled = true;
+            window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
+        };
 
-        ensureTop();
+        forceScrollToTop();
 
-        const onPageShow = () => ensureTop();
-        const rafId = requestAnimationFrame(ensureTop);
-        const timeoutId = window.setTimeout(ensureTop, 120);
+        const rafIds = [
+            requestAnimationFrame(forceScrollToTop),
+            requestAnimationFrame(() => requestAnimationFrame(forceScrollToTop)),
+        ];
+        const timeoutIds = [120, 240].map((delay) => (
+            window.setTimeout(forceScrollToTop, delay)
+        ));
+        const finish = window.setTimeout(() => {
+            forceScrollToTop();
+            window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
+        }, 320);
 
-        window.addEventListener('pageshow', onPageShow);
+        window.addEventListener('scroll', markUserScroll, { passive: true });
+        window.addEventListener('touchstart', markUserScroll, { passive: true });
+        window.addEventListener('wheel', markUserScroll, { passive: true });
 
         return () => {
-            cancelAnimationFrame(rafId);
+            rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
+            timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+            window.clearTimeout(finish);
+            window.removeEventListener('scroll', markUserScroll);
+            window.removeEventListener('touchstart', markUserScroll);
+            window.removeEventListener('wheel', markUserScroll);
+        };
+    }, [user?.id]);
+
+    useEffect(() => {
+        coreResidentSnapshotRef.current = hasCoreResidentSnapshot;
+    }, [hasCoreResidentSnapshot]);
+
+    useEffect(() => {
+        dashboardShellMetricRef.current = false;
+        dashboardDataMetricRef.current = false;
+        bannerReadyMetricRef.current = false;
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId || dashboardShellMetricRef.current) return;
+        dashboardShellMetricRef.current = true;
+        finishResidentPerfSpan('resident:login-to-dashboard-shell', {
+            cachedCore: hasCoreResidentSnapshot,
+            source: cachedDashboardSnapshot ? 'snapshot' : (cachedCoreWarmSnapshot ? 'warm-snapshot' : 'resource-cache'),
+        });
+    }, [cachedCoreWarmSnapshot, cachedDashboardSnapshot, hasCoreResidentSnapshot, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || dashboardDataMetricRef.current) return;
+        dashboardDataMetricRef.current = true;
+        finishResidentPerfSpan('resident:login-to-dashboard-data', {
+            cachedCore: hasCoreResidentSnapshot,
+            cachedRecentBookings: hasCachedRecentBookings,
+            source: cachedRecentWarmSnapshot
+                ? 'warm-snapshot'
+                : (cachedDashboardSnapshot ? 'snapshot' : (cachedCoreWarmSnapshot ? 'warm-core' : 'resource-cache')),
+        });
+    }, [cachedCoreWarmSnapshot, cachedDashboardSnapshot, cachedRecentWarmSnapshot, hasCachedRecentBookings, hasCoreResidentSnapshot, loading, userId]);
+
+    useEffect(() => {
+        if (bannersLoading || bannerReadyMetricRef.current) return;
+        if (banners.length > 0) return;
+
+        bannerReadyMetricRef.current = true;
+        finishResidentPerfSpan('resident:dashboard-banner-ready', {
+            banners: 0,
+        });
+    }, [banners.length, bannersLoading]);
+
+    useEffect(() => {
+        if (!userId || loading) {
+            return;
+        }
+
+        if (loadIssue === 'error' && !hasCoreResidentSnapshot) {
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const storageKey = `${CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX}${userId}`;
+
+        if (cancelToastSeenRef.current === storageKey || window.localStorage.getItem(storageKey) === '1') {
+            cancelToastSeenRef.current = storageKey;
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            notifySuccess(t.toastNewCancel);
+            window.localStorage.setItem(storageKey, '1');
+            cancelToastSeenRef.current = storageKey;
+        }, 900);
+
+        return () => {
             window.clearTimeout(timeoutId);
-            window.removeEventListener('pageshow', onPageShow);
+        };
+    }, [hasCoreResidentSnapshot, loadIssue, loading, t.toastNewCancel, userId]);
+
+    /* eslint-disable react-hooks/set-state-in-effect */
+    useEffect(() => {
+        if (!userId || loading || typeof window === 'undefined') {
+            return;
+        }
+
+        let cancelled = false;
+        let idleHandle: number | null = null;
+        let timeoutId: number | null = null;
+
+        const primeBelowFoldSections = () => {
+            void Promise.allSettled([
+                loadDashboardBookingSummary(),
+                loadDashboardFeedback(),
+            ]).then(() => {
+                if (cancelled) return;
+            });
+        };
+
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleHandle = idleWindow.requestIdleCallback(primeBelowFoldSections, { timeout: 900 });
+        } else {
+            timeoutId = window.setTimeout(primeBelowFoldSections, 180);
+        }
+
+        return () => {
+            cancelled = true;
+            if (idleHandle !== null) {
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+        };
+    }, [loading, userId]);
+
+    useEffect(() => {
+        setRoommates(getInitialRoommates(user));
+    }, [user?.id, user?.roomNumber]);
+
+    useEffect(() => {
+        setRecentBookings(cachedRecentBookings ?? []);
+        setRecentBookingsHydrated(hasCachedRecentBookings);
+        setRecentBookingsLoading(Boolean(userId) && !hasCachedRecentBookings);
+    }, [cachedRecentBookings, hasCachedRecentBookings, userId]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+
+    useEffect(() => {
+        if (!isRoommateMenuOpen) return;
+
+        const handleOutsidePress = (event: MouseEvent | TouchEvent) => {
+            if (roommateMenuRef.current?.contains(event.target as Node)) {
+                return;
+            }
+            setIsRoommateMenuOpen(false);
+        };
+
+        document.addEventListener('mousedown', handleOutsidePress);
+        document.addEventListener('touchstart', handleOutsidePress);
+
+        return () => {
+            document.removeEventListener('mousedown', handleOutsidePress);
+            document.removeEventListener('touchstart', handleOutsidePress);
+        };
+    }, [isRoommateMenuOpen]);
+
+    useEffect(() => {
+        return () => {
+            if (roommateHoldTimerRef.current) {
+                window.clearTimeout(roommateHoldTimerRef.current);
+            }
         };
     }, []);
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
-        if (!user) {
+        if (!residentLoadSlow || !loading || !hasCoreResidentSnapshot) {
+            return;
+        }
+
+        setLoadIssue('saved');
+        setLoadErrorMessage(t.showingSavedDescription);
+        setLoading(false);
+    }, [hasCoreResidentSnapshot, loading, residentLoadSlow, t.showingSavedDescription]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+
+    useEffect(() => {
+        if (!userId) {
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            preloadBookingRoute();
+            return;
+        }
+
+        let idleHandle: number | null = null;
+        let timeoutHandle: number | null = null;
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleHandle = idleWindow.requestIdleCallback(() => {
+                idleHandle = null;
+                preloadBookingRoute();
+            }, { timeout: 1400 });
+        } else {
+            timeoutHandle = window.setTimeout(preloadBookingRoute, 420);
+        }
+
+        return () => {
+            if (idleHandle !== null) {
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            if (timeoutHandle !== null) {
+                window.clearTimeout(timeoutHandle);
+            }
+        };
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId) {
             navigate('/login');
             return;
         }
 
-        let unsubscribeBookings = () => { };
-        let unsubscribeMachines = () => { };
+        let isMounted = true;
+        let machinesReady = hasCachedMachines;
+        let weekBookingsReady = hasCachedWeekBookings;
+        let unsubscribeMachines = () => { /* noop */ };
+        let unsubscribeWeekBookings = () => { /* noop */ };
+        let liveAttachTimeoutId: number | null = null;
+        let idleHandle: number | null = null;
 
-        const loadData = async () => {
-            try {
-                const [fetchedSettings, fetchedBanners] = await Promise.all([
-                    firestoreService.getSettings(),
-                    firestoreService.getBanners()
-                ]);
-
-                setSettings(fetchedSettings);
-                setBanners(fetchedBanners);
-                setBannersLoading(false);
-
-                unsubscribeMachines = firestoreService.subscribeToMachines((machines) => {
-                    setMachines(machines);
-                });
-
-                unsubscribeBookings = firestoreService.subscribeToBookings((bookings) => {
-                    setAllBookings(bookings);
-                    const myBookings = bookings.filter(b => b.studentId === user.id);
-                    const chronological = [...myBookings].sort((a, b) =>
-                        new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-                    );
-
-                    const now = getBelarusNow();
-                    const futureBookings = chronological.filter(b => {
-                        // Parse as UTC+3 (Belarus time) by appending +03:00
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
-                        return end > now;
-                    });
-
-                    const pastBookings = chronological.filter(b => {
-                        const end = addMinutes(parseISO(b.date + 'T' + b.startTime + '+03:00'), 90);
-                        return end <= now;
-                    }).reverse();
-
-                    setUpcomingBookings(futureBookings);
-                    setHistory(pastBookings.slice(0, 3));
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Dashboard bookings subscription error:", error);
-                    setLoading(false);
-                });
-
-            } catch (err) {
-                console.error("Failed to load dashboard data", err);
-                setBannersLoading(false);
+        const finishLoadingIfReady = () => {
+            if (isMounted && machinesReady && weekBookingsReady) {
+                setLoadIssue(null);
+                setLoadErrorMessage(null);
                 setLoading(false);
             }
         };
 
-        loadData();
+        const handleResidentDataError = (label: string, error: unknown) => {
+            console.error(label, error);
+            if (!isMounted) return;
+            setLoadErrorMessage(t.dashboardRetryDescription);
+            setLoadIssue(coreResidentSnapshotRef.current ? 'saved' : 'error');
+            setLoading(false);
+        };
+
+        finishLoadingIfReady();
+
+        void residentSnapshotService.getDashboardSnapshot(dashboardWeekIds)
+            .then((snapshot) => {
+                if (!isMounted) return;
+
+                machinesReady = true;
+                weekBookingsReady = true;
+
+                startTransition(() => {
+                    setMachines(snapshot.machines);
+                    setWeekBookings(snapshot.weekBookings);
+                    setSettings(snapshot.settings);
+                    setBanners(snapshot.banners ?? []);
+                });
+
+                warmBannerImages(snapshot.banners ?? [], 1);
+                finishLoadingIfReady();
+            })
+            .catch((error) => {
+                handleResidentDataError('Dashboard snapshot fetch error:', error);
+            })
+            .finally(() => {
+                if (isMounted) {
+                    setBannersLoading(false);
+                }
+            });
+
+        const attachLiveStreams = () => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    unsubscribeMachines = residentLiveService.subscribeToMachines((nextMachines) => {
+                        if (!isMounted) return;
+                        machinesReady = true;
+                        startTransition(() => {
+                            setMachines(nextMachines);
+                        });
+                        finishLoadingIfReady();
+                    }, (error) => {
+                        handleResidentDataError('Dashboard machines subscription error:', error);
+                    });
+
+                    unsubscribeWeekBookings = residentLiveService.subscribeToBookingsForWeekIds(dashboardWeekIds, (nextBookings) => {
+                        if (!isMounted) return;
+                        weekBookingsReady = true;
+                        startTransition(() => {
+                            setWeekBookings(nextBookings);
+                        });
+                        finishLoadingIfReady();
+                    }, (error) => {
+                        handleResidentDataError('Dashboard week bookings subscription error:', error);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident live dashboard streams', error);
+                });
+        };
+
+        const scheduleLiveStreams = () => {
+            if (typeof window === 'undefined') {
+                attachLiveStreams();
+                return;
+            }
+
+            const idleWindow = window as Window & typeof globalThis & {
+                requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (typeof idleWindow.requestIdleCallback === 'function') {
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    attachLiveStreams();
+                }, { timeout: 1200 });
+                return;
+            }
+
+            liveAttachTimeoutId = window.setTimeout(attachLiveStreams, 280);
+        };
+
+        scheduleLiveStreams();
 
         return () => {
-            unsubscribeBookings();
+            isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
+            }
+            if (idleHandle !== null) {
+                const idleWindow = window as Window & typeof globalThis & {
+                    cancelIdleCallback?: (handle: number) => void;
+                };
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
             unsubscribeMachines();
+            unsubscribeWeekBookings();
         };
-    }, [user?.id, navigate]);
+    }, [dashboardWeekIds, navigate, reloadKey, t.dashboardRetryDescription, userId]);
+
+    /* eslint-disable react-hooks/set-state-in-effect */
+    useEffect(() => {
+        if (!userId) {
+            return;
+        }
+
+        let isMounted = true;
+        let unsubscribeRecentBookings = () => { /* noop */ };
+        let liveAttachTimeoutId: number | null = null;
+        let idleHandle: number | null = null;
+
+        if (hasCachedRecentBookings) {
+            setRecentBookingsHydrated(true);
+            setRecentBookingsLoading(false);
+        } else {
+            setRecentBookingsLoading(true);
+
+            void residentFirestoreService.getRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+                .then((nextBookings) => {
+                    if (!isMounted) return;
+                    setRecentBookingsHydrated(true);
+                    setRecentBookingsLoading(false);
+                    startTransition(() => {
+                        setRecentBookings(nextBookings);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Dashboard student bookings fetch error:', error);
+                    if (!isMounted) return;
+                    setRecentBookingsHydrated(true);
+                    setRecentBookingsLoading(false);
+                });
+        }
+
+        const attachRecentBookingsStream = () => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    unsubscribeRecentBookings = residentLiveService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
+                        if (!isMounted) return;
+                        setRecentBookingsHydrated(true);
+                        setRecentBookingsLoading(false);
+                        startTransition(() => {
+                            setRecentBookings(nextBookings);
+                        });
+                    }, (error) => {
+                        console.error('Dashboard student bookings subscription error:', error);
+                        if (!isMounted) return;
+                        setRecentBookingsHydrated(true);
+                        setRecentBookingsLoading(false);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident recent bookings stream', error);
+                });
+        };
+
+        if (typeof window === 'undefined') {
+            attachRecentBookingsStream();
+        } else {
+            const idleWindow = window as Window & typeof globalThis & {
+                requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (typeof idleWindow.requestIdleCallback === 'function') {
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    attachRecentBookingsStream();
+                }, { timeout: 1200 });
+            } else {
+                liveAttachTimeoutId = window.setTimeout(attachRecentBookingsStream, 280);
+            }
+        }
+
+        return () => {
+            isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
+            }
+            if (idleHandle !== null) {
+                const idleWindow = window as Window & typeof globalThis & {
+                    cancelIdleCallback?: (handle: number) => void;
+                };
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            unsubscribeRecentBookings();
+        };
+    }, [hasCachedRecentBookings, reloadKey, userId]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -134,26 +747,25 @@ export default function Dashboard() {
         const maintenanceDay = settings.maintenanceDay ?? 3;
         const isMaintenanceDay = currentBWeekday === maintenanceDay;
 
-        if (isMaintenanceDay) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
-        if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
+        if (isMaintenanceDay) return { state: 'maintenance', label: t.maintenanceDay, color: '#ef4444' };
+        if (machine.status === 'maintenance') return { state: 'maintenance', label: t.underMaintenance, color: '#ef4444' };
 
-        // Check current bookings using allBookings state
         const today = formatBelarusDate(getBelarusDate());
-        const bookingsToday = allBookings.filter(b => b.date === today); // In memory filter
+        const bookingsToday = weekBookings.filter(b => b.date === today);
+        const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
         const currentBooking = bookingsToday.find(b => {
             if (b.machineId !== machine.id) return false;
-
-            const start = parse(b.startTime, 'HH:mm', now);
-            const end = addMinutes(start, 90); // 90 min slots
-            return isAfter(now, start) && isBefore(now, end);
+            const startMinutes = getTimeStringMinutes(b.startTime);
+            const endMinutes = startMinutes + 90;
+            return nowMinutes > startMinutes && nowMinutes < endMinutes;
         });
 
         if (currentBooking) {
-            return { state: 'occupied', label: 'In Use', color: '#f59e0b' }; // Orange
+            return { state: 'occupied', label: t.inUse, color: '#f59e0b' }; // Orange
         }
 
-        return { state: 'available', label: 'Ready to use', color: '#10b981' };
+        return { state: 'available', label: t.readyToUse, color: '#10b981' };
     };
 
 
@@ -170,21 +782,132 @@ export default function Dashboard() {
         const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
 
         const totalSlots = slotsPerDay * bookableDates.length;
-        const bookedInTargetWeek = allBookings.filter(
+        const bookedInTargetWeek = weekBookings.filter(
             b => b.weekId === targetWeekId && bookableDates.includes(b.date)
         ).length;
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, allBookings, settings.maintenanceDay, isNextWeekOpen]);
+    }, [machines, settings.maintenanceDay, isNextWeekOpen, weekBookings]);
 
     const handleLogout = () => {
         bookingService.logout();
         navigate('/login');
     };
 
-    const formatUtcForIcs = (date: Date) => {
-        return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const handleOpenBooking = () => {
+        preloadBookingRoute();
+        startResidentPerfSpan('resident:dashboard-to-booking-shell');
+        startResidentPerfSpan('resident:booking-data-ready');
+        startResidentPerfSpan('resident:booking-live-ready');
+        navigate('/book');
+    };
+
+    const ensureRoommatesLoaded = (forceRefresh = false) => {
+        if (!user?.roomNumber || roommatesLoading) {
+            return;
+        }
+
+        const alreadyLoadedRoommates = roommates.filter((student) => student.roomNumber === user.roomNumber);
+        if (!forceRefresh && alreadyLoadedRoommates.length > 1) {
+            return;
+        }
+
+        setRoommatesLoading(true);
+
+        void residentFirestoreService.getStudentsByRoom(user.roomNumber)
+            .then((fetchedRoommates) => {
+                const nextRoommates = buildRoommateList(user, fetchedRoommates);
+                setRoommates(nextRoommates);
+                bookingService.setCurrentRoommates(nextRoommates);
+            })
+            .catch((error) => {
+                console.error('Failed to load roommates for current room', error);
+            })
+            .finally(() => {
+                setRoommatesLoading(false);
+            });
+    };
+
+    const clearRoommateHold = () => {
+        if (roommateHoldTimerRef.current) {
+            window.clearTimeout(roommateHoldTimerRef.current);
+            roommateHoldTimerRef.current = null;
+        }
+    };
+
+    const startRoommateHold = () => {
+        if (!canOpenRoommateMenu) return;
+
+        ensureRoommatesLoaded(true);
+        clearRoommateHold();
+        roommateHoldTimerRef.current = window.setTimeout(() => {
+            suppressRoommateClickRef.current = true;
+            setIsRoommateMenuOpen(true);
+            hapticSoftPulse();
+        }, 420);
+    };
+
+    const handleRoommateButtonClick = () => {
+        if (!canOpenRoommateMenu) return;
+
+        if (suppressRoommateClickRef.current) {
+            suppressRoommateClickRef.current = false;
+            return;
+        }
+
+        if (!isRoommateMenuOpen) {
+            ensureRoommatesLoaded(true);
+        }
+
+        setIsRoommateMenuOpen((current) => !current);
+        hapticSelection();
+    };
+
+    const handleRoommateSwitch = (nextResident: Student) => {
+        if (!user || nextResident.id === user.id) {
+            setIsRoommateMenuOpen(false);
+            return;
+        }
+
+        const cachedBookings = residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, nextResident.id, true)?.recentBookings
+            ?? residentFirestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
+
+        bookingService.setCurrentUser(nextResident);
+        startTransition(() => {
+            setUser(nextResident);
+            setRecentBookings(cachedBookings ?? []);
+        });
+        setLoading(false);
+        setRecentBookingsHydrated(cachedBookings !== undefined);
+        setRecentBookingsLoading(cachedBookings === undefined);
+        setLoadIssue(null);
+        setLoadErrorMessage(null);
+        setIsRoommateMenuOpen(false);
+        preloadBookingRoute();
+        void warmResidentAppData(nextResident.id, {
+            includeRecentBookings: true,
+            roomNumber: nextResident.roomNumber,
+        });
+        hapticSelection();
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    };
+
+    const retryDashboardData = () => {
+        if (hasResidentSnapshot) {
+            setLoadIssue('saved');
+            setLoadErrorMessage('Reconnecting to live dashboard updates...');
+        } else {
+            setLoadIssue(null);
+            setLoadErrorMessage(null);
+            setLoading(true);
+        }
+        setRecentBookingsHydrated(hasCachedRecentBookings);
+        setRecentBookingsLoading(!hasCachedRecentBookings);
+        if (!hasResidentSnapshot) {
+            setBannersLoading(banners.length === 0);
+        }
+        setReloadKey((current) => current + 1);
     };
 
     const today = getBelarusDate();
@@ -192,164 +915,110 @@ export default function Dashboard() {
     const nextWeekId = getBelarusWeekId(nextWeekStart);
 
     // Check if the user has a booking specifically for the *upcoming* week (next week slots)
-    const hasBookedForNextWeek = user ? allBookings.some(b => b.studentId === user.id && b.weekId === nextWeekId) : false;
+    const hasBookedForNextWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === nextWeekId);
 
-
-    const primaryUpcomingBooking = upcomingBookings[0] || null;
-
-    let mainActionLabel = 'Book Now';
-    let mainActionSubtitle = 'Book your slot for next week';
+    let mainActionLabel = t.bookNow;
+    let mainActionSubtitle = t.bookSubtitle;
 
     if (isSystemClosed) {
-        mainActionLabel = 'Check Status';
-        mainActionSubtitle = 'Bookings are currently closed';
+        mainActionLabel = t.checkStatus;
+        mainActionSubtitle = t.bookingsClosed;
     } else if (hasBookedForNextWeek) {
-        mainActionLabel = 'Booked';
-        mainActionSubtitle = 'You already booked. You can still open slots page to browse remaining slots';
+        mainActionLabel = t.booked;
+        mainActionSubtitle = t.bookedSubtitle;
     }
 
-    const getUpcomingDateForWeekday = (weekday: number) => {
-        const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
-        const dayOffset = weekday === 0 ? 6 : weekday - 1;
-        return addBelarusDays(baseWeekStart, dayOffset);
-    };
+    const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasCoreResidentSnapshot)
+        || (!loading && loadIssue === 'error' && !hasCoreResidentSnapshot);
+    const isDashboardShellBooting = loading && !hasCoreResidentSnapshot;
+    const showStatusSkeleton = isDashboardShellBooting
+        || (loading && (!hasCachedMachines || !hasCachedWeekBookings) && (machines.length === 0 || weekBookings.length === 0));
 
-    const handleQuickBookFromHistory = (booking: Booking) => {
-        setQuickBookModalBooking(booking);
-        setQuickBookModalMessage(null);
-    };
+    if (isDashboardShellBooting) {
+        mainActionLabel = t.openSlots;
+        mainActionSubtitle = t.loadingLatest;
+    }
 
-    const handleConfirmQuickBook = async () => {
-        if (!user || !quickBookModalBooking || quickBookingId) return;
-
-        const booking = quickBookModalBooking;
-        const sourceDate = new Date(`${booking.date}T00:00:00Z`);
-        const targetDate = getUpcomingDateForWeekday(getBelarusWeekday(sourceDate));
-        const targetDateLabel = format(targetDate, 'EEE, MMM d');
-
-        if (settings.forceCloseBookings || !isNextWeekOpen) {
-            setQuickBookModalMessage({ type: 'error', text: 'Quick Book is closed right now. Booking window is not open yet.' });
-            return;
-        }
-
-        const machine = machines.find(m => m.id === booking.machineId);
-        if (!machine || machine.status === 'maintenance') {
-            setQuickBookModalMessage({ type: 'error', text: 'Machine is under maintenance. Please choose another slot.' });
-            return;
-        }
-
-        const maintenanceDay = settings.maintenanceDay ?? 3;
-        if (getBelarusWeekday(targetDate) === maintenanceDay) {
-            setQuickBookModalMessage({ type: 'error', text: 'Selected day is maintenance day, so quick booking is unavailable.' });
-            return;
-        }
-
-        if (!TIME_SLOTS.includes(booking.startTime as (typeof TIME_SLOTS)[number])) {
-            setQuickBookModalMessage({ type: 'error', text: 'Original slot time is no longer available.' });
-            return;
-        }
-
-        const targetDateStr = formatBelarusDate(targetDate);
-        const existingSlotBooking = allBookings.find(b =>
-            b.date === targetDateStr && b.machineId === booking.machineId && b.startTime === booking.startTime
-        );
-
-        if (existingSlotBooking) {
-            const isYourExistingBooking = existingSlotBooking.studentId === user.id;
-            setQuickBookModalMessage({
-                type: 'error',
-                text: isYourExistingBooking
-                    ? 'You already booked this exact machine and slot for next week (likely from Book Now page).'
-                    : 'This exact machine and slot is already booked by another resident for next week.'
-            });
-            return;
-        }
-
-        setQuickBookingId(booking.id);
-
-        const bookingData: Booking = {
-            id: Date.now().toString(),
-            machineId: booking.machineId,
-            studentId: user.id,
-            studentName: user.name,
-            roomNumber: user.roomNumber,
-            date: targetDateStr,
-            startTime: booking.startTime,
-            endTime: booking.startTime,
-            weekId: getBelarusWeekId(targetDate),
-            createdAt: Date.now()
-        };
-
-        try {
-            const result = await firestoreService.createBooking(bookingData);
-            if (!result.success) {
-                const detailedError = result.error?.includes('Slot already booked by another student')
-                    ? 'This exact machine and slot was just booked by another resident. Please choose a different slot.'
-                    : result.error?.includes('already booked a slot for this week')
-                        ? 'You already have a booking for this week (including bookings made via Book Now page).'
-                        : result.error || 'Quick booking failed. Please try again.';
-                setQuickBookModalMessage({ type: 'error', text: detailedError });
-                return;
-            }
-
-            const refreshedBookings = await firestoreService.getBookings();
-            setAllBookings(refreshedBookings);
-
-            const myBookings = refreshedBookings.filter(b => b.studentId === user.id);
-            const chronological = [...myBookings].sort((a, b) =>
-                new Date(a.date + 'T' + a.startTime).getTime() - new Date(b.date + 'T' + b.startTime).getTime()
-            );
-            const now = new Date();
-            const futureBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) > now);
-            const pastBookings = chronological.filter(b => addMinutes(parseISO(b.date + 'T' + b.startTime), 90) <= now).reverse();
-
-            setUpcomingBookings(futureBookings);
-            setHistory(pastBookings);
-            setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
-
-            // Auto close on success
-            setTimeout(() => {
-                setQuickBookModalBooking(null);
-                setQuickBookModalMessage(null);
-            }, 2000);
-        } catch (error) {
-            console.error('Quick booking failed', error);
-            setQuickBookModalMessage({ type: 'error', text: 'Quick booking failed due to a system error.' });
-        } finally {
-            setQuickBookingId(null);
-        }
-    };
-
-
-    if (loading) {
+    if (showBlockingDashboardNotice) {
         return (
-            <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
-                <header style={{ marginBottom: '32px', marginTop: '16px' }}>
-                    <div style={{ height: '32px', width: '200px', background: 'var(--glass-border)', borderRadius: '8px', marginBottom: '8px' }} className="skeleton-pulse"></div>
-                    <div style={{ height: '20px', width: '100px', background: 'var(--glass-border)', borderRadius: '8px' }} className="skeleton-pulse"></div>
-                </header>
-                <div style={{ height: '140px', background: 'var(--glass-border)', borderRadius: '20px', marginBottom: '32px' }} className="skeleton-pulse"></div>
-                <div className="grid-cols-2">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} style={{ height: '120px', background: 'var(--glass-border)', borderRadius: '16px' }} className="skeleton-pulse"></div>
-                    ))}
-                </div>
+            <div className="container animate-fade-in flex-center" style={{ minHeight: '100vh', padding: '24px' }}>
+                <DataLoadNotice
+                    tone="error"
+                    title={residentLoadSlow ? t.dashboardSlowTitle : t.dashboardFailedTitle}
+                    description={loadErrorMessage ?? t.dashboardRetryDescription}
+                    onRetry={retryDashboardData}
+                    retryLabel={t.retryDashboard}
+                />
             </div>
         );
     }
+
     if (!user) return null;
 
-    const quickBookTargetDate = quickBookModalBooking
-        ? getUpcomingDateForWeekday(getBelarusWeekday(new Date(`${quickBookModalBooking.date}T00:00:00Z`)))
-        : null;
-    const quickBookMachine = quickBookModalBooking
-        ? machines.find(m => m.id === quickBookModalBooking.machineId)
-        : null;
-    const quickBookMachineLabel = quickBookMachine?.name || `Machine ${quickBookModalBooking?.machineId || ''}`;
-    const modalRoot = typeof document !== 'undefined' ? document.body : null;
+    const shouldShowRecentBookingsLoading = !recentBookingsHydrated || recentBookingsLoading;
+    const statusOverviewSkeleton = (
+        <div
+            className="glass-panel"
+            style={{
+                marginBottom: '20px',
+                padding: '20px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.2)'
+            }}
+        >
+            <div style={{ height: '20px', width: '132px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '14px' }} className="skeleton-pulse"></div>
+            <div style={{ height: '44px', width: '100%', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+        </div>
+    );
+    const machineStatusSkeleton = (
+        <div className="grid-cols-2">
+            {[1, 2, 3, 4].map((item) => (
+                <div
+                    key={item}
+                    className="glass-panel"
+                    style={{ height: '116px', borderRadius: '16px', background: 'var(--glass-border)' }}
+                >
+                    <div className="skeleton-pulse" style={{ width: '100%', height: '100%', borderRadius: '16px' }}></div>
+                </div>
+            ))}
+        </div>
+    );
+    const handlePrimaryBannerReady = () => {
+        if (bannerReadyMetricRef.current) return;
+        bannerReadyMetricRef.current = true;
+        finishResidentPerfSpan('resident:dashboard-banner-ready', {
+            banners: banners.length,
+        });
+    };
+
+    const handleResidentBookingCreated = (createdBooking: Booking) => {
+        startTransition(() => {
+            setWeekBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
+            setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
+        });
+    };
+
+    const handleResidentBookingCancelled = (cancelledBookingId: string) => {
+        startTransition(() => {
+            setWeekBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== cancelledBookingId));
+            setRecentBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== cancelledBookingId));
+        });
+    };
+    const topAlertType = settings.topAlert?.type ?? 'info';
+    const topAlertBackground = topAlertType === 'urgent'
+        ? 'rgba(239, 68, 68, 0.2)'
+        : topAlertType === 'warning'
+            ? 'rgba(245, 158, 11, 0.2)'
+            : 'rgba(59, 130, 246, 0.2)';
+    const topAlertIconColor = topAlertType === 'urgent'
+        ? 'var(--error)'
+        : topAlertType === 'warning'
+            ? '#d97706'
+            : 'var(--primary)';
 
     return (
-        <div className="container animate-fade-in">
+        <div className="container">
             {/* Top Alert Banner */}
             {settings.topAlert?.isActive && settings.topAlert.message && (
                 <div
@@ -361,11 +1030,7 @@ export default function Dashboard() {
                         right: 0,
                         zIndex: 100,
                         padding: '12px 16px',
-                        background: settings.topAlert.type === 'urgent'
-                            ? 'rgba(239, 68, 68, 0.25)' // Red glass
-                            : settings.topAlert.type === 'warning'
-                                ? 'rgba(245, 158, 11, 0.25)' // Amber glass
-                                : 'rgba(59, 130, 246, 0.25)', // Blue glass
+                        background: topAlertBackground,
                         backdropFilter: 'blur(12px)',
                         WebkitBackdropFilter: 'blur(12px)',
                         display: 'flex',
@@ -373,22 +1038,23 @@ export default function Dashboard() {
                         justifyContent: 'center',
                         gap: '8px',
                         color: 'var(--text-main)',
-                        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                        boxShadow: '0 4px 22px rgba(15, 23, 42, 0.14)',
+                        borderBottom: '1px solid var(--glass-border)'
                     }}
                 >
                     <div style={{
-                        background: 'rgba(255,255,255,0.2)',
+                        background: 'rgba(148, 163, 184, 0.14)',
                         padding: '4px',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        border: '1px solid rgba(148, 163, 184, 0.2)',
+                        color: topAlertIconColor
                     }}>
-                        {settings.topAlert.type === 'urgent' && <AlertTriangle size={16} fill="white" />}
-                        {settings.topAlert.type === 'info' && <Info size={16} />}
-                        {settings.topAlert.type === 'warning' && <AlertTriangle size={16} />}
+                        {topAlertType === 'urgent' && <AlertTriangle size={16} />}
+                        {topAlertType === 'info' && <Info size={16} />}
+                        {topAlertType === 'warning' && <AlertTriangle size={16} />}
                     </div>
                     <span style={{ fontWeight: 600, fontSize: '14px', textAlign: 'center', letterSpacing: '0.01em' }}>
                         {settings.topAlert.message}
@@ -397,29 +1063,259 @@ export default function Dashboard() {
             )}
 
             {/* Header */}
-            <header style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '32px',
-                marginTop: settings.topAlert?.isActive ? '48px' : '16px', // Push down if alert is visible
-                transition: 'margin-top 0.3s ease'
-            }}>
-                <div>
-                    <h2 style={{ margin: 0, fontSize: '24px' }}>Hello, {user.name.split(' ')[0]} 👋</h2>
-                    <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>Room {user.roomNumber}</p>
+            <header
+                className="resident-header"
+                style={{
+                    marginBottom: '32px',
+                    marginTop: settings.topAlert?.isActive ? '48px' : '16px',
+                    transition: 'margin-top 0.3s ease'
+                }}
+            >
+                <div className="resident-header-main">
+                    <div ref={roommateMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+                        <button
+                            type="button"
+                            onClick={handleRoommateButtonClick}
+                            onTouchStart={startRoommateHold}
+                            onTouchEnd={clearRoommateHold}
+                            onTouchCancel={clearRoommateHold}
+                            onMouseDown={startRoommateHold}
+                            onMouseUp={clearRoommateHold}
+                            onMouseLeave={clearRoommateHold}
+                            className="glass-button"
+                            style={{
+                                width: '52px',
+                                height: '52px',
+                                borderRadius: '50%',
+                                padding: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.12) 100%)',
+                                border: '1px solid rgba(99, 102, 241, 0.22)',
+                                boxShadow: '0 10px 24px rgba(37, 99, 235, 0.14)',
+                                cursor: canOpenRoommateMenu ? 'pointer' : 'default'
+                            }}
+                            aria-label={canOpenRoommateMenu ? t.switchRoommateProfile : t.currentResidentProfile}
+                        >
+                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.04em' }}>
+                                {getResidentInitialsForLanguage(user.name, isRussian)}
+                            </span>
+                            {canOpenRoommateMenu && (
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        right: '-2px',
+                                        bottom: '-2px',
+                                        width: '20px',
+                                        height: '20px',
+                                        borderRadius: '999px',
+                                        background: 'var(--glass-bg)',
+                                        border: '1px solid var(--glass-border)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'var(--primary)'
+                                    }}
+                                >
+                                    <ChevronDown size={12} />
+                                </span>
+                            )}
+                        </button>
+
+                        {isRoommateMenuOpen && (
+                            <div
+                                className="glass-panel animate-fade-in"
+                                style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 12px)',
+                                    left: 0,
+                                    width: 'min(320px, calc(100vw - 40px))',
+                                    borderRadius: '20px',
+                                    padding: '14px',
+                                    zIndex: 120,
+                                    background: 'var(--glass-bg)',
+                                    border: '1px solid var(--glass-border)',
+                                    boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)'
+                                }}
+                            >
+                                    <div style={{ marginBottom: '10px' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{t.bookForRoommate}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                                            {t.roommatesOnly(user.roomNumber)}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gap: '8px' }}>
+                                        {roommates.map((resident) => {
+                                            const isActiveResident = resident.id === user.id;
+                                            return (
+                                                <button
+                                                    key={resident.id}
+                                                    type="button"
+                                                    onClick={() => handleRoommateSwitch(resident)}
+                                                    className="glass-button"
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '12px 14px',
+                                                        borderRadius: '16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        gap: '10px',
+                                                        background: isActiveResident
+                                                            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(14, 165, 233, 0.12) 100%)'
+                                                            : 'rgba(148, 163, 184, 0.08)',
+                                                        border: isActiveResident
+                                                            ? '1px solid rgba(99, 102, 241, 0.22)'
+                                                            : '1px solid rgba(148, 163, 184, 0.2)',
+                                                        textAlign: 'left'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                        <div
+                                                            style={{
+                                                                width: '36px',
+                                                                height: '36px',
+                                                                borderRadius: '50%',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                background: isActiveResident ? 'rgba(99, 102, 241, 0.2)' : 'rgba(148, 163, 184, 0.16)',
+                                                                color: 'var(--text-main)',
+                                                                fontWeight: 700,
+                                                                border: '1px solid rgba(148, 163, 184, 0.24)',
+                                                                flexShrink: 0
+                                                            }}
+                                                        >
+                                                            {getResidentInitialsForLanguage(resident.name, isRussian)}
+                                                        </div>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {getResidentShortNameForLanguage(resident.name, isRussian)}
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                                {t.roomLabel(resident.roomNumber)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {isActiveResident && (
+                                                        <span
+                                                            style={{
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                borderRadius: '999px',
+                                                                background: 'rgba(16, 185, 129, 0.16)',
+                                                                color: 'var(--success)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0
+                                                            }}
+                                                        >
+                                                            <Check size={14} />
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+
+                                        {roommatesLoading && (
+                                            <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                {t.refreshingRoommates}
+                                            </div>
+                                        )}
+
+                                        {!roommatesLoading && roommates.length <= 1 && (
+                                            <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                {t.noOtherRoommates}
+                                            </div>
+                                        )}
+                                    </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="resident-header-copy">
+                        <div className="resident-header-title-row">
+                            <h2 className="resident-header-title">
+                                {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)} 👋
+                            </h2>
+                            <button
+                                onClick={handleLogout}
+                                className="glass-button resident-header-logout"
+                                style={{
+                                    padding: '8px',
+                                    borderRadius: '50%',
+                                    width: '40px',
+                                    height: '40px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <LogOut size={20} />
+                            </button>
+                        </div>
+                        <div className="resident-header-meta">
+                            <p className="resident-header-room">
+                                {t.roomLabel(user.roomNumber)}
+                            </p>
+                            {canOpenRoommateMenu && (
+                                <p className="resident-header-switch-hint">
+                                    {t.tapAvatarToSwitch}
+                                </p>
+                            )}
+                        </div>
+                    </div>
                 </div>
-                <button
-                    onClick={handleLogout}
-                    className="glass-button"
-                    style={{ padding: '8px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                    <LogOut size={20} />
-                </button>
+                <div className="resident-header-actions">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const nextLanguage: ResidentPortalLanguage = language === 'ru' ? 'en' : 'ru';
+                            setLanguage(nextLanguage);
+                            setResidentPortalLanguage(nextLanguage);
+                        }}
+                        className="glass-button"
+                        style={{
+                            padding: '8px 14px',
+                            borderRadius: '999px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        <Languages size={16} />
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{t.switchLanguage}</span>
+                    </button>
+                </div>
             </header>
 
+            {loadIssue === 'saved' && (
+                <div style={{ marginBottom: '20px' }}>
+                    <DataLoadNotice
+                        compact
+                        title={t.showingSavedTitle}
+                        description={loadErrorMessage ?? t.showingSavedDescription}
+                        onRetry={retryDashboardData}
+                        retryLabel={t.refreshData}
+                    />
+                </div>
+            )}
+
             {/* Announcements Carousel */}
-            <BannerCarousel banners={banners} isLoading={bannersLoading} />
+            <div>
+                <BannerCarousel
+                    banners={banners}
+                    isLoading={bannersLoading}
+                    onPrimaryBannerReady={handlePrimaryBannerReady}
+                />
+            </div>
 
             {/* Main Action */}
             <div
@@ -431,27 +1327,41 @@ export default function Dashboard() {
                 }}
             >
                 <div>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>Need to wash?</h3>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>{t.needToWash}</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
                         {mainActionSubtitle}
                     </p>
                 </div>
                 <button
-                    onClick={() => navigate('/book')}
-                    className="primary-button"
+                    onClick={handleOpenBooking}
+                    onMouseEnter={preloadBookingRoute}
+                    onTouchStart={preloadBookingRoute}
+                    className={hasBookedForNextWeek && !isSystemClosed ? '' : 'primary-button'}
                     style={{
                         padding: '10px 24px',
                         borderRadius: '10px',
-                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--success)' : 'var(--primary)',
+                        background: isSystemClosed
+                            ? 'var(--error)'
+                            : hasBookedForNextWeek
+                                ? 'var(--resident-ready-green)'
+                                : 'var(--primary)',
                         boxShadow: isSystemClosed
                             ? '0 0 15px rgba(239, 68, 68, 0.3)'
                             : hasBookedForNextWeek
-                                ? '0 0 15px rgba(16, 185, 129, 0.3)'
+                                ? '0 10px 24px rgba(16, 185, 129, 0.26)'
                                 : '0 0 15px var(--primary-glow)',
                         fontSize: '14px',
                         fontWeight: 600,
-                        border: 'none',
-                        color: 'white',
+                        border: isSystemClosed
+                            ? 'none'
+                            : hasBookedForNextWeek
+                                ? '1px solid var(--resident-ready-green)'
+                                : 'none',
+                        color: isSystemClosed
+                            ? 'white'
+                            : hasBookedForNextWeek
+                                ? '#ffffff'
+                                : 'white',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                     }}
@@ -462,566 +1372,185 @@ export default function Dashboard() {
 
 
             {/* Machine Status - Live View */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Status
-                    <span style={{
-                        fontSize: '12px',
-                        fontWeight: 'normal',
-                        background: 'var(--glass-button-bg)',
-                        border: '1px solid var(--glass-border)',
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        color: 'var(--text-muted)'
-                    }}>
-                        {format(new Date(), 'h:mm a')}
-                    </span>
-                </h3>
-            </div>
-
-            <div className="glass-panel" style={{
-                marginBottom: '20px',
-                padding: '20px',
-                borderRadius: '16px',
-                position: 'relative',
-                overflow: 'hidden',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
-                border: '1px solid rgba(99, 102, 241, 0.2)'
-            }}>
-                <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{
-                            background: 'rgba(99, 102, 241, 0.15)',
-                            padding: '12px',
-                            borderRadius: '14px',
-                            display: 'flex',
-                            position: 'relative'
+            <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {t.status}
+                            <span style={{
+                                fontSize: '12px',
+                                fontWeight: 'normal',
+                                background: 'var(--glass-button-bg)',
+                                border: '1px solid var(--glass-border)',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            color: 'var(--text-muted)'
                         }}>
-                            {/* Pulse effect */}
-                            <div className="skeleton-pulse" style={{
-                                position: 'absolute', inset: 0, borderRadius: '14px',
-                                background: 'var(--primary)', opacity: 0.25, zIndex: 0
-                            }}></div>
-                            <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
-                            <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{
-                                    width: '8px', height: '8px', borderRadius: '50%',
-                                    background: isSystemClosed ? 'var(--error)' : 'var(--success)',
-                                    boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
-                                }}></span>
-                                {isSystemClosed ? 'Closed' : 'Active'}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
-                            <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
-                                {slotCapacity.remainingSlots}
-                            </span>
-                            <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                / {slotCapacity.totalSlots}
-                            </span>
-                        </div>
-                    </div>
+                            {formatBelarusClockLabel(new Date(), dateLocale)}
+                        </span>
+                    </h3>
                 </div>
 
-                {/* Progress Bar background effect */}
-                <div style={{
-                    position: 'absolute', bottom: 0, left: 0, height: '4px',
-                    background: 'var(--glass-border)', width: '100%'
-                }}>
-                    <div style={{
-                        height: '100%',
-                        background: 'var(--primary)',
-                        width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
-                        transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                        boxShadow: '0 0 12px var(--primary-glow)'
-                    }}></div>
-                </div>
-            </div>
-            <div className="grid-cols-2">
-                {machines.map(machine => {
-                    const status = getMachineRealTimeStatus(machine);
-                    return (
-                        <div
-                            key={machine.id}
-                            className="glass-panel"
-                            style={{
-                                padding: '16px',
-                                borderRadius: '16px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '12px'
-                            }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div style={{
-                                    background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.2)`,
-                                    padding: '8px',
-                                    borderRadius: '10px'
-                                }}>
-                                    {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
-                                </div>
-                                <span style={{
-                                    fontSize: '12px',
-                                    padding: '4px 8px',
-                                    borderRadius: '10px',
-                                    background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`,
-                                    color: status.color
-                                }}>
-                                    {status.label}
-                                </span>
-                            </div>
-                            <div>
-                                <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
-                                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                    {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
-                                </p>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Your Bookings */}
-            <div style={{ marginTop: '32px' }}>
-                <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={20} /> Your Upcoming Booking
-                </h3>
-                {primaryUpcomingBooking ? (
-                    <div
-                        className="glass-panel"
-                        style={{
-                            padding: '24px',
-                            borderRadius: '20px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '20px',
-                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)',
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                {showStatusSkeleton ? (
+                    <>
+                        {statusOverviewSkeleton}
+                        {machineStatusSkeleton}
+                    </>
+                ) : (
+                    <>
+                        <div className="glass-panel" style={{
+                            marginBottom: '20px',
+                            padding: '20px',
+                            borderRadius: '16px',
                             position: 'relative',
                             overflow: 'hidden',
-                            boxShadow: '0 10px 30px rgba(0,0,0,0.05)'
-                        }}
-                    >
-                        {/* Decorative accent */}
-                        <div style={{
-                            position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
-                            background: 'linear-gradient(90deg, var(--success) 0%, #34d399 100%)'
-                        }} />
-
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
-                            <div style={{
-                                width: '64px',
-                                height: '64px',
-                                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%)',
-                                borderRadius: '16px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '1px solid rgba(16, 185, 129, 0.2)',
-                                flexShrink: 0
-                            }}>
-                                <Washer size={32} color="var(--success)" />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                                    <div>
-                                        <h4 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
-                                            {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMMM d')}
-                                        </h4>
-                                        <p style={{ margin: '4px 0 0', fontSize: '15px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{primaryUpcomingBooking.startTime}</span>
-                                            <span>•</span>
-                                            {machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}
-                                        </p>
-                                    </div>
+                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                            border: '1px solid rgba(99, 102, 241, 0.2)'
+                        }}>
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                                     <div style={{
-                                        background: 'rgba(16, 185, 129, 0.1)',
-                                        color: 'var(--success)',
-                                        padding: '4px 10px',
-                                        borderRadius: '12px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
+                                        background: 'rgba(99, 102, 241, 0.15)',
+                                        padding: '12px',
+                                        borderRadius: '14px',
                                         display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
+                                        position: 'relative'
                                     }}>
-                                        <Activity size={12} /> Confirmed
+                                        <div className="skeleton-pulse" style={{
+                                            position: 'absolute', inset: 0, borderRadius: '14px',
+                                            background: 'var(--primary)', opacity: 0.25, zIndex: 0
+                                        }}></div>
+                                        <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>{t.systemStatus}</div>
+                                        <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{
+                                                width: '8px', height: '8px', borderRadius: '50%',
+                                                background: isSystemClosed ? 'var(--error)' : 'var(--success)',
+                                                boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
+                                            }}></span>
+                                            {isSystemClosed ? t.closed : t.active}
+                                        </div>
                                     </div>
                                 </div>
+
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>{t.weekSlots}</div>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                        <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                            {slotCapacity.remainingSlots}
+                                        </span>
+                                        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                            / {slotCapacity.totalSlots}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{
+                                position: 'absolute', bottom: 0, left: 0, height: '4px',
+                                background: 'var(--glass-border)', width: '100%'
+                            }}>
+                                <div style={{
+                                    height: '100%',
+                                    background: 'var(--primary)',
+                                    width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
+                                    transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    boxShadow: '0 0 12px var(--primary-glow)'
+                                }}></div>
                             </div>
                         </div>
-
-                        {upcomingBookings.length > 1 && (
-                            <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: '4px' }}>
-                                    Also upcoming ({upcomingBookings.length - 1})
-                                </div>
-                                {upcomingBookings.slice(1, 3).map((booking) => (
+                        <div className="grid-cols-2">
+                            {machines.map((machine) => {
+                                const status = getMachineRealTimeStatus(machine);
+                                return (
                                     <div
-                                        key={booking.id}
+                                        key={machine.id}
+                                        className="glass-panel"
                                         style={{
                                             padding: '16px',
                                             borderRadius: '16px',
-                                            background: 'var(--glass-bg)',
-                                            border: '1px solid var(--glass-border)',
                                             display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
-                                            position: 'relative',
-                                            overflow: 'hidden'
+                                            flexDirection: 'column',
+                                            gap: '12px'
                                         }}
                                     >
-                                        <div style={{
-                                            position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
-                                            background: 'var(--primary)',
-                                            opacity: 0.8
-                                        }} />
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: '4px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div style={{
-                                                background: 'rgba(99, 102, 241, 0.1)',
-                                                padding: '10px',
-                                                borderRadius: '12px'
+                                                background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.2)`,
+                                                padding: '8px',
+                                                borderRadius: '10px'
                                             }}>
-                                                <Calendar size={18} color="var(--primary)" />
+                                                {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
                                             </div>
-                                            <div>
-                                                <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '2px' }}>
-                                                    {format(new Date(booking.date), 'EEEE, MMM d')}
-                                                </div>
-                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{booking.startTime}</span>
-                                                    <span>•</span>
-                                                    <span>{machines.find(m => m.id === booking.machineId)?.name || 'Machine'}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
-                            {/* Google Calendar Button */}
-                            <button
-                                onClick={() => {
-                                    if (!primaryUpcomingBooking) return;
-                                    const start = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
-                                    const end = addMinutes(start, 90);
-
-                                    const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, "").slice(0, 15) + 'Z';
-
-                                    const url = `https://www.google.com/calendar/render?action=TEMPLATE` +
-                                        `&text=${encodeURIComponent("Hostel Laundry: " + (machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || "Machine"))}` +
-                                        `&dates=${formatGCal(start)}/${formatGCal(end)}` +
-                                        `&details=${encodeURIComponent("Don't forget your laundry slot! Reminder target: 30 minutes before. Remember to clear the machine when done.")}` +
-                                        `&location=${encodeURIComponent("Laundry Room")}` +
-                                        `&sprop=&sprop=name:`;
-
-                                    window.open(url, '_blank');
-                                }}
-                                className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
-                            >
-                                <Calendar size={18} />
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Google Cal</span>
-                            </button>
-
-                            {/* ICS / Apple Calendar Button */}
-                            <button
-                                onClick={async () => {
-                                    if (!primaryUpcomingBooking) return;
-
-                                    const startDate = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
-                                    const endDate = addMinutes(startDate, 90);
-                                    const uid = `${primaryUpcomingBooking.id || Date.now()}@hostel-wash`;
-
-                                    const icsContent = [
-                                        'BEGIN:VCALENDAR',
-                                        'VERSION:2.0',
-                                        'PRODID:-//Hostel Wash//Booking Reminder//EN',
-                                        'CALSCALE:GREGORIAN',
-                                        'METHOD:PUBLISH',
-                                        'BEGIN:VEVENT',
-                                        `UID:${uid}`,
-                                        `DTSTAMP:${formatUtcForIcs(new Date())}`,
-                                        `DTSTART:${formatUtcForIcs(startDate)}`,
-                                        `DTEND:${formatUtcForIcs(endDate)}`,
-                                        `SUMMARY:Hostel Laundry - ${machines.find(m => m.id === primaryUpcomingBooking.machineId)?.name || 'Machine'}`,
-                                        'DESCRIPTION:Remember to empty the machine on time!',
-                                        'LOCATION:Laundry Room',
-                                        'BEGIN:VALARM',
-                                        `TRIGGER:-PT30M`,
-                                        'ACTION:DISPLAY',
-                                        'DESCRIPTION:Laundry Reminder',
-                                        'END:VALARM',
-                                        'END:VEVENT',
-                                        'END:VCALENDAR'
-                                    ].join('\r\n');
-
-                                    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-                                    const file = new File([blob], 'laundry-booking.ics', { type: 'text/calendar' });
-
-                                    try {
-                                        if (navigator.share && (navigator as any).canShare?.({ files: [file] })) {
-                                            await navigator.share({
-                                                files: [file],
-                                                title: 'Laundry Booking Reminder'
-                                            });
-                                            return;
-                                        }
-                                    } catch {
-                                        // If share is cancelled/unsupported, fallback to download.
-                                    }
-
-                                    const url = window.URL.createObjectURL(blob);
-
-                                    // iOS/Safari compatibility: attempt open in a new tab first, then fall back to explicit download.
-                                    const openedWindow = window.open(url, '_blank');
-                                    if (openedWindow) {
-                                        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-                                        return;
-                                    }
-
-                                    const link = document.createElement('a');
-                                    link.href = url;
-                                    link.setAttribute('download', 'laundry-booking.ics');
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                    window.URL.revokeObjectURL(url);
-                                }}
-                                className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
-                            >
-                                <Download size={18} />
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple / Outlook</span>
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div
-                        className="glass-panel"
-                        style={{
-                            padding: '20px',
-                            borderRadius: '16px',
-                            textAlign: 'center',
-                            color: 'var(--text-muted)'
-                        }}
-                    >
-                        <Calendar size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                        <p>No upcoming bookings.</p>
-                    </div>
-                )
-                }
-            </div >
-
-            {/* History */}
-            {
-                history.length > 0 && (
-                    <div style={{ marginTop: '32px' }}>
-                        <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <History size={20} /> Past Bookings
-                        </h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {history.slice(0, 5).map((booking) => {
-                                const machine = machines.find((m) => m.id === booking.machineId);
-                                const machineLabel = machine?.name || `Machine ${booking.machineId}`;
-                                return (
-                                    <div
-                                        key={booking.id}
-                                        className="glass-panel hover-card"
-                                        style={{
-                                            padding: '20px',
-                                            borderRadius: '16px',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            flexWrap: 'wrap',
-                                            gap: '16px',
-                                            border: '1px solid rgba(168, 85, 247, 0.2)',
-                                            background: 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)',
-                                            transition: 'transform 0.2s, background 0.2s',
-                                            position: 'relative',
-                                            overflow: 'hidden'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)';
-                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.4)';
-                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)';
-                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.2)';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                        }}
-                                    >
-                                        <div style={{
-                                            position: 'absolute', top: 0, left: 0, bottom: 0, width: '4px',
-                                            background: 'linear-gradient(to bottom, var(--success) 0%, #10b98188 100%)'
-                                        }} />
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
-                                            <div style={{
-                                                width: '48px',
-                                                height: '48px',
-                                                borderRadius: '12px',
-                                                background: 'rgba(168, 85, 247, 0.1)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#a855f7',
-                                                flexShrink: 0
+                                            <span style={{
+                                                fontSize: '12px',
+                                                padding: '4px 8px',
+                                                borderRadius: '10px',
+                                                background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`,
+                                                color: status.color
                                             }}>
-                                                <History size={24} />
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>
-                                                    {machineLabel} <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '4px' }}>• {booking.startTime}</span>
-                                                </div>
-                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <CheckCircle size={14} color="var(--success)" />
-                                                    {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
-                                                </div>
-                                            </div>
+                                                {status.label}
+                                            </span>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
-                                            <button
-                                                onClick={() => handleQuickBookFromHistory(booking)}
-                                                className="glass-button"
-                                                disabled={quickBookingId === booking.id}
-                                                style={{
-                                                    padding: '10px 16px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '13px',
-                                                    fontWeight: 600,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                                                    color: 'var(--primary)',
-                                                    background: 'rgba(168, 85, 247, 0.05)',
-                                                    opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                    cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
-                                                    transition: 'all 0.2s',
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (quickBookingId !== booking.id) {
-                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    if (quickBookingId !== booking.id) {
-                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
-                                                    }
-                                                }}
-                                            >
-                                                {quickBookingId === booking.id ? 'Booking...' : (
-                                                    <>
-                                                        Quick Book
-                                                        <ArrowRight size={14} />
-                                                    </>
-                                                )}
-                                            </button>
+                                        <div>
+                                            <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
+                                            <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                {status.state === 'available' ? t.ready : status.state === 'occupied' ? t.finishesSoon : t.closedShort}
+                                            </p>
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
-                    </div>
-                )
-            }
+                    </>
+                )}
+            </section>
 
-            {modalRoot && quickBookModalBooking && createPortal(
-                <div className="modal-overlay" onClick={() => setQuickBookModalBooking(null)}>
-                    <div className="glass-panel modal-card" onClick={(e) => e.stopPropagation()}>
-
-                        {quickBookModalMessage?.type === 'success' ? (
-                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', damping: 20, stiffness: 250 }}
-                                    style={{
-                                        background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
-                                    }}
-                                >
-                                    <CheckCircle size={32} color="var(--success)" />
-                                </motion.div>
-                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Confirmed!</h3>
-                                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{quickBookModalMessage.text}</p>
-                            </div>
-                        ) : (
-                            <>
-                                <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
-                                <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                                    {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
-                                </p>
-                                <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
-                                    Machine: {quickBookMachineLabel}
-                                </p>
-
-                                {quickBookModalMessage && (
-                                    <div
-                                        style={{
-                                            marginBottom: '14px',
-                                            padding: '10px 12px',
-                                            borderRadius: '10px',
-                                            fontSize: '13px',
-                                            color: quickBookModalMessage.type === 'info' ? 'var(--text-main)' : 'var(--error)',
-                                            border: quickBookModalMessage.type === 'info'
-                                                ? '1px solid rgba(16,185,129,0.4)'
-                                                : '1px solid rgba(239,68,68,0.4)',
-                                            background: quickBookModalMessage.type === 'info'
-                                                ? 'rgba(16,185,129,0.12)'
-                                                : 'rgba(239,68,68,0.12)'
-                                        }}
-                                    >
-                                        {quickBookModalMessage.text}
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                                    <button
-                                        onClick={() => setQuickBookModalBooking(null)}
-                                        className="glass-button"
-                                        style={{ padding: '10px 18px', borderRadius: '10px' }}
-                                    >
-                                        Close
-                                    </button>
-                                    <button
-                                        onClick={handleConfirmQuickBook}
-                                        disabled={quickBookingId === quickBookModalBooking.id}
-                                        className="primary-button"
-                                        style={{
-                                            padding: '10px 18px',
-                                            borderRadius: '10px',
-                                            opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
-                                            cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>,
-                modalRoot
-            )}
+            <div
+                ref={bookingSummarySectionRef}
+                className={`scroll-reveal${isBookingSummaryActive ? ' scroll-reveal--visible' : ''}`}
+                style={{
+                    minHeight: '220px',
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '220px'
+                }}
+            >
+                <div className={isBookingSummaryActive ? 'scroll-reveal-content' : undefined}>
+                    <Suspense fallback={null}>
+                        <LazyDashboardBookingSummary
+                            key={userId}
+                            user={user}
+                            machines={machines}
+                            recentBookings={recentBookings}
+                            recentBookingsLoading={shouldShowRecentBookingsLoading}
+                            weekBookings={weekBookings}
+                            settings={settings}
+                            isNextWeekOpen={isNextWeekOpen}
+                            isRussian={isRussian}
+                            onBookingCreated={handleResidentBookingCreated}
+                            onBookingCancelled={handleResidentBookingCancelled}
+                        />
+                    </Suspense>
+                </div>
+            </div>
 
             {/* Inline Feedback Section */}
-            <DashboardFeedback />
+            <div
+                ref={feedbackSectionRef}
+                className={`scroll-reveal${isFeedbackActive ? ' scroll-reveal--visible' : ''}`}
+                style={{
+                    minHeight: '132px',
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '132px'
+                }}
+            >
+                <div className={isFeedbackActive ? 'scroll-reveal-content' : undefined}>
+                    <Suspense fallback={null}>
+                        <LazyDashboardFeedback isRussian={isRussian} />
+                    </Suspense>
+                </div>
+            </div>
         </div>
     );
 }
