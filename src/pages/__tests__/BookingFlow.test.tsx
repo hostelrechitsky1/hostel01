@@ -36,6 +36,13 @@ vi.mock('../../services/residentFirestoreService', () => ({
     }
 }));
 
+vi.mock('../../services/residentMutationsService', () => ({
+    residentMutationsService: {
+        createBooking: vi.fn(() => Promise.resolve({ success: true })),
+        addFeedback: vi.fn(() => Promise.resolve()),
+    }
+}));
+
 vi.mock('react-confetti', () => ({
     default: () => <div data-testid="mock-confetti" />
 }));

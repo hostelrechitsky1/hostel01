@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
+import { residentMutationsService } from '../services/residentMutationsService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
@@ -289,7 +290,7 @@ export default function BookingFlow() {
         };
 
         try {
-            const result = await residentFirestoreService.createBooking(bookingData);
+            const result = await residentMutationsService.createBooking(bookingData);
             if (result.success) {
                 const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
                 hapticSuccess();

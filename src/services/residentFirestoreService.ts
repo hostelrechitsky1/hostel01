@@ -6,7 +6,6 @@ import {
     getDocs,
     onSnapshot,
     query,
-    runTransaction,
     setDoc,
     where,
 } from 'firebase/firestore';
@@ -16,7 +15,6 @@ import { normalizeBannerSource } from '../utils/bannerImages';
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
-const BOOKING_LIMITS_COL = 'bookingLimits';
 const SETTINGS_DOC = doc(db, 'settings', 'config');
 const CACHE_PREFIX = 'hostel-cache:v4';
 
@@ -100,7 +98,7 @@ const writeCache = <T>(key: string, value: T, persist = true) => {
     }
 };
 
-const clearCacheByPrefix = (prefix: string) => {
+export const clearResidentCacheByPrefix = (prefix: string) => {
     for (const key of Array.from(runtimeCache.keys())) {
         if (key.startsWith(prefix)) {
             runtimeCache.delete(key);
@@ -350,36 +348,6 @@ export const residentFirestoreService = {
         });
     },
 
-    async createBooking(booking: Booking): Promise<{ success: boolean; error?: string }> {
-        const slotId = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '-')}`;
-        const slotRef = doc(db, BOOKINGS_COL, slotId);
-        const limitId = `${booking.studentId}_${booking.weekId}`;
-        const limitRef = doc(db, BOOKING_LIMITS_COL, limitId);
-        const bookingRecord = { ...booking, id: slotId };
-
-        const result = await runTransaction(db, async (transaction) => {
-            const slotSnapshot = await transaction.get(slotRef);
-            if (slotSnapshot.exists()) {
-                return { success: false, error: 'Slot already booked by another student. Please try a different time.' };
-            }
-
-            const limitSnapshot = await transaction.get(limitRef);
-            if (limitSnapshot.exists()) {
-                return { success: false, error: 'You have already booked a slot for this week.' };
-            }
-
-            transaction.set(slotRef, bookingRecord);
-            transaction.set(limitRef, { studentId: booking.studentId, weekId: booking.weekId, bookingId: slotId });
-            return { success: true };
-        });
-
-        if (result.success) {
-            clearCacheByPrefix('bookings:');
-        }
-
-        return result;
-    },
-
     async getSettings(): Promise<AppSettings> {
         return resolveWithCache(cacheKeys.settings, CACHE_MAX_AGE_MS.settings, async () => {
             const configDoc = await getDoc(SETTINGS_DOC);
@@ -401,11 +369,6 @@ export const residentFirestoreService = {
                 vipLastAppliedWeekId: typeof data.vipLastAppliedWeekId === 'string' ? data.vipLastAppliedWeekId : DEFAULT_APP_SETTINGS.vipLastAppliedWeekId
             };
         });
-    },
-
-    async addFeedback(feedback: Feedback) {
-        await setDoc(doc(db, 'feedbacks', feedback.id), feedback);
-        clearCacheByPrefix('feedbacks:');
     },
 
     async getFeedbacksForResident(

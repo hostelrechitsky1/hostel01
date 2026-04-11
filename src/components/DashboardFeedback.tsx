@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
 import { residentFirestoreService } from '../services/residentFirestoreService';
+import { residentMutationsService } from '../services/residentMutationsService';
 import type { Feedback, FeedbackType } from '../types';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
@@ -72,7 +73,7 @@ export default function DashboardFeedback() {
         setLoading(true);
 
         try {
-            await residentFirestoreService.addFeedback({
+            await residentMutationsService.addFeedback({
                 id: Date.now().toString(),
                 studentId: user.id,
                 studentName: user.name,

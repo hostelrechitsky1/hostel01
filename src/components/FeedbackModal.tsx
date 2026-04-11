@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { residentFirestoreService } from '../services/residentFirestoreService';
 import { bookingService } from '../services/bookingService';
+import { residentMutationsService } from '../services/residentMutationsService';
 import { X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -21,7 +21,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         const user = bookingService.getCurrentUser();
 
         try {
-            await residentFirestoreService.addFeedback({
+            await residentMutationsService.addFeedback({
                 id: Date.now().toString(),
                 studentId: user?.id,
                 studentName: user?.name || 'Anonymous',
