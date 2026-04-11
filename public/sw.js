@@ -1,11 +1,12 @@
-const VERSION = 'v5'
+const VERSION = 'v6'
 const STATIC_CACHE = `app-static-${VERSION}`
 const DOCUMENT_CACHE = `app-documents-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
 const PRECACHE_URLS = ['/', '/index.html']
 const IMAGE_HOSTS = [
   'drive.google.com',
-  'lh3.googleusercontent.com'
+  'lh3.googleusercontent.com',
+  'googleusercontent.com'
 ]
 
 self.addEventListener('install', (event) => {

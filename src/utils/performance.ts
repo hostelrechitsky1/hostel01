@@ -90,13 +90,31 @@ export const shouldShowResidentPerfDebug = () => {
     if (typeof window === 'undefined') return false;
 
     try {
+        const hostname = window.location.hostname;
+        const isNetlifyPreview = hostname.endsWith('.netlify.app')
+            && hostname !== 'hostelone.netlify.app'
+            && hostname !== 'www.hostelone.netlify.app';
+
         const params = new URLSearchParams(window.location.search);
         if (params.get('perf') === '1') {
             window.localStorage.setItem('hostel_perf_debug', '1');
             return true;
         }
 
-        return window.localStorage.getItem('hostel_perf_debug') === '1';
+        const storedPreference = window.localStorage.getItem('hostel_perf_debug');
+        if (storedPreference === '1') {
+            return true;
+        }
+
+        if (storedPreference === '0') {
+            return false;
+        }
+
+        if (isNetlifyPreview) {
+            return true;
+        }
+
+        return false;
     } catch {
         return false;
     }
@@ -109,7 +127,7 @@ export const setResidentPerfDebug = (enabled: boolean) => {
         if (enabled) {
             window.localStorage.setItem('hostel_perf_debug', '1');
         } else {
-            window.localStorage.removeItem('hostel_perf_debug');
+            window.localStorage.setItem('hostel_perf_debug', '0');
         }
     } catch {
         // Ignore debug preference persistence issues.

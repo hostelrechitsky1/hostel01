@@ -6,7 +6,6 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
-import clsx from 'clsx';
 import { toast } from 'sonner';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
@@ -29,6 +28,7 @@ import { preloadDashboardRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from '../components/ActionSpinner';
+import { finishResidentPerfSpan } from '../utils/performance';
 
 const LazyConfetti = lazy(() => import('react-confetti'));
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -74,6 +74,8 @@ export default function BookingFlow() {
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [loading, setLoading] = useState(() => Boolean(userId) && (!hasCachedMachines || !hasCachedWeekBookings));
     const [submitting, setSubmitting] = useState(false);
+    const [liveSyncRequested, setLiveSyncRequested] = useState(false);
+    const [liveSyncAttached, setLiveSyncAttached] = useState(false);
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
     const [reloadKey, setReloadKey] = useState(0);
     const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
@@ -88,10 +90,47 @@ export default function BookingFlow() {
         || bookings.length > 0;
     const bookingLoadSlow = useSlowLoadFlag(loading, 4500);
     const bookingSnapshotRef = useRef(hasBookingSnapshot);
+    const liveSyncReasonRef = useRef<'interaction' | 'idle' | 'retry' | null>(null);
+    const bookingShellMetricRef = useRef(false);
+    const bookingDataMetricRef = useRef(false);
+    const bookingLiveMetricRef = useRef(false);
 
     useEffect(() => {
         bookingSnapshotRef.current = hasBookingSnapshot;
     }, [hasBookingSnapshot]);
+
+    useEffect(() => {
+        bookingShellMetricRef.current = false;
+        bookingDataMetricRef.current = false;
+        bookingLiveMetricRef.current = false;
+        liveSyncReasonRef.current = null;
+        setLiveSyncRequested(false);
+        setLiveSyncAttached(false);
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId || bookingShellMetricRef.current) return;
+        bookingShellMetricRef.current = true;
+        finishResidentPerfSpan('resident:dashboard-to-booking-shell', {
+            cachedCore: hasBookingSnapshot,
+        });
+    }, [hasBookingSnapshot, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || bookingDataMetricRef.current) return;
+        bookingDataMetricRef.current = true;
+        finishResidentPerfSpan('resident:booking-data-ready', {
+            cachedCore: hasBookingSnapshot,
+        });
+    }, [hasBookingSnapshot, loading, userId]);
+
+    useEffect(() => {
+        if (!userId || !liveSyncAttached || bookingLiveMetricRef.current) return;
+        bookingLiveMetricRef.current = true;
+        finishResidentPerfSpan('resident:booking-live-ready', {
+            source: liveSyncReasonRef.current ?? 'unknown',
+        });
+    }, [liveSyncAttached, userId]);
 
     useEffect(() => {
         if (!bookingLoadSlow || !loading || !hasBookingSnapshot) {
@@ -103,6 +142,18 @@ export default function BookingFlow() {
         setLoading(false);
     }, [bookingLoadSlow, hasBookingSnapshot, loading]);
 
+    const requestLiveSync = (reason: 'interaction' | 'idle' | 'retry') => {
+        if (!liveSyncReasonRef.current || liveSyncReasonRef.current === 'idle') {
+            liveSyncReasonRef.current = reason;
+        }
+
+        if (reason !== 'idle') {
+            void loadResidentLiveService();
+        }
+
+        setLiveSyncRequested(true);
+    };
+
     useEffect(() => {
         if (!userId) {
             navigate('/login');
@@ -113,10 +164,6 @@ export default function BookingFlow() {
         let isMounted = true;
         let machinesReady = hasCachedMachines;
         let bookingsReady = hasCachedWeekBookings;
-        let unsubscribeMachines = () => { /* noop */ };
-        let unsubscribeBookings = () => { /* noop */ };
-        let liveAttachTimeoutId: number | null = null;
-        let idleHandle: number | null = null;
 
         const finishLoadingIfReady = () => {
             if (isMounted && machinesReady && bookingsReady) {
@@ -178,31 +225,60 @@ export default function BookingFlow() {
                 toast.error('Failed to load booking settings. Using saved defaults.');
             });
 
+        return () => {
+            isMounted = false;
+        };
+    }, [bookingWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || liveSyncRequested) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            requestLiveSync('idle');
+        }, 2200);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [liveSyncRequested, loading, reloadKey, userId]);
+
+    useEffect(() => {
+        if (!userId || !liveSyncRequested) {
+            return;
+        }
+
+        let isMounted = true;
+        let unsubscribeMachines = () => { /* noop */ };
+        let unsubscribeBookings = () => { /* noop */ };
+        let idleHandle: number | null = null;
+        let liveAttachTimeoutId: number | null = null;
+        const liveSyncReason = liveSyncReasonRef.current;
+
         const attachLiveStreams = () => {
             void loadResidentLiveService()
                 .then(({ residentLiveService }) => {
                     if (!isMounted) return;
 
+                    setLiveSyncAttached(true);
+
                     unsubscribeMachines = residentLiveService.subscribeToMachines((nextMachines) => {
                         if (!isMounted) return;
-                        machinesReady = true;
                         startTransition(() => {
                             setMachines(nextMachines);
                         });
-                        finishLoadingIfReady();
                     }, (error) => {
-                        handleBookingLoadError('Machine streaming error:', error);
+                        console.error('Machine streaming error:', error);
                     });
 
                     unsubscribeBookings = residentLiveService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
                         if (!isMounted) return;
-                        bookingsReady = true;
                         startTransition(() => {
                             setBookings(nextBookings);
                         });
-                        finishLoadingIfReady();
                     }, (error) => {
-                        handleBookingLoadError('Booking streaming error:', error);
+                        console.error('Booking streaming error:', error);
                     });
                 })
                 .catch((error) => {
@@ -210,7 +286,11 @@ export default function BookingFlow() {
                 });
         };
 
-        if (typeof window !== 'undefined') {
+        if (typeof window === 'undefined') {
+            attachLiveStreams();
+        } else if (liveSyncReason === 'interaction' || liveSyncReason === 'retry') {
+            attachLiveStreams();
+        } else {
             const idleWindow = window as Window & typeof globalThis & {
                 requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
                 cancelIdleCallback?: (handle: number) => void;
@@ -220,12 +300,10 @@ export default function BookingFlow() {
                 idleHandle = idleWindow.requestIdleCallback(() => {
                     idleHandle = null;
                     attachLiveStreams();
-                }, { timeout: 1200 });
+                }, { timeout: 900 });
             } else {
-                liveAttachTimeoutId = window.setTimeout(attachLiveStreams, 280);
+                liveAttachTimeoutId = window.setTimeout(attachLiveStreams, 120);
             }
-        } else {
-            attachLiveStreams();
         }
 
         return () => {
@@ -242,7 +320,7 @@ export default function BookingFlow() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [bookingWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
+    }, [bookingWeekIds, liveSyncRequested, reloadKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -399,6 +477,7 @@ export default function BookingFlow() {
     const isMaintenanceDay = getBelarusWeekday(selectedDate) === maintenanceDay;
     const maintenanceDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][maintenanceDay];
     const retryBookingData = () => {
+        requestLiveSync('retry');
         if (hasBookingSnapshot) {
             setLoadIssue('saved');
             setLoadErrorMessage('Reconnecting to live slot updates...');
@@ -644,8 +723,13 @@ export default function BookingFlow() {
                         return (
                             <button
                                 key={date.toISOString()}
-                                onClick={() => { setSelectedDate(date); setSelectedSlot(null); setSelectedMachine(null); }}
-                                className={clsx('glass-panel')}
+                                onClick={() => {
+                                    requestLiveSync('interaction');
+                                    setSelectedDate(date);
+                                    setSelectedSlot(null);
+                                    setSelectedMachine(null);
+                                }}
+                                className="glass-panel"
                                 style={{
                                     minWidth: '80px',
                                     padding: '16px 12px',
@@ -752,6 +836,8 @@ export default function BookingFlow() {
                                     disabled={isFull || isPassed}
                                     onClick={() => {
                                         if (!isFull && !isPassed) {
+                                            requestLiveSync('interaction');
+                                            void loadResidentMutationsService();
                                             if (selectedSlot === time) {
                                                 setSelectedSlot(null);
                                             } else {
@@ -802,6 +888,7 @@ export default function BookingFlow() {
                                                     disabled={isBooked}
                                                     onClick={() => {
                                                         if (!isBooked) {
+                                                            requestLiveSync('interaction');
                                                             void loadResidentMutationsService();
                                                             hapticSoftPulse();
                                                             setSelectedMachine(m);

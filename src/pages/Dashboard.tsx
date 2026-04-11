@@ -14,7 +14,7 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
-import { finishResidentPerfSpan } from '../utils/performance';
+import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
@@ -527,6 +527,14 @@ export default function Dashboard() {
         navigate('/login');
     };
 
+    const handleOpenBooking = () => {
+        preloadBookingRoute();
+        startResidentPerfSpan('resident:dashboard-to-booking-shell');
+        startResidentPerfSpan('resident:booking-data-ready');
+        startResidentPerfSpan('resident:booking-live-ready');
+        navigate('/book');
+    };
+
     const ensureRoommatesLoaded = (forceRefresh = false) => {
         if (!user?.roomNumber || roommatesLoading) {
             return;
@@ -1011,7 +1019,7 @@ export default function Dashboard() {
                     </p>
                 </div>
                 <button
-                    onClick={() => navigate('/book')}
+                    onClick={handleOpenBooking}
                     onMouseEnter={preloadBookingRoute}
                     onTouchStart={preloadBookingRoute}
                     className="primary-button"

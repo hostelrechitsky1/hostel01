@@ -48,6 +48,22 @@ const roundBannerWidth = (requestedWidth: number) => {
     return BANNER_WIDTH_STEPS.find((step) => step >= requestedWidth) ?? BANNER_WIDTH_STEPS[BANNER_WIDTH_STEPS.length - 1];
 };
 
+const getResponsiveBannerWidths = (priority: boolean) => {
+    const connection = getConnectionInfo();
+    const effectiveType = connection?.effectiveType;
+    const saveData = connection?.saveData === true;
+
+    if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
+        return priority ? [240, 360] : [180, 240];
+    }
+
+    if (effectiveType === '3g') {
+        return priority ? [360, 480, 640] : [240, 360, 480];
+    }
+
+    return priority ? [360, 480, 640, 840, 960] : [240, 360, 480, 640, 720];
+};
+
 const isDriveThumbnailBanner = (source: string) => {
     return source.includes('drive.google.com/thumbnail');
 };
@@ -115,6 +131,21 @@ export const getBannerWarmSources = (source: string, options?: { priority?: bool
         previewSource: getTinyBannerSrc(source),
         fullSource: getAdaptiveBannerSrc(source, options)
     };
+};
+
+export const getBannerResponsiveSrcSet = (source: string, options?: { priority?: boolean }) => {
+    const normalizedSource = normalizeBannerSource(source);
+    if (!isDriveThumbnailBanner(normalizedSource)) {
+        return undefined;
+    }
+
+    return getResponsiveBannerWidths(Boolean(options?.priority))
+        .map((width) => `${replaceDriveThumbnailWidth(normalizedSource, width)} ${width}w`)
+        .join(', ');
+};
+
+export const getBannerResponsiveSizes = () => {
+    return '(max-width: 640px) calc(100vw - 32px), (max-width: 960px) 92vw, 720px';
 };
 
 export const hasWarmBannerImage = (source: string) => {

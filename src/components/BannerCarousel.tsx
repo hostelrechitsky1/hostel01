@@ -3,6 +3,8 @@ import type { Banner } from '../types';
 import {
     ensureBannerPreloadLink,
     getBannerWarmSources,
+    getBannerResponsiveSizes,
+    getBannerResponsiveSrcSet,
     hasWarmBannerImage,
     markBannerImageLoaded,
     preloadBannerImage,
@@ -46,6 +48,7 @@ const SmartImage = ({
     const imgRef = useRef<HTMLImageElement>(null);
     const adaptiveSrcRef = useRef<string | null>(null);
     const previewSrcRef = useRef<string | null>(null);
+    const responsiveSrcSetRef = useRef<string | undefined>(getBannerResponsiveSrcSet(src, { priority }));
     const displayReadySourceRef = useRef<string | null>(null);
 
     useEffect(() => {
@@ -54,6 +57,7 @@ const SmartImage = ({
 
         adaptiveSrcRef.current = fullSource;
         previewSrcRef.current = previewSource;
+        responsiveSrcSetRef.current = getBannerResponsiveSrcSet(src, { priority });
         displayReadySourceRef.current = null;
         setPreviewLoaded(hasWarmBannerImage(previewSource));
         setLoaded(hasWarmBannerImage(nextDisplaySrc));
@@ -149,6 +153,13 @@ const SmartImage = ({
         return null;
     }
 
+    const shouldUseResponsiveSourceSet = Boolean(
+        loaded
+        && adaptiveSrcRef.current
+        && imgSrc === adaptiveSrcRef.current
+        && responsiveSrcSetRef.current
+    );
+
     return (
         <>
             {/* Skeleton Loader - Visible while image is loading */}
@@ -184,6 +195,8 @@ const SmartImage = ({
                 draggable={false}
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
+                srcSet={shouldUseResponsiveSourceSet ? responsiveSrcSetRef.current : undefined}
+                sizes={shouldUseResponsiveSourceSet ? getBannerResponsiveSizes() : undefined}
             />
         </>
     );
