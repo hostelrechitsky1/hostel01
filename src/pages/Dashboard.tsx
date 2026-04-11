@@ -176,15 +176,15 @@ export default function Dashboard() {
         ref: bookingSummarySectionRef,
         isActive: isBookingSummaryActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '120px 0px',
-        idleTimeout: 1400,
+        rootMargin: '0px 0px 56px 0px',
+        idleTimeout: null,
     });
     const {
         ref: feedbackSectionRef,
         isActive: isFeedbackActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '60px 0px',
-        idleTimeout: 2200,
+        rootMargin: '0px 0px 48px 0px',
+        idleTimeout: null,
     });
     const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
     const [roommatesLoading, setRoommatesLoading] = useState(false);
@@ -258,12 +258,18 @@ export default function Dashboard() {
         if (typeof window === 'undefined') return;
         if (window.sessionStorage.getItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY) !== '1') return;
 
+        let userStartedScrolling = false;
         const forceScrollToTop = () => {
+            if (userStartedScrolling) return;
             const scrollingElement = document.scrollingElement ?? document.documentElement;
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
             scrollingElement.scrollTop = 0;
             document.documentElement.scrollTop = 0;
             document.body.scrollTop = 0;
+        };
+        const markUserScroll = () => {
+            userStartedScrolling = true;
+            window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
         };
 
         forceScrollToTop();
@@ -272,7 +278,7 @@ export default function Dashboard() {
             requestAnimationFrame(forceScrollToTop),
             requestAnimationFrame(() => requestAnimationFrame(forceScrollToTop)),
         ];
-        const timeoutIds = [80, 180, 320, 520, 760, 1040].map((delay) => (
+        const timeoutIds = [80, 180, 320, 520, 760].map((delay) => (
             window.setTimeout(forceScrollToTop, delay)
         ));
         const viewport = window.visualViewport;
@@ -280,19 +286,21 @@ export default function Dashboard() {
         const finish = window.setTimeout(() => {
             forceScrollToTop();
             window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
-        }, 1280);
+        }, 900);
 
         viewport?.addEventListener('resize', handleViewportShift);
-        window.addEventListener('pageshow', forceScrollToTop);
-        window.addEventListener('focus', forceScrollToTop);
+        window.addEventListener('scroll', markUserScroll, { passive: true });
+        window.addEventListener('touchstart', markUserScroll, { passive: true });
+        window.addEventListener('wheel', markUserScroll, { passive: true });
 
         return () => {
             rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
             timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
             window.clearTimeout(finish);
             viewport?.removeEventListener('resize', handleViewportShift);
-            window.removeEventListener('pageshow', forceScrollToTop);
-            window.removeEventListener('focus', forceScrollToTop);
+            window.removeEventListener('scroll', markUserScroll);
+            window.removeEventListener('touchstart', markUserScroll);
+            window.removeEventListener('wheel', markUserScroll);
         };
     }, [user?.id]);
 
@@ -1289,20 +1297,32 @@ export default function Dashboard() {
                     onClick={handleOpenBooking}
                     onMouseEnter={preloadBookingRoute}
                     onTouchStart={preloadBookingRoute}
-                    className="primary-button"
+                    className={hasBookedForNextWeek && !isSystemClosed ? '' : 'primary-button'}
                     style={{
                         padding: '10px 24px',
                         borderRadius: '10px',
-                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--resident-ready-green)' : 'var(--primary)',
+                        background: isSystemClosed
+                            ? 'var(--error)'
+                            : hasBookedForNextWeek
+                                ? 'var(--resident-ready-green-soft)'
+                                : 'var(--primary)',
                         boxShadow: isSystemClosed
                             ? '0 0 15px rgba(239, 68, 68, 0.3)'
                             : hasBookedForNextWeek
-                                ? '0 0 15px var(--resident-ready-green-glow)'
+                                ? 'none'
                                 : '0 0 15px var(--primary-glow)',
                         fontSize: '14px',
                         fontWeight: 600,
-                        border: 'none',
-                        color: 'white',
+                        border: isSystemClosed
+                            ? 'none'
+                            : hasBookedForNextWeek
+                                ? '1px solid var(--resident-ready-green-border)'
+                                : 'none',
+                        color: isSystemClosed
+                            ? 'white'
+                            : hasBookedForNextWeek
+                                ? 'var(--resident-ready-green)'
+                                : 'white',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                     }}
