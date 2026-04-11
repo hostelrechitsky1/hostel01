@@ -1182,7 +1182,7 @@ export default function Dashboard() {
             </div>
 
             {/* Inline Feedback Section */}
-            <div ref={feedbackSectionRef} className="animate-fade-in" style={{ minHeight: '132px' }}>
+            <div ref={feedbackSectionRef} style={{ minHeight: '132px' }}>
                 {isFeedbackActive ? (
                     <Suspense fallback={feedbackFallback}>
                         <LazyDashboardFeedback />

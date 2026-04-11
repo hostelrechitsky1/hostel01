@@ -215,7 +215,7 @@ export default function DashboardBookingSummary({
 
     return (
         <>
-            <div className="animate-fade-in" style={{ marginTop: '32px' }}>
+            <div style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={20} /> Your Upcoming Booking
                 </h3>
@@ -446,7 +446,7 @@ export default function DashboardBookingSummary({
             </div>
 
             {(recentBookingsLoading || history.length > 0) && (
-                <div className="animate-fade-in" style={{ marginTop: '32px' }}>
+                <div style={{ marginTop: '32px' }}>
                     <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <History size={20} /> Past Bookings
                     </h3>
@@ -460,7 +460,7 @@ export default function DashboardBookingSummary({
                                 return (
                                     <div
                                         key={booking.id}
-                                        className="glass-panel hover-card animate-fade-in"
+                                        className="glass-panel hover-card"
                                         style={{
                                             padding: '20px',
                                             borderRadius: '16px',
@@ -576,7 +576,6 @@ export default function DashboardBookingSummary({
                         {quickBookModalMessage?.type === 'success' ? (
                             <div style={{ textAlign: 'center', padding: '20px 0' }}>
                                 <div
-                                    className="animate-fade-in"
                                     style={{
                                         background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'

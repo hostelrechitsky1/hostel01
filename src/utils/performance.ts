@@ -90,11 +90,6 @@ export const shouldShowResidentPerfDebug = () => {
     if (typeof window === 'undefined') return false;
 
     try {
-        const hostname = window.location.hostname;
-        const isNetlifyPreview = hostname.endsWith('.netlify.app')
-            && hostname !== 'hostelone.netlify.app'
-            && hostname !== 'www.hostelone.netlify.app';
-
         const params = new URLSearchParams(window.location.search);
         if (params.get('perf') === '1') {
             window.localStorage.setItem('hostel_perf_debug', '1');
@@ -108,10 +103,6 @@ export const shouldShowResidentPerfDebug = () => {
 
         if (storedPreference === '0') {
             return false;
-        }
-
-        if (isNetlifyPreview) {
-            return true;
         }
 
         return false;
