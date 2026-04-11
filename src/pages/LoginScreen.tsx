@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { Building, ArrowRight, Languages, User } from 'lucide-react';
@@ -27,52 +27,6 @@ const resetPageScroll = () => {
     scrollingElement.scrollTop = 0;
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
-};
-
-const waitForLoginViewportToSettle = async () => {
-    if (typeof window === 'undefined') return;
-
-    const viewport = window.visualViewport;
-    if (!viewport) {
-        await new Promise((resolve) => window.setTimeout(resolve, 120));
-        resetPageScroll();
-        return;
-    }
-
-    const keyboardGapThreshold = 110;
-    const isKeyboardLikelyOpen = () => window.innerHeight - viewport.height > keyboardGapThreshold;
-
-    if (!isKeyboardLikelyOpen()) {
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
-        resetPageScroll();
-        return;
-    }
-
-    await new Promise<void>((resolve) => {
-        let finished = false;
-
-        const cleanup = () => {
-            if (finished) return;
-            finished = true;
-            viewport.removeEventListener('resize', handleResize);
-            window.clearTimeout(timeoutId);
-            resolve();
-        };
-
-        const handleResize = () => {
-            resetPageScroll();
-            if (!isKeyboardLikelyOpen()) {
-                cleanup();
-            }
-        };
-
-        const timeoutId = window.setTimeout(cleanup, 260);
-        viewport.addEventListener('resize', handleResize, { passive: true });
-        handleResize();
-    });
-
-    await new Promise((resolve) => window.setTimeout(resolve, 32));
-    resetPageScroll();
 };
 
 export default function LoginScreen() {
@@ -144,40 +98,6 @@ export default function LoginScreen() {
 
         const timeoutId = window.setTimeout(startWarmup, 250);
         return () => window.clearTimeout(timeoutId);
-    }, []);
-
-    useLayoutEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const root = document.documentElement;
-        const body = document.body;
-        const viewport = window.visualViewport;
-        const keyboardGapThreshold = 110;
-        const setViewportHeight = () => {
-            const viewportHeight = viewport?.height ?? window.innerHeight;
-            root.style.setProperty('--resident-login-vh', `${viewportHeight}px`);
-            const keyboardOpen = Boolean(viewport && window.innerHeight - viewport.height > keyboardGapThreshold);
-            root.classList.toggle('resident-login-keyboard-open', keyboardOpen);
-            body.classList.toggle('resident-login-keyboard-open', keyboardOpen);
-        };
-
-        root.classList.add('resident-login-route');
-        body.classList.add('resident-login-route');
-        setViewportHeight();
-        resetPageScroll();
-
-        window.addEventListener('resize', setViewportHeight, { passive: true });
-        viewport?.addEventListener('resize', setViewportHeight, { passive: true });
-
-        return () => {
-            root.classList.remove('resident-login-route');
-            root.classList.remove('resident-login-keyboard-open');
-            body.classList.remove('resident-login-route');
-            body.classList.remove('resident-login-keyboard-open');
-            root.style.removeProperty('--resident-login-vh');
-            window.removeEventListener('resize', setViewportHeight);
-            viewport?.removeEventListener('resize', setViewportHeight);
-        };
     }, []);
 
     useEffect(() => {
@@ -305,7 +225,6 @@ export default function LoginScreen() {
         bookingService.setCurrentRoommates(roommates);
         window.sessionStorage.setItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY, '1');
         preloadResidentRoutes();
-        const viewportSettlePromise = waitForLoginViewportToSettle();
         const warmupPromise = warmResidentAppData(student.id, {
             includeRecentBookings: true,
             roomNumber: student.roomNumber,
@@ -315,12 +234,9 @@ export default function LoginScreen() {
         startResidentPerfSpan('resident:dashboard-banner-ready');
 
         try {
-            await Promise.allSettled([
-                Promise.race([
-                    warmupPromise,
-                    new Promise((resolve) => window.setTimeout(resolve, 180)),
-                ]),
-                viewportSettlePromise,
+            await Promise.race([
+                warmupPromise,
+                new Promise((resolve) => window.setTimeout(resolve, 180)),
             ]);
         } catch {
             // Navigation should continue even if the warmup request fails.

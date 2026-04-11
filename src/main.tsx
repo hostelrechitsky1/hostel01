@@ -34,8 +34,34 @@ const ensureConnectionHints = () => {
   });
 };
 
+const isDeployPreviewHost = () => {
+  if (typeof window === 'undefined') return false;
+
+  const { hostname } = window.location;
+  return hostname.startsWith('deploy-preview-') || hostname.includes('--');
+};
+
+const cleanupPreviewServiceWorker = () => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  void navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      void registration.unregister();
+    });
+  });
+
+  if ('caches' in window) {
+    void caches.keys().then((cacheNames) => Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName))));
+  }
+};
+
 const registerServiceWorker = () => {
   if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
+
+  if (isDeployPreviewHost()) {
+    cleanupPreviewServiceWorker();
+    return;
+  }
 
   const startRegistration = () => {
     let didRefreshForController = false;
