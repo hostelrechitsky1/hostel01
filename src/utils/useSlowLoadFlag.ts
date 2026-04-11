@@ -1,20 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function useSlowLoadFlag(isLoading: boolean, delayMs = 4500) {
-    const [isSlow, setIsSlow] = useState(false);
+    const [slowCycle, setSlowCycle] = useState<number | null>(null);
+    const cycleRef = useRef(0);
 
     useEffect(() => {
-        if (!isLoading) {
-            setIsSlow(false);
-            return;
-        }
+        cycleRef.current += 1;
+        const cycle = cycleRef.current;
+        if (!isLoading) return;
 
         const timeoutId = window.setTimeout(() => {
-            setIsSlow(true);
+            setSlowCycle((current) => current === cycle ? current : cycle);
         }, delayMs);
 
         return () => window.clearTimeout(timeoutId);
     }, [delayMs, isLoading]);
 
-    return isSlow;
+    /* eslint-disable-next-line react-hooks/refs */
+    return isLoading && slowCycle === cycleRef.current;
 }

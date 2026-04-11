@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Banner } from '../types';
 import {
     ensureBannerPreloadLink,
@@ -33,7 +33,7 @@ const SmartImage = ({
     source: Banner;
     alt: string;
     className?: string;
-    style?: any;
+    style?: CSSProperties;
     priority?: boolean;
     shouldLoad?: boolean;
     onDisplayReady?: () => void;
@@ -55,12 +55,13 @@ const SmartImage = ({
         || initialRememberedSrc === initialAdaptiveSrc
     ));
     const imgRef = useRef<HTMLImageElement>(null);
-    const adaptiveSrcRef = useRef<string | null>(null);
-    const previewSrcRef = useRef<string | null>(null);
-    const rememberedDisplaySrcRef = useRef<string | undefined>(initialRememberedSrc);
-    const responsiveSrcSetRef = useRef<string | undefined>(getBannerResponsiveSrcSet(source, { priority }));
     const displayReadySourceRef = useRef<string | null>(null);
+    const [adaptiveSrc, setAdaptiveSrc] = useState(initialAdaptiveSrc);
+    const [previewSrc, setPreviewSrc] = useState(initialPreviewSrc);
+    const [rememberedDisplaySrc, setRememberedDisplaySrc] = useState<string | undefined>(initialRememberedSrc);
+    const [responsiveSrcSet, setResponsiveSrcSet] = useState<string | undefined>(getBannerResponsiveSrcSet(source, { priority }));
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
         const { previewSource, fullSource } = getBannerWarmSources(source, { priority });
         const rememberedDisplaySrc = getRememberedBannerDisplaySource(source);
@@ -68,10 +69,10 @@ const SmartImage = ({
             ? fullSource
             : (rememberedDisplaySrc ?? previewSource);
 
-        adaptiveSrcRef.current = fullSource;
-        previewSrcRef.current = previewSource;
-        rememberedDisplaySrcRef.current = rememberedDisplaySrc;
-        responsiveSrcSetRef.current = getBannerResponsiveSrcSet(source, { priority });
+        setAdaptiveSrc(fullSource);
+        setPreviewSrc(previewSource);
+        setRememberedDisplaySrc(rememberedDisplaySrc);
+        setResponsiveSrcSet(getBannerResponsiveSrcSet(source, { priority }));
         displayReadySourceRef.current = null;
         setPreviewLoaded(
             hasWarmBannerImage(previewSource)
@@ -106,14 +107,15 @@ const SmartImage = ({
             return preloadBannerImage(fullSource);
         });
     }, [priority, shouldLoad, source]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
         if (!shouldLoad) return;
-        if (!previewLoaded || !adaptiveSrcRef.current || !previewSrcRef.current) return;
-        if (previewSrcRef.current === adaptiveSrcRef.current) return;
-        if (imgSrc === adaptiveSrcRef.current) return;
+        if (!previewLoaded || !adaptiveSrc || !previewSrc) return;
+        if (previewSrc === adaptiveSrc) return;
+        if (imgSrc === adaptiveSrc) return;
 
-        const nextAdaptiveSrc = adaptiveSrcRef.current;
+        const nextAdaptiveSrc = adaptiveSrc;
         let isActive = true;
 
         void preloadBannerImage(nextAdaptiveSrc).then(() => {
@@ -124,8 +126,9 @@ const SmartImage = ({
         return () => {
             isActive = false;
         };
-    }, [imgSrc, previewLoaded, shouldLoad]);
+    }, [adaptiveSrc, imgSrc, previewLoaded, previewSrc, shouldLoad]);
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
         if (!shouldLoad) return;
         if (imgRef.current?.complete && hasWarmBannerImage(imgSrc)) {
@@ -133,6 +136,7 @@ const SmartImage = ({
             setPreviewLoaded(true);
         }
     }, [imgSrc, shouldLoad]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
         if (!loaded) return;
@@ -143,14 +147,14 @@ const SmartImage = ({
 
     useEffect(() => {
         if (!loaded) return;
-        if (!adaptiveSrcRef.current) return;
-        if (imgSrc !== adaptiveSrcRef.current) return;
+        if (!adaptiveSrc) return;
+        if (imgSrc !== adaptiveSrc) return;
         onFullLoad?.();
-    }, [imgSrc, loaded, onFullLoad]);
+    }, [adaptiveSrc, imgSrc, loaded, onFullLoad]);
 
     const handleError = () => {
-        if (rememberedDisplaySrcRef.current && imgSrc === rememberedDisplaySrcRef.current && previewSrcRef.current && previewSrcRef.current !== imgSrc) {
-            setImgSrc(previewSrcRef.current);
+        if (rememberedDisplaySrc && imgSrc === rememberedDisplaySrc && previewSrc && previewSrc !== imgSrc) {
+            setImgSrc(previewSrc);
             setLoaded(false);
             setError(false);
             return;
@@ -161,8 +165,8 @@ const SmartImage = ({
             const idMatch = imgSrc.match(/id=([^&]+)/);
             if (idMatch && idMatch[1]) {
                 const newSrc = `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
-                adaptiveSrcRef.current = newSrc;
-                previewSrcRef.current = newSrc;
+                setAdaptiveSrc(newSrc);
+                setPreviewSrc(newSrc);
                 setImgSrc(newSrc);
                 // We are trying a new source, so we are "loading" again
                 setLoaded(false);
@@ -180,9 +184,9 @@ const SmartImage = ({
 
     const shouldUseResponsiveSourceSet = Boolean(
         loaded
-        && adaptiveSrcRef.current
-        && imgSrc === adaptiveSrcRef.current
-        && responsiveSrcSetRef.current
+        && adaptiveSrc
+        && imgSrc === adaptiveSrc
+        && responsiveSrcSet
     );
 
     return (
@@ -221,7 +225,7 @@ const SmartImage = ({
                 draggable={false}
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
-                srcSet={shouldUseResponsiveSourceSet ? responsiveSrcSetRef.current : undefined}
+                srcSet={shouldUseResponsiveSourceSet ? responsiveSrcSet : undefined}
                 sizes={shouldUseResponsiveSourceSet ? getBannerResponsiveSizes(source) : undefined}
             />
         </>
@@ -247,6 +251,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
     const [activatedIndexes, setActivatedIndexes] = useState<Set<number>>(() => new Set([0]));
     const [fullyReadyIndexes, setFullyReadyIndexes] = useState<Set<number>>(() => new Set());
     const [pendingAutoAdvanceIndex, setPendingAutoAdvanceIndex] = useState<number | null>(null);
+    const pendingAutoAdvanceIndexRef = useRef<number | null>(null);
 
     // Minimum swipe distance to trigger slide change
     const minSwipeDistance = 50;
@@ -291,6 +296,11 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
             nextIndexes.add(index);
             return nextIndexes;
         });
+
+        if (pendingAutoAdvanceIndexRef.current === index) {
+            setCurrentIndex(index);
+            setPendingAutoAdvanceIndex(null);
+        }
     };
 
     const prepareBannerIndex = (index: number, priority = false, previewOnly = false) => {
@@ -343,6 +353,10 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
     }, []);
 
     useEffect(() => {
+        pendingAutoAdvanceIndexRef.current = pendingAutoAdvanceIndex;
+    }, [pendingAutoAdvanceIndex]);
+
+    useEffect(() => {
         if (activeBanners.length <= 1 || isDragging || !isVisible || !isPageVisible || pendingAutoAdvanceIndex !== null) return;
 
         const startInterval = () => {
@@ -379,18 +393,6 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
             window.clearTimeout(warmNextBannerTimer);
         };
     }, [activeBanners, currentIndex, isPageVisible, isVisible]);
-
-    useEffect(() => {
-        if (pendingAutoAdvanceIndex === null) return;
-        if (fullyReadyIndexes.has(pendingAutoAdvanceIndex)) {
-            setCurrentIndex(pendingAutoAdvanceIndex);
-            setPendingAutoAdvanceIndex(null);
-        }
-    }, [fullyReadyIndexes, pendingAutoAdvanceIndex]);
-
-    useEffect(() => {
-        setPendingAutoAdvanceIndex(null);
-    }, [currentIndex]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);

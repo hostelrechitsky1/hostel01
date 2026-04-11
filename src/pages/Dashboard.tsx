@@ -204,6 +204,7 @@ export default function Dashboard() {
         });
     }, [banners.length, bannersLoading]);
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
         setRoommates(getInitialRoommates(user));
     }, [user?.id, user?.roomNumber]);
@@ -213,6 +214,7 @@ export default function Dashboard() {
         setRecentBookingsHydrated(hasCachedRecentBookings);
         setRecentBookingsLoading(Boolean(userId) && isBookingSummaryActive && !hasCachedRecentBookings);
     }, [cachedRecentBookings, hasCachedRecentBookings, isBookingSummaryActive, userId]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
         if (!isRoommateMenuOpen) return;
@@ -241,6 +243,7 @@ export default function Dashboard() {
         };
     }, []);
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
         if (!residentLoadSlow || !loading || !hasCoreResidentSnapshot) {
             return;
@@ -250,6 +253,7 @@ export default function Dashboard() {
         setLoadErrorMessage('Showing saved dashboard data while live updates reconnect in the background.');
         setLoading(false);
     }, [hasCoreResidentSnapshot, loading, residentLoadSlow]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
         if (!userId) {
@@ -417,6 +421,7 @@ export default function Dashboard() {
         };
     }, [dashboardWeekIds, navigate, reloadKey, userId]);
 
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
         if (!userId || !isBookingSummaryActive) {
             return;
@@ -506,6 +511,7 @@ export default function Dashboard() {
             unsubscribeRecentBookings();
         };
     }, [hasCachedRecentBookings, isBookingSummaryActive, reloadKey, userId]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 

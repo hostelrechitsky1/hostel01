@@ -558,10 +558,14 @@ export default function BookingFlow() {
 
                 notifyError(getBookNowFailureMessage(result.errorCode, result.error));
             }
-        } catch (e: any) {
-            console.error('Booking transaction failed:', e);
-            console.error('Error details:', e.message, e.code);
-            notifyError(`System error: ${e.message || 'Please try again.'}`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Please try again.';
+            const errorCode = typeof error === 'object' && error !== null && 'code' in error
+                ? String((error as { code?: unknown }).code ?? '')
+                : '';
+            console.error('Booking transaction failed:', error);
+            console.error('Error details:', errorMessage, errorCode);
+            notifyError(`System error: ${errorMessage}`);
         } finally {
             if (!bookingSucceeded) {
                 setPendingBooking(null);

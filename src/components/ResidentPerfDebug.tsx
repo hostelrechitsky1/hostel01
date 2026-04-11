@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { Activity, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { getResidentPerfMetrics, setResidentPerfDebug, shouldShowResidentPerfDebug } from '../utils/performance';
-
-type ResidentPerfMetric = ReturnType<typeof getResidentPerfMetrics>[number];
 
 const formatMetricLabel = (name: string) => {
     return name
@@ -15,20 +13,23 @@ const formatMetricLabel = (name: string) => {
 
 export function ResidentPerfDebug() {
     const location = useLocation();
-    const [enabled, setEnabled] = useState(() => shouldShowResidentPerfDebug());
+    const [dismissed, setDismissed] = useState(false);
     const [expanded, setExpanded] = useState(false);
-    const [metrics, setMetrics] = useState<ResidentPerfMetric[]>(() => getResidentPerfMetrics());
-
-    useEffect(() => {
-        setEnabled(shouldShowResidentPerfDebug());
-        setMetrics(getResidentPerfMetrics());
-    }, [location.search]);
+    const [metricsVersion, refreshMetrics] = useReducer((current) => current + 1, 0);
+    const enabled = useMemo(
+        () => shouldShowResidentPerfDebug() && !dismissed,
+        [dismissed, location.search]
+    );
+    const metrics = useMemo(
+        () => getResidentPerfMetrics(),
+        [location.search, metricsVersion]
+    );
 
     useEffect(() => {
         if (!enabled) return;
 
         const handleMetric = () => {
-            setMetrics(getResidentPerfMetrics());
+            refreshMetrics();
         };
 
         window.addEventListener('hostel:resident-performance', handleMetric as EventListener);
@@ -115,7 +116,7 @@ export function ResidentPerfDebug() {
                             type="button"
                             onClick={() => {
                                 setResidentPerfDebug(false);
-                                setEnabled(false);
+                                setDismissed(true);
                             }}
                             className="glass-button"
                             style={{

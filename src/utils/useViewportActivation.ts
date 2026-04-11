@@ -12,7 +12,7 @@ export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
     idleTimeout = null,
 }: ViewportActivationOptions = {}) {
     const [node, setNode] = useState<T | null>(null);
-    const [isActive, setIsActive] = useState(initiallyActive);
+    const [isActive, setIsActive] = useState(() => initiallyActive || typeof window === 'undefined');
 
     const activate = useCallback(() => {
         setIsActive(true);
@@ -24,15 +24,12 @@ export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
 
     useEffect(() => {
         if (isActive) return;
-        if (typeof window === 'undefined') {
-            setIsActive(true);
-            return;
-        }
         if (!node) return;
 
         let observer: IntersectionObserver | null = null;
         let idleCallbackId: number | null = null;
         let idleFallbackTimeoutId: number | null = null;
+        let immediateActivationTimeoutId: number | null = null;
 
         const activateSection = () => {
             setIsActive(true);
@@ -48,7 +45,7 @@ export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
 
             observer.observe(node);
         } else {
-            activateSection();
+            immediateActivationTimeoutId = window.setTimeout(activateSection, 0);
         }
 
         if (idleTimeout !== null) {
@@ -74,6 +71,9 @@ export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
             }
             if (idleFallbackTimeoutId !== null) {
                 window.clearTimeout(idleFallbackTimeoutId);
+            }
+            if (immediateActivationTimeoutId !== null) {
+                window.clearTimeout(immediateActivationTimeoutId);
             }
         };
     }, [idleTimeout, isActive, node, rootMargin]);

@@ -46,7 +46,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 setType('feature'); // Reset to default
                 onClose();
             }, 2000);
-        } catch (error) {
+        } catch {
             notifyError('Failed to send feedback. Please try again.');
         } finally {
             setLoading(false);

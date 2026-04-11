@@ -58,6 +58,11 @@ const getFeedbackTypeIcon = (type: Feedback['type']) => {
 };
 
 const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const getManagerTopAlert = (topAlert: AppSettings['topAlert']) => ({
+    message: topAlert?.message ?? '',
+    isActive: topAlert?.isActive ?? false,
+    type: topAlert?.type ?? 'info',
+});
 
 export default function ManagerPanel() {
     const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
@@ -637,15 +642,13 @@ export default function ManagerPanel() {
     };
 
     const handleToggleSetting = async (key: 'forceShowNextWeek' | 'forceCloseBookings') => {
-        // @ts-ignore
         const newValue = !settings[key];
 
-        const messages = {
+        const messages: Record<'forceShowNextWeek' | 'forceCloseBookings', string> = {
             forceShowNextWeek: newValue ? "This will OPEN booking immediately." : "Returning to automatic schedule.",
             forceCloseBookings: newValue ? "This will CLOSE booking immediately (Kill Switch)." : "Booking will follow schedule rules."
         };
 
-        // @ts-ignore
         const confirmed = await confirmDialog('Confirm Setting Update', messages[key]);
         if (confirmed) {
             await firestoreService.updateSettings({ [key]: newValue });
@@ -825,8 +828,11 @@ export default function ManagerPanel() {
                                         {settings.topAlert?.isActive ? 'ACTIVE' : 'INACTIVE'}
                                     </span>
                                     <button
-                                        onClick={() => updateSettings({ 
-                                            topAlert: { ...settings.topAlert, isActive: !settings.topAlert?.isActive } as any 
+                                        onClick={() => updateSettings({
+                                            topAlert: {
+                                                ...getManagerTopAlert(settings.topAlert),
+                                                isActive: !settings.topAlert?.isActive
+                                            }
                                         })}
                                         style={{
                                             background: settings.topAlert?.isActive ? '#10b981' : '#ef4444',
@@ -858,7 +864,7 @@ export default function ManagerPanel() {
                                     placeholder="Alert Message (e.g. 'Gym is closed today')"
                                     value={settings.topAlert?.message || ''}
                                     onChange={(e) => {
-                                        const newAlert = { ...settings.topAlert, message: e.target.value } as any;
+                                        const newAlert = { ...getManagerTopAlert(settings.topAlert), message: e.target.value };
                                         setSettings(prev => ({ ...prev, topAlert: newAlert }));
                                     }}
                                     onBlur={() => updateSettings({ topAlert: settings.topAlert })}
@@ -877,9 +883,9 @@ export default function ManagerPanel() {
                                         <button
                                             key={type}
                                             onClick={() => {
-                                                const newAlert = { ...settings.topAlert, type };
-                                                setSettings(prev => ({ ...prev, topAlert: newAlert as any }));
-                                                updateSettings({ topAlert: newAlert as any });
+                                                const newAlert = { ...getManagerTopAlert(settings.topAlert), type };
+                                                setSettings(prev => ({ ...prev, topAlert: newAlert }));
+                                                updateSettings({ topAlert: newAlert });
                                             }}
                                             style={{
                                                 flex: 1,
