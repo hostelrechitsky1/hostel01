@@ -6,17 +6,18 @@ const canVibrate = () => {
 
 export const triggerHaptic = (pattern: HapticPattern) => {
     if (!canVibrate()) return;
+    navigator.vibrate(0);
     navigator.vibrate(pattern);
 };
 
 export const hapticSelection = () => {
-    triggerHaptic(12);
+    triggerHaptic(20);
 };
 
 export const hapticSoftPulse = () => {
-    triggerHaptic([10, 28, 14]);
+    triggerHaptic([18, 30, 18]);
 };
 
 export const hapticSuccess = () => {
-    triggerHaptic([20, 40, 20, 80, 20]);
+    triggerHaptic([30, 40, 30, 80, 30]);
 };

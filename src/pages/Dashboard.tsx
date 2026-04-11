@@ -16,7 +16,7 @@ import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBe
 import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { warmResidentAppData } from '../utils/warmResidentApp';
-import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
+import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const scrollRevealViewport = { once: true, amount: 0.18 };
@@ -41,6 +41,12 @@ const getResidentInitials = (name: string) => {
     if (parts.length === 0) return 'R';
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
+};
+
+const getResidentShortName = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 2) return parts.join(' ');
+    return `${parts[0]} ${parts[parts.length - 1]}`;
 };
 
 export default function Dashboard() {
@@ -173,28 +179,6 @@ export default function Dashboard() {
         setLoadErrorMessage('Showing saved dashboard data while live updates reconnect in the background.');
         setLoading(false);
     }, [hasResidentSnapshot, loading, residentLoadSlow]);
-
-    useEffect(() => {
-        const ensureTop = () => {
-            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-            document.documentElement.scrollTop = 0;
-            document.body.scrollTop = 0;
-        };
-
-        ensureTop();
-
-        const onPageShow = () => ensureTop();
-        const rafId = requestAnimationFrame(ensureTop);
-        const timeoutId = window.setTimeout(ensureTop, 120);
-
-        window.addEventListener('pageshow', onPageShow);
-
-        return () => {
-            cancelAnimationFrame(rafId);
-            window.clearTimeout(timeoutId);
-            window.removeEventListener('pageshow', onPageShow);
-        };
-    }, []);
 
     useEffect(() => {
         if (!userId) {
@@ -554,6 +538,7 @@ export default function Dashboard() {
 
             const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
             const createdBooking = { ...bookingData, id: createdSlotId };
+            hapticSuccess();
             startTransition(() => {
                 setWeekBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
                 setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
@@ -803,7 +788,7 @@ export default function Dashboard() {
                                                         </div>
                                                         <div style={{ minWidth: 0 }}>
                                                             <div style={{ fontSize: '14px', fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {resident.name}
+                                                                {getResidentShortName(resident.name)}
                                                             </div>
                                                             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                                                                 Room {resident.roomNumber}

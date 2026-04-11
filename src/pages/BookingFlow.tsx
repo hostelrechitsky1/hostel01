@@ -214,12 +214,6 @@ export default function BookingFlow() {
     }, [showConfirmModal, showConfirmation]);
 
     useEffect(() => {
-        if (showConfirmation) {
-            hapticSuccess();
-        }
-    }, [showConfirmation]);
-
-    useEffect(() => {
         if (!showConfirmation) return;
         const timer = window.setTimeout(() => setShowConfirmation(false), 1800);
         return () => window.clearTimeout(timer);
@@ -299,6 +293,7 @@ export default function BookingFlow() {
             const result = await firestoreService.createBooking(bookingData);
             if (result.success) {
                 const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
+                hapticSuccess();
                 startTransition(() => {
                     setBookings((currentBookings) => upsertBooking(currentBookings, { ...bookingData, id: createdSlotId }));
                 });

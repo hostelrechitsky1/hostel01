@@ -49,37 +49,53 @@ function ScrollToTopOnRouteChange() {
 
   useEffect(() => {
     forceScrollToTop();
+    let userStartedScrolling = false;
 
     const rafIds = [
       requestAnimationFrame(() => {
-        forceScrollToTop();
+        if (!userStartedScrolling) {
+          forceScrollToTop();
+        }
       }),
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          forceScrollToTop();
+          if (!userStartedScrolling) {
+            forceScrollToTop();
+          }
         });
       })
     ];
 
     const timeoutIds = [60, 180, 320, 520].map((delay) => {
       return window.setTimeout(() => {
-        forceScrollToTop();
+        if (!userStartedScrolling) {
+          forceScrollToTop();
+        }
       }, delay);
     });
 
     const visualViewport = window.visualViewport;
     const handleViewportShift = () => {
-      forceScrollToTop();
+      if (!userStartedScrolling) {
+        forceScrollToTop();
+      }
+    };
+    const markUserScroll = () => {
+      userStartedScrolling = true;
     };
 
     visualViewport?.addEventListener('resize', handleViewportShift);
-    visualViewport?.addEventListener('scroll', handleViewportShift);
+    window.addEventListener('scroll', markUserScroll, { passive: true });
+    window.addEventListener('touchstart', markUserScroll, { passive: true });
+    window.addEventListener('wheel', markUserScroll, { passive: true });
 
     return () => {
       rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
       timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
       visualViewport?.removeEventListener('resize', handleViewportShift);
-      visualViewport?.removeEventListener('scroll', handleViewportShift);
+      window.removeEventListener('scroll', markUserScroll);
+      window.removeEventListener('touchstart', markUserScroll);
+      window.removeEventListener('wheel', markUserScroll);
     };
   }, [pathname, key]);
 
