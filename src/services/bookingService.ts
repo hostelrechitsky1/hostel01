@@ -1,4 +1,5 @@
 import type { Student } from '../types';
+import { clearResidentPortalLanguage } from '../utils/residentPortalLanguage';
 
 const STORAGE_KEYS = {
     CURRENT_USER: 'hostel_current_user',
@@ -39,6 +40,7 @@ class BookingService {
     logout() {
         localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
         localStorage.removeItem(STORAGE_KEYS.CURRENT_ROOMMATES);
+        clearResidentPortalLanguage();
     }
 }
 

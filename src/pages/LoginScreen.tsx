@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { Building, ArrowRight, User } from 'lucide-react';
+import { Building, ArrowRight, Languages, User } from 'lucide-react';
 import { ActionSpinner } from '../components/ActionSpinner';
 import type { Student } from '../types';
 import { preloadResidentRoutes } from '../utils/preloadRoutes';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { notifyError } from '../utils/notify';
+import { getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 
 let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
 
@@ -17,6 +18,7 @@ const loadResidentLookup = () => {
 };
 
 export default function LoginScreen() {
+    const [language, setLanguage] = useState<ResidentPortalLanguage>(() => getResidentPortalLanguage());
     const [step, setStep] = useState<1 | 1.5 | 2>(1);
     const [room, setRoom] = useState('');
     const [pin, setPin] = useState('');
@@ -24,6 +26,46 @@ export default function LoginScreen() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [selectingStudentId, setSelectingStudentId] = useState<string | null>(null);
+    const isRussian = language === 'ru';
+    const t = isRussian
+        ? {
+            portalTitle: 'Портал общежития',
+            portalSubtitle: 'Только для жильцов общежития',
+            switchLanguage: 'English',
+            roomLabel: 'Номер комнаты',
+            roomPlaceholder: 'например, 101, 52-2',
+            checking: 'Проверяем...',
+            findRoom: 'Найти комнату',
+            enterRoomPin: 'Введите PIN комнаты',
+            pinPlaceholder: '000',
+            verifyPin: 'Проверить PIN',
+            back: 'Назад',
+            whoAreYou: 'Кто вы?',
+            backToSearch: 'Вернуться к поиску',
+            residentsOnly: 'Строго только для жильцов общежития',
+            roomNotFound: 'Комната не найдена. Проверьте номер, например 101 или 52-2.',
+            failedToConnect: 'Не удалось подключиться к базе данных.',
+            incorrectPin: 'Неверный PIN комнаты.',
+        }
+        : {
+            portalTitle: 'Hostel Portal',
+            portalSubtitle: 'Hostel Residents Only',
+            switchLanguage: 'Русский',
+            roomLabel: 'Room Number',
+            roomPlaceholder: 'e.g. 101, 52-2',
+            checking: 'Checking...',
+            findRoom: 'Find Room',
+            enterRoomPin: 'Enter Room PIN',
+            pinPlaceholder: '000',
+            verifyPin: 'Verify PIN',
+            back: 'Back',
+            whoAreYou: 'Who are you?',
+            backToSearch: 'Back to Search',
+            residentsOnly: 'Strictly for Hostel Residents Only',
+            roomNotFound: 'Room not found. Please check the number (e.g. 101, 52-2).',
+            failedToConnect: 'Failed to connect to database.',
+            incorrectPin: 'Incorrect Room PIN.',
+        };
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -122,17 +164,18 @@ export default function LoginScreen() {
                     setStep(2); // Legacy/Unprotected flow
                 }
             } else {
-                notifyError('Room not found. Please check the number (e.g. 101, 52-2).');
+                notifyError(t.roomNotFound);
             }
         } catch (err) {
             finishResidentPerfSpan('resident:login-room-lookup', {
                 result: 'error',
             });
             console.error(err);
-            notifyError('Failed to connect to database.');
+            notifyError(t.failedToConnect);
         } finally {
             setLoading(false);
         }
+    // Intentionally keyed to current language so the toast/message matches the selected locale.
     };
 
     const handlePinSubmit = (e: React.FormEvent) => {
@@ -141,8 +184,14 @@ export default function LoginScreen() {
         if (pin === correctPin) {
             setStep(2);
         } else {
-            notifyError('Incorrect Room PIN.');
+            notifyError(t.incorrectPin);
         }
+    };
+
+    const toggleLanguage = () => {
+        const nextLanguage: ResidentPortalLanguage = language === 'ru' ? 'en' : 'ru';
+        setLanguage(nextLanguage);
+        setResidentPortalLanguage(nextLanguage);
     };
 
     const handleStudentSelect = async (student: Student) => {
@@ -205,6 +254,18 @@ export default function LoginScreen() {
                         justifyContent: 'center'
                     }}
                 >
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                        <button
+                            type="button"
+                            onClick={toggleLanguage}
+                            className="glass-button"
+                            style={{ padding: '8px 14px', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                        >
+                            <Languages size={16} />
+                            {t.switchLanguage}
+                        </button>
+                    </div>
+
                     <div style={{ textAlign: 'center', marginBottom: '30px' }}>
                         <div style={{
                             background: 'rgba(99, 102, 241, 0.2)',
@@ -218,22 +279,22 @@ export default function LoginScreen() {
                         }}>
                             <Building size={40} color="#818cf8" />
                         </div>
-                        <h1 className="text-gradient" style={{ margin: 0, fontSize: '28px' }}>Hostel Portal</h1>
-                        <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Hostel Residents Only</p>
+                        <h1 className="text-gradient" style={{ margin: 0, fontSize: '28px' }}>{t.portalTitle}</h1>
+                        <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>{t.portalSubtitle}</p>
                     </div>
 
                     {step === 1 ? (
                         <form onSubmit={handleRoomSubmit}>
                                 <div style={{ marginBottom: '20px' }}>
                                     <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>
-                                        Room Number
+                                        {t.roomLabel}
                                     </label>
                                     <input
                                         type="text"
                                         value={room}
                                         onChange={(e) => setRoom(e.target.value)}
                                         onFocus={handleRoomFieldFocus}
-                                        placeholder="e.g. 101, 52-2"
+                                        placeholder={t.roomPlaceholder}
                                         autoComplete="off"
                                         autoFocus
                                         style={{
@@ -266,12 +327,12 @@ export default function LoginScreen() {
                                         opacity: loading ? 0.7 : 1
                                     }}
                                 >
-                                    {loading ? 'Checking...' : 'Find Room'} <ArrowRight size={18} />
+                                    {loading ? t.checking : t.findRoom} <ArrowRight size={18} />
                                 </button>
                         </form>
                     ) : step === 1.5 ? (
                         <form onSubmit={handlePinSubmit}>
-                                <p style={{ textAlign: 'center', marginBottom: '16px' }}>Enter Room PIN</p>
+                                <p style={{ textAlign: 'center', marginBottom: '16px' }}>{t.enterRoomPin}</p>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
                                     <input
                                         type="password"
@@ -279,7 +340,7 @@ export default function LoginScreen() {
                                         maxLength={3}
                                         value={pin}
                                         onChange={(e) => setPin(e.target.value)}
-                                        placeholder="000"
+                                        placeholder={t.pinPlaceholder}
                                         autoFocus
                                         style={{
                                             width: '120px',
@@ -301,19 +362,19 @@ export default function LoginScreen() {
                                     className="primary-button"
                                     style={{ width: '100%', padding: '16px', borderRadius: '12px' }}
                                 >
-                                    Verify PIN
+                                    {t.verifyPin}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setStep(1)}
                                     style={{ background: 'none', border: 'none', color: 'var(--text-muted)', width: '100%', marginTop: '20px', cursor: 'pointer' }}
                                 >
-                                    Back
+                                    {t.back}
                                 </button>
                         </form>
                     ) : (
                         <div>
-                                <p style={{ textAlign: 'center', marginBottom: '16px' }}>Who are you?</p>
+                                <p style={{ textAlign: 'center', marginBottom: '16px' }}>{t.whoAreYou}</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {roommates.map(student => (
                                         <button
@@ -349,13 +410,13 @@ export default function LoginScreen() {
                                     onClick={() => setStep(1)}
                                     style={{ background: 'none', border: 'none', color: 'var(--text-muted)', width: '100%', marginTop: '20px', cursor: 'pointer' }}
                                 >
-                                    Back to Search
+                                    {t.backToSearch}
                                 </button>
                         </div>
                     )}
 
                     <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', marginTop: '24px' }}>
-                        Strictly for Hostel Residents Only
+                        {t.residentsOnly}
                     </p>
                 </div>
             </div>

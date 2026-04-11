@@ -9,6 +9,7 @@ import { residentFirestoreService } from '../services/residentFirestoreService';
 import type { Feedback, FeedbackType } from '../types';
 import { formatBelarusCompactTimestamp } from '../utils/time';
 import { notifyError, notifySuccess } from '../utils/notify';
+import { getResidentPortalDateLocale } from '../utils/residentPortalLanguage';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -38,8 +39,32 @@ const inferFeedbackType = (text: string): FeedbackType => {
     return 'other';
 };
 
-export default function DashboardFeedback() {
+export default function DashboardFeedback({ isRussian = false }: { isRussian?: boolean }) {
     const user = bookingService.getCurrentUser();
+    const dateLocale = getResidentPortalDateLocale(isRussian ? 'ru' : 'en');
+    const t = isRussian
+        ? {
+            heading: 'Обратная связь',
+            prompt: 'Есть предложение или нашли ошибку? Напишите нам напрямую.',
+            placeholder: 'Введите сообщение...',
+            roomLabel: (roomNumber: string) => `Комната ${roomNumber}`,
+            sent: 'Сообщение отправлено. Ответы администрации появятся ниже.',
+            failed: 'Не удалось отправить сообщение.',
+            hostelTeam: 'Команда общежития',
+            repliedToFeedback: 'Ответ на ваше сообщение',
+            yourFeedback: 'Ваше сообщение',
+        }
+        : {
+            heading: 'Feedback',
+            prompt: 'Have a suggestion or found a bug? Let us know directly.',
+            placeholder: 'Type your feedback here...',
+            roomLabel: (roomNumber: string) => `Room ${roomNumber}`,
+            sent: 'Feedback sent. Admin replies will appear below.',
+            failed: 'Failed to send feedback.',
+            hostelTeam: 'Hostel Team',
+            repliedToFeedback: 'Replied to your feedback',
+            yourFeedback: 'Your feedback',
+        };
     const cachedFeedbacks = useMemo(() => {
         if (!user) return undefined;
         return residentFirestoreService.getCachedFeedbacksForResident(
@@ -133,10 +158,10 @@ export default function DashboardFeedback() {
             });
 
             setText('');
-            notifySuccess('Feedback sent. Admin replies will appear below.');
+            notifySuccess(t.sent);
         } catch (error) {
             console.error('Failed to send feedback', error);
-            notifyError('Failed to send feedback.');
+            notifyError(t.failed);
         } finally {
             setLoading(false);
         }
@@ -148,7 +173,7 @@ export default function DashboardFeedback() {
         <div style={{ marginTop: '40px', paddingBottom: '40px' }}>
             <h3 style={{ margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <MessageSquare size={18} />
-                Feedback
+                {t.heading}
             </h3>
 
             <div
@@ -163,7 +188,7 @@ export default function DashboardFeedback() {
                 }}
             >
                 <p style={{ margin: '0 0 12px', color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
-                    Have a suggestion or found a bug? Let us know directly.
+                    {t.prompt}
                 </p>
 
                 <div
@@ -188,7 +213,7 @@ export default function DashboardFeedback() {
                                 }
                             }
                         }}
-                        placeholder="Type your feedback here..."
+                        placeholder={t.placeholder}
                         style={{
                             flex: 1,
                             height: '44px',
@@ -224,7 +249,7 @@ export default function DashboardFeedback() {
                 </div>
 
                 <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Room {user.roomNumber} • {user.name}
+                    {t.roomLabel(user.roomNumber)} • {user.name}
                 </div>
             </div>
 
@@ -261,9 +286,9 @@ export default function DashboardFeedback() {
                                             <Reply size={18} color="var(--primary)" />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>Hostel Team</div>
+                                            <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{t.hostelTeam}</div>
                                             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                Replied to your feedback
+                                                {t.repliedToFeedback}
                                             </div>
                                         </div>
                                     </div>
@@ -278,7 +303,7 @@ export default function DashboardFeedback() {
                                             border: '1px solid rgba(99, 102, 241, 0.16)'
                                         }}
                                     >
-                                        {formatBelarusCompactTimestamp(new Date(feedback.adminReply!.repliedAt))}
+                                        {formatBelarusCompactTimestamp(new Date(feedback.adminReply!.repliedAt), dateLocale)}
                                     </div>
                                 </div>
 
@@ -319,7 +344,7 @@ export default function DashboardFeedback() {
                                     }}
                                 >
                                     <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                                        Your feedback
+                                        {t.yourFeedback}
                                     </div>
                                     <div style={{ color: 'var(--text-main)', lineHeight: 1.55, whiteSpace: 'pre-wrap', fontSize: '14px' }}>
                                         {feedback.text}

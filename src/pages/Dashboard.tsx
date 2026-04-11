@@ -5,7 +5,7 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, WashingMachine as Washer } from 'lucide-react';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
@@ -18,6 +18,7 @@ import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
 import { notifySuccess } from '../utils/notify';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { getResidentInitials, getResidentShortName } from '../utils/residentNames';
+import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
@@ -82,7 +83,93 @@ const getInitialRoommates = (currentUser: Student | null) => {
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const [language, setLanguage] = useState<ResidentPortalLanguage>(() => getResidentPortalLanguage());
     const [user, setUser] = useState<Student | null>(() => bookingService.getCurrentUser());
+    const isRussian = language === 'ru';
+    const dateLocale = getResidentPortalDateLocale(language);
+    const t = isRussian
+        ? {
+            switchLanguage: 'English',
+            hello: 'Здравствуйте',
+            roomLabel: (roomNumber: string) => `Комната ${roomNumber}`,
+            tapAvatarToSwitch: ' • Нажмите на аватар, чтобы сменить жильца',
+            switchRoommateProfile: 'Сменить профиль жильца',
+            currentResidentProfile: 'Текущий профиль жильца',
+            bookForRoommate: 'Бронировать для соседа',
+            roommatesOnly: (roomNumber: string) => `Здесь можно выбрать только жильцов из комнаты ${roomNumber}.`,
+            refreshingRoommates: 'Обновляем список соседей...',
+            noOtherRoommates: 'Сейчас нет других соседей для переключения.',
+            showingSavedTitle: 'Показаны сохранённые данные панели',
+            showingSavedDescription: 'Живые обновления переподключаются в фоновом режиме. Вы можете продолжать пользоваться страницей.',
+            refreshData: 'Обновить данные',
+            dashboardSlowTitle: 'Панель загружается дольше обычного',
+            dashboardFailedTitle: 'Не удалось загрузить панель',
+            dashboardRetryDescription: 'Соединение может быть медленным. Попробуйте снова, чтобы обновить панель жильца.',
+            retryDashboard: 'Повторить',
+            needToWash: 'Нужно постирать?',
+            bookNow: 'Забронировать',
+            bookSubtitle: 'Забронируйте слот на следующую неделю',
+            checkStatus: 'Проверить статус',
+            bookingsClosed: 'Бронирование сейчас закрыто',
+            booked: 'Забронировано',
+            bookedSubtitle: 'У вас уже есть бронь. Вы всё ещё можете открыть страницу слотов и посмотреть свободные места.',
+            openSlots: 'Открыть слоты',
+            loadingLatest: 'Мы загружаем ваш актуальный статус бронирования в фоне.',
+            status: 'Статус',
+            systemStatus: 'Статус системы',
+            active: 'Активно',
+            closed: 'Закрыто',
+            weekSlots: 'Слоты недели',
+            readyToUse: 'Готово к использованию',
+            inUse: 'Занято',
+            maintenanceDay: 'День обслуживания',
+            underMaintenance: 'На обслуживании',
+            ready: 'Готово',
+            finishesSoon: 'Скоро освободится',
+            closedShort: 'Закрыто',
+            toastNewCancel: 'Новинка: теперь вы можете отменять свои будущие бронирования прямо с панели.',
+        }
+        : {
+            switchLanguage: 'Русский',
+            hello: 'Hello',
+            roomLabel: (roomNumber: string) => `Room ${roomNumber}`,
+            tapAvatarToSwitch: ' • Tap avatar to switch resident',
+            switchRoommateProfile: 'Switch roommate profile',
+            currentResidentProfile: 'Current resident profile',
+            bookForRoommate: 'Book For Roommate',
+            roommatesOnly: (roomNumber: string) => `Only residents from Room ${roomNumber} can be selected here.`,
+            refreshingRoommates: 'Refreshing roommate list...',
+            noOtherRoommates: 'No other roommates are available for switching right now.',
+            showingSavedTitle: 'Showing saved dashboard data',
+            showingSavedDescription: 'Live updates are reconnecting in the background. You can keep using the page.',
+            refreshData: 'Refresh Data',
+            dashboardSlowTitle: 'Dashboard is taking longer than usual',
+            dashboardFailedTitle: 'Unable to load dashboard',
+            dashboardRetryDescription: 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.',
+            retryDashboard: 'Retry Dashboard',
+            needToWash: 'Need to wash?',
+            bookNow: 'Book Now',
+            bookSubtitle: 'Book your slot for next week',
+            checkStatus: 'Check Status',
+            bookingsClosed: 'Bookings are currently closed',
+            booked: 'Booked',
+            bookedSubtitle: 'You already booked. You can still open slots page to browse remaining slots.',
+            openSlots: 'Open Slots',
+            loadingLatest: 'We’re loading your latest booking status in the background.',
+            status: 'Status',
+            systemStatus: 'System Status',
+            active: 'Active',
+            closed: 'Closed',
+            weekSlots: 'Week Slots',
+            readyToUse: 'Ready to use',
+            inUse: 'In Use',
+            maintenanceDay: 'Maintenance Day',
+            underMaintenance: 'Under Maintenance',
+            ready: 'Ready',
+            finishesSoon: 'Finishes soon',
+            closedShort: 'Closed',
+            toastNewCancel: 'New: you can now cancel your own upcoming bookings directly from the dashboard.',
+        };
     const userId = user?.id ?? '';
     const {
         ref: bookingSummarySectionRef,
@@ -228,7 +315,7 @@ export default function Dashboard() {
         }
 
         const timeoutId = window.setTimeout(() => {
-            notifySuccess('New: you can now cancel your own upcoming bookings directly from the dashboard.');
+            notifySuccess(t.toastNewCancel);
             window.localStorage.setItem(storageKey, '1');
             cancelToastSeenRef.current = storageKey;
         }, 900);
@@ -236,7 +323,7 @@ export default function Dashboard() {
         return () => {
             window.clearTimeout(timeoutId);
         };
-    }, [hasCoreResidentSnapshot, loadIssue, loading, userId]);
+    }, [hasCoreResidentSnapshot, loadIssue, loading, t.toastNewCancel, userId]);
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
@@ -284,9 +371,9 @@ export default function Dashboard() {
         }
 
         setLoadIssue('saved');
-        setLoadErrorMessage('Showing saved dashboard data while live updates reconnect in the background.');
+        setLoadErrorMessage(t.showingSavedDescription);
         setLoading(false);
-    }, [hasCoreResidentSnapshot, loading, residentLoadSlow]);
+    }, [hasCoreResidentSnapshot, loading, residentLoadSlow, t.showingSavedDescription]);
     /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
@@ -350,7 +437,7 @@ export default function Dashboard() {
         const handleResidentDataError = (label: string, error: unknown) => {
             console.error(label, error);
             if (!isMounted) return;
-            setLoadErrorMessage('We could not refresh the latest dashboard data. Retry to reconnect.');
+            setLoadErrorMessage(t.dashboardRetryDescription);
             setLoadIssue(coreResidentSnapshotRef.current ? 'saved' : 'error');
             setLoading(false);
         };
@@ -453,7 +540,7 @@ export default function Dashboard() {
             unsubscribeMachines();
             unsubscribeWeekBookings();
         };
-    }, [dashboardWeekIds, navigate, reloadKey, userId]);
+    }, [dashboardWeekIds, navigate, reloadKey, t.dashboardRetryDescription, userId]);
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
@@ -558,8 +645,8 @@ export default function Dashboard() {
         const maintenanceDay = settings.maintenanceDay ?? 3;
         const isMaintenanceDay = currentBWeekday === maintenanceDay;
 
-        if (isMaintenanceDay) return { state: 'maintenance', label: 'Maintenance Day', color: '#ef4444' };
-        if (machine.status === 'maintenance') return { state: 'maintenance', label: 'Under Maintenance', color: '#ef4444' };
+        if (isMaintenanceDay) return { state: 'maintenance', label: t.maintenanceDay, color: '#ef4444' };
+        if (machine.status === 'maintenance') return { state: 'maintenance', label: t.underMaintenance, color: '#ef4444' };
 
         const today = formatBelarusDate(getBelarusDate());
         const bookingsToday = weekBookings.filter(b => b.date === today);
@@ -573,10 +660,10 @@ export default function Dashboard() {
         });
 
         if (currentBooking) {
-            return { state: 'occupied', label: 'In Use', color: '#f59e0b' }; // Orange
+            return { state: 'occupied', label: t.inUse, color: '#f59e0b' }; // Orange
         }
 
-        return { state: 'available', label: 'Ready to use', color: '#10b981' };
+        return { state: 'available', label: t.readyToUse, color: '#10b981' };
     };
 
 
@@ -728,15 +815,15 @@ export default function Dashboard() {
     // Check if the user has a booking specifically for the *upcoming* week (next week slots)
     const hasBookedForNextWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === nextWeekId);
 
-    let mainActionLabel = 'Book Now';
-    let mainActionSubtitle = 'Book your slot for next week';
+    let mainActionLabel = t.bookNow;
+    let mainActionSubtitle = t.bookSubtitle;
 
     if (isSystemClosed) {
-        mainActionLabel = 'Check Status';
-        mainActionSubtitle = 'Bookings are currently closed';
+        mainActionLabel = t.checkStatus;
+        mainActionSubtitle = t.bookingsClosed;
     } else if (hasBookedForNextWeek) {
-        mainActionLabel = 'Booked';
-        mainActionSubtitle = 'You already booked. You can still open slots page to browse remaining slots';
+        mainActionLabel = t.booked;
+        mainActionSubtitle = t.bookedSubtitle;
     }
 
     const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasCoreResidentSnapshot)
@@ -746,8 +833,8 @@ export default function Dashboard() {
         || (loading && (!hasCachedMachines || !hasCachedWeekBookings) && (machines.length === 0 || weekBookings.length === 0));
 
     if (isDashboardShellBooting) {
-        mainActionLabel = 'Open Slots';
-        mainActionSubtitle = 'We’re loading your latest booking status in the background.';
+        mainActionLabel = t.openSlots;
+        mainActionSubtitle = t.loadingLatest;
     }
 
     if (showBlockingDashboardNotice) {
@@ -755,10 +842,10 @@ export default function Dashboard() {
             <div className="container animate-fade-in flex-center" style={{ minHeight: '100vh', padding: '24px' }}>
                 <DataLoadNotice
                     tone="error"
-                    title={residentLoadSlow ? 'Dashboard is taking longer than usual' : 'Unable to load dashboard'}
-                    description={loadErrorMessage ?? 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.'}
+                    title={residentLoadSlow ? t.dashboardSlowTitle : t.dashboardFailedTitle}
+                    description={loadErrorMessage ?? t.dashboardRetryDescription}
                     onRetry={retryDashboardData}
-                    retryLabel="Retry Dashboard"
+                    retryLabel={t.retryDashboard}
                 />
             </div>
         );
@@ -921,7 +1008,7 @@ export default function Dashboard() {
                                 boxShadow: '0 10px 24px rgba(37, 99, 235, 0.14)',
                                 cursor: canOpenRoommateMenu ? 'pointer' : 'default'
                             }}
-                            aria-label={canOpenRoommateMenu ? 'Switch roommate profile' : 'Current resident profile'}
+                            aria-label={canOpenRoommateMenu ? t.switchRoommateProfile : t.currentResidentProfile}
                         >
                             <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.04em' }}>
                                 {getResidentInitials(user.name)}
@@ -965,9 +1052,9 @@ export default function Dashboard() {
                                 }}
                             >
                                     <div style={{ marginBottom: '10px' }}>
-                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>Book For Roommate</div>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{t.bookForRoommate}</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
-                                            Only residents from Room {user.roomNumber} can be selected here.
+                                            {t.roommatesOnly(user.roomNumber)}
                                         </div>
                                     </div>
 
@@ -1020,7 +1107,7 @@ export default function Dashboard() {
                                                                 {getResidentShortName(resident.name)}
                                                             </div>
                                                             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                                Room {resident.roomNumber}
+                                                                {t.roomLabel(resident.roomNumber)}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1048,13 +1135,13 @@ export default function Dashboard() {
 
                                         {roommatesLoading && (
                                             <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                Refreshing roommate list...
+                                                {t.refreshingRoommates}
                                             </div>
                                         )}
 
                                         {!roommatesLoading && roommates.length <= 1 && (
                                             <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                No other roommates are available for switching right now.
+                                                {t.noOtherRoommates}
                                             </div>
                                         )}
                                     </div>
@@ -1064,30 +1151,45 @@ export default function Dashboard() {
 
                     <div style={{ minWidth: 0 }}>
                         <h2 style={{ margin: 0, fontSize: '24px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            Hello, {user.name.split(' ')[0]} 👋
+                            {t.hello}, {user.name.split(' ')[0]} 👋
                         </h2>
                         <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                            Room {user.roomNumber}{canOpenRoommateMenu ? ' • Tap avatar to switch resident' : ''}
+                            {t.roomLabel(user.roomNumber)}{canOpenRoommateMenu ? t.tapAvatarToSwitch : ''}
                         </p>
                     </div>
                 </div>
-                <button
-                    onClick={handleLogout}
-                    className="glass-button"
-                    style={{ padding: '8px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                    <LogOut size={20} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const nextLanguage: ResidentPortalLanguage = language === 'ru' ? 'en' : 'ru';
+                            setLanguage(nextLanguage);
+                            setResidentPortalLanguage(nextLanguage);
+                        }}
+                        className="glass-button"
+                        style={{ padding: '8px 14px', borderRadius: '999px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                        <Languages size={16} />
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{t.switchLanguage}</span>
+                    </button>
+                    <button
+                        onClick={handleLogout}
+                        className="glass-button"
+                        style={{ padding: '8px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <LogOut size={20} />
+                    </button>
+                </div>
             </header>
 
             {loadIssue === 'saved' && (
                 <div style={{ marginBottom: '20px' }}>
                     <DataLoadNotice
                         compact
-                        title="Showing saved dashboard data"
-                        description={loadErrorMessage ?? 'Live updates are reconnecting in the background. You can keep using the page.'}
+                        title={t.showingSavedTitle}
+                        description={loadErrorMessage ?? t.showingSavedDescription}
                         onRetry={retryDashboardData}
-                        retryLabel="Refresh Data"
+                        retryLabel={t.refreshData}
                     />
                 </div>
             )}
@@ -1111,7 +1213,7 @@ export default function Dashboard() {
                 }}
             >
                 <div>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>Need to wash?</h3>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>{t.needToWash}</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
                         {mainActionSubtitle}
                     </p>
@@ -1147,7 +1249,7 @@ export default function Dashboard() {
             <section>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Status
+                        {t.status}
                             <span style={{
                                 fontSize: '12px',
                                 fontWeight: 'normal',
@@ -1157,7 +1259,7 @@ export default function Dashboard() {
                             borderRadius: '12px',
                             color: 'var(--text-muted)'
                         }}>
-                            {formatBelarusClockLabel(new Date())}
+                            {formatBelarusClockLabel(new Date(), dateLocale)}
                         </span>
                     </h3>
                 </div>
@@ -1194,20 +1296,20 @@ export default function Dashboard() {
                                         <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
                                     </div>
                                     <div>
-                                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
+                                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>{t.systemStatus}</div>
                                         <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span style={{
                                                 width: '8px', height: '8px', borderRadius: '50%',
                                                 background: isSystemClosed ? 'var(--error)' : 'var(--success)',
                                                 boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
                                             }}></span>
-                                            {isSystemClosed ? 'Closed' : 'Active'}
+                                            {isSystemClosed ? t.closed : t.active}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
+                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>{t.weekSlots}</div>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
                                         <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
                                             {slotCapacity.remainingSlots}
@@ -1268,7 +1370,7 @@ export default function Dashboard() {
                                         <div>
                                             <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
                                             <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
+                                                {status.state === 'available' ? t.ready : status.state === 'occupied' ? t.finishesSoon : t.closedShort}
                                             </p>
                                         </div>
                                     </div>
@@ -1295,6 +1397,7 @@ export default function Dashboard() {
                             weekBookings={weekBookings}
                             settings={settings}
                             isNextWeekOpen={isNextWeekOpen}
+                            isRussian={isRussian}
                             onBookingCreated={handleResidentBookingCreated}
                             onBookingCancelled={handleResidentBookingCancelled}
                         />
@@ -1310,7 +1413,7 @@ export default function Dashboard() {
             >
                 {isFeedbackActive ? (
                     <Suspense fallback={feedbackFallback}>
-                        <LazyDashboardFeedback />
+                        <LazyDashboardFeedback isRussian={isRussian} />
                     </Suspense>
                 ) : feedbackFallback}
             </div>

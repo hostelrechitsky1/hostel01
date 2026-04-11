@@ -7,6 +7,7 @@ import { addBelarusDays, addBelarusMinutes, addMinutesToTimeString, formatBelaru
 import { hapticSelection, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from './ActionSpinner';
 import { getCancelBookingFailureMessage, getQuickBookFailureMessage } from '../utils/bookingMutations';
+import { getResidentPortalDateLocale } from '../utils/residentPortalLanguage';
 
 interface DashboardBookingSummaryProps {
     user: Student;
@@ -16,6 +17,7 @@ interface DashboardBookingSummaryProps {
     weekBookings: Booking[];
     settings: AppSettings;
     isNextWeekOpen: boolean;
+    isRussian?: boolean;
     onBookingCreated: (booking: Booking) => void;
     onBookingCancelled: (bookingId: string) => void;
 }
@@ -36,9 +38,64 @@ export default function DashboardBookingSummary({
     weekBookings,
     settings,
     isNextWeekOpen,
+    isRussian = false,
     onBookingCreated,
     onBookingCancelled
 }: DashboardBookingSummaryProps) {
+    const dateLocale = getResidentPortalDateLocale(isRussian ? 'ru' : 'en');
+    const t = isRussian
+        ? {
+            upcomingBooking: 'Ваше ближайшее бронирование',
+            confirmed: 'Подтверждено',
+            alsoUpcoming: (count: number) => `Ещё впереди (${count})`,
+            googleCalendar: 'Google Календарь',
+            appleOutlook: 'Apple / Outlook',
+            cancelBooking: 'Отменить бронь',
+            cancelHint: 'Освободить слот сразу',
+            noUpcomingBookings: 'Нет предстоящих бронирований.',
+            pastBookings: 'Прошлые бронирования',
+            quickBook: 'Быстро забронировать',
+            quickBookConfirmation: 'Подтверждение быстрой брони',
+            bookingConfirmed: 'Бронь подтверждена!',
+            close: 'Закрыть',
+            confirmQuickBook: 'Подтвердить быструю бронь',
+            bookingProgress: 'Бронируем...',
+            atTime: 'в',
+            quickBooked: (timeLabel: string, dateLabel: string) => `Забронировано на ${timeLabel}, ${dateLabel}.`,
+            bookingCancelled: 'Бронь отменена',
+            cancelThisBooking: 'Отменить это бронирование?',
+            machine: 'Машина',
+            cancellingFreesSlot: 'После отмены слот сразу станет доступен другим жильцам.',
+            keepBooking: 'Оставить бронь',
+            cancelling: 'Отменяем...',
+            cancelSuccess: 'Бронирование отменено. Слот снова свободен.',
+        }
+        : {
+            upcomingBooking: 'Your Upcoming Booking',
+            confirmed: 'Confirmed',
+            alsoUpcoming: (count: number) => `Also upcoming (${count})`,
+            googleCalendar: 'Google Cal',
+            appleOutlook: 'Apple / Outlook',
+            cancelBooking: 'Cancel Booking',
+            cancelHint: 'Free the slot instantly',
+            noUpcomingBookings: 'No upcoming bookings.',
+            pastBookings: 'Past Bookings',
+            quickBook: 'Quick Book',
+            quickBookConfirmation: 'Quick Book Confirmation',
+            bookingConfirmed: 'Booking Confirmed!',
+            close: 'Close',
+            confirmQuickBook: 'Confirm Quick Book',
+            bookingProgress: 'Booking...',
+            atTime: 'at',
+            quickBooked: (timeLabel: string, dateLabel: string) => `Booked ${timeLabel} on ${dateLabel}.`,
+            bookingCancelled: 'Booking Cancelled',
+            cancelThisBooking: 'Cancel This Booking?',
+            machine: 'Machine',
+            cancellingFreesSlot: 'Cancelling frees this slot immediately for other residents.',
+            keepBooking: 'Keep Booking',
+            cancelling: 'Cancelling...',
+            cancelSuccess: 'Booking cancelled. The slot is now free again.',
+        };
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
@@ -122,7 +179,7 @@ export default function DashboardBookingSummary({
             onBookingCancelled(cancelModalBooking.id);
             setCancelModalMessage({
                 type: 'success',
-                text: 'Booking cancelled. The slot is now free again.'
+                text: t.cancelSuccess
             });
 
             setTimeout(() => {
@@ -214,7 +271,7 @@ export default function DashboardBookingSummary({
             };
             hapticSuccess();
             onBookingCreated(createdBooking);
-            setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
+            setQuickBookModalMessage({ type: 'success', text: t.quickBooked(booking.startTime, targetDateLabel) });
 
             setTimeout(() => {
                 setQuickBookModalBooking(null);
@@ -333,7 +390,7 @@ export default function DashboardBookingSummary({
         <>
             <div style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={20} /> Your Upcoming Booking
+                    <Calendar size={20} /> {t.upcomingBooking}
                 </h3>
                 {recentBookingsLoading && recentBookings.length === 0 ? (
                     bookingSectionSkeleton
@@ -376,7 +433,7 @@ export default function DashboardBookingSummary({
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
                                     <div>
                                         <h4 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
-                                            {formatBelarusLongDateLabel(parseBelarusDateTime(primaryUpcomingBooking.date))}
+                                            {formatBelarusLongDateLabel(parseBelarusDateTime(primaryUpcomingBooking.date), dateLocale)}
                                         </h4>
                                         <p style={{ margin: '4px 0 0', fontSize: '15px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{primaryUpcomingBooking.startTime}</span>
@@ -395,7 +452,7 @@ export default function DashboardBookingSummary({
                                         alignItems: 'center',
                                         gap: '4px'
                                     }}>
-                                        <Activity size={12} /> Confirmed
+                                        <Activity size={12} /> {t.confirmed}
                                     </div>
                                 </div>
                             </div>
@@ -404,7 +461,7 @@ export default function DashboardBookingSummary({
                         {upcomingBookings.length > 1 && (
                             <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: '4px' }}>
-                                    Also upcoming ({upcomingBookings.length - 1})
+                                    {t.alsoUpcoming(upcomingBookings.length - 1)}
                                 </div>
                                 {upcomingBookings.slice(1, 3).map((booking) => (
                                     <div
@@ -437,7 +494,7 @@ export default function DashboardBookingSummary({
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '2px' }}>
-                                                    {formatBelarusShortDateLabel(parseBelarusDateTime(booking.date))}
+                                                    {formatBelarusShortDateLabel(parseBelarusDateTime(booking.date), dateLocale)}
                                                 </div>
                                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{booking.startTime}</span>
@@ -473,7 +530,7 @@ export default function DashboardBookingSummary({
                                 style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
                             >
                                 <Calendar size={18} />
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Google Cal</span>
+                                <span style={{ fontSize: '14px', fontWeight: 500 }}>{t.googleCalendar}</span>
                             </button>
 
                             <button
@@ -541,7 +598,7 @@ export default function DashboardBookingSummary({
                                 style={{ padding: '10px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '136px', minHeight: '44px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
                             >
                                 <Download size={18} />
-                                <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple / Outlook</span>
+                                <span style={{ fontSize: '14px', fontWeight: 500 }}>{t.appleOutlook}</span>
                             </button>
 
                             <button
@@ -574,9 +631,9 @@ export default function DashboardBookingSummary({
                                             <XCircle size={15} />
                                         </span>
                                         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.05 }}>
-                                            <span>Cancel Booking</span>
+                                            <span>{t.cancelBooking}</span>
                                             <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(254, 202, 202, 0.78)' }}>
-                                                Free the slot instantly
+                                                {t.cancelHint}
                                             </span>
                                         </span>
                                     </>
@@ -595,7 +652,7 @@ export default function DashboardBookingSummary({
                         }}
                     >
                         <Calendar size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                        <p>No upcoming bookings.</p>
+                        <p>{t.noUpcomingBookings}</p>
                     </div>
                 )}
             </div>
@@ -603,7 +660,7 @@ export default function DashboardBookingSummary({
             {(recentBookingsLoading || history.length > 0) && (
                 <div style={{ marginTop: '32px' }}>
                     <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <History size={20} /> Past Bookings
+                        <History size={20} /> {t.pastBookings}
                     </h3>
                     {recentBookingsLoading && history.length === 0 ? (
                         historySectionSkeleton
@@ -669,7 +726,7 @@ export default function DashboardBookingSummary({
                                                 </div>
                                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <CheckCircle size={14} color="var(--success)" />
-                                                    {formatBelarusLongDateYearLabel(parseBelarusDateTime(booking.date))}
+                                                    {formatBelarusLongDateYearLabel(parseBelarusDateTime(booking.date), dateLocale)}
                                                 </div>
                                             </div>
                                         </div>
@@ -702,7 +759,7 @@ export default function DashboardBookingSummary({
                                                             >
                                                                 <XCircle size={13} />
                                                             </span>
-                                                            <span>Cancel</span>
+                                                            <span>{t.cancelBooking}</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -740,11 +797,11 @@ export default function DashboardBookingSummary({
                                                 {quickBookingId === booking.id ? (
                                                     <>
                                                         <ActionSpinner size={14} tone="primary" />
-                                                        Booking...
+                                                        {t.bookingProgress}
                                                     </>
                                                 ) : (
                                                     <>
-                                                        Quick Book
+                                                        {t.quickBook}
                                                         <ArrowRight size={14} />
                                                     </>
                                                 )}
@@ -771,17 +828,17 @@ export default function DashboardBookingSummary({
                                 >
                                     <CheckCircle size={32} color="var(--success)" />
                                 </div>
-                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Confirmed!</h3>
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>{t.bookingConfirmed}</h3>
                                 <p style={{ margin: 0, color: 'var(--text-muted)' }}>{quickBookModalMessage.text}</p>
                             </div>
                         ) : (
                             <>
-                                <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
+                                <h3 style={{ margin: '0 0 12px' }}>{t.quickBookConfirmation}</h3>
                                 <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                                    {quickBookTargetDate ? `${formatBelarusShortDateLabel(quickBookTargetDate)}` : ''} at {quickBookModalBooking.startTime}
+                                    {quickBookTargetDate ? `${formatBelarusShortDateLabel(quickBookTargetDate, dateLocale)}` : ''} {t.atTime} {quickBookModalBooking.startTime}
                                 </p>
                                 <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
-                                    Machine: {quickBookMachineLabel}
+                                    {t.machine}: {quickBookMachineLabel}
                                 </p>
 
                                 {quickBookModalMessage && (
@@ -810,7 +867,7 @@ export default function DashboardBookingSummary({
                                         className="glass-button"
                                         style={{ padding: '10px 18px', borderRadius: '10px' }}
                                     >
-                                        Close
+                                        {t.close}
                                     </button>
                                     <button
                                         onClick={handleConfirmQuickBook}
@@ -830,9 +887,9 @@ export default function DashboardBookingSummary({
                                         {quickBookingId === quickBookModalBooking.id ? (
                                             <>
                                                 <ActionSpinner size={16} tone="inverted" />
-                                                Booking...
+                                                {t.bookingProgress}
                                             </>
-                                        ) : 'Confirm Quick Book'}
+                                        ) : t.confirmQuickBook}
                                     </button>
                                 </div>
                             </>
@@ -855,17 +912,17 @@ export default function DashboardBookingSummary({
                                 >
                                     <CheckCircle size={32} color="var(--success)" />
                                 </div>
-                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Cancelled</h3>
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>{t.bookingCancelled}</h3>
                                 <p style={{ margin: 0, color: 'var(--text-muted)' }}>{cancelModalMessage.text}</p>
                             </div>
                         ) : (
                             <>
-                                <h3 style={{ margin: '0 0 12px' }}>Cancel This Booking?</h3>
+                                <h3 style={{ margin: '0 0 12px' }}>{t.cancelThisBooking}</h3>
                                 <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                                    {formatBelarusShortDateLabel(parseBelarusDateTime(cancelModalBooking.date))} at {cancelModalBooking.startTime}
+                                    {formatBelarusShortDateLabel(parseBelarusDateTime(cancelModalBooking.date), dateLocale)} {t.atTime} {cancelModalBooking.startTime}
                                 </p>
                                 <p style={{ margin: '0 0 12px', fontWeight: 700 }}>
-                                    Machine: {cancelBookingMachineLabel}
+                                    {t.machine}: {cancelBookingMachineLabel}
                                 </p>
                                 <div
                                     style={{
@@ -878,7 +935,7 @@ export default function DashboardBookingSummary({
                                         background: 'rgba(239,68,68,0.08)'
                                     }}
                                 >
-                                    Cancelling frees this slot immediately for other residents.
+                                    {t.cancellingFreesSlot}
                                 </div>
 
                                 {cancelModalMessage && (
@@ -904,7 +961,7 @@ export default function DashboardBookingSummary({
                                         disabled={cancelBookingId === cancelModalBooking.id}
                                         style={{ padding: '10px 18px', borderRadius: '10px' }}
                                     >
-                                        Keep Booking
+                                        {t.keepBooking}
                                     </button>
                                     <button
                                         onClick={handleConfirmCancelBooking}
@@ -927,9 +984,9 @@ export default function DashboardBookingSummary({
                                         {cancelBookingId === cancelModalBooking.id ? (
                                             <>
                                                 <ActionSpinner size={16} tone="neutral" />
-                                                Cancelling...
+                                                {t.cancelling}
                                             </>
-                                        ) : 'Cancel Booking'}
+                                        ) : t.cancelBooking}
                                     </button>
                                 </div>
                             </>
