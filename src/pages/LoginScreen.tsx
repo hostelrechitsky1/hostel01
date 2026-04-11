@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { Building, ArrowRight, User } from 'lucide-react';
-import { toast } from 'sonner';
 import { ActionSpinner } from '../components/ActionSpinner';
 import type { Student } from '../types';
 import { preloadResidentRoutes } from '../utils/preloadRoutes';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { warmResidentAppData } from '../utils/warmResidentApp';
+import { notifyError } from '../utils/notify';
 
 let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
 
@@ -122,14 +122,14 @@ export default function LoginScreen() {
                     setStep(2); // Legacy/Unprotected flow
                 }
             } else {
-                toast.error('Room not found. Please check the number (e.g. 101, 52-2).');
+                notifyError('Room not found. Please check the number (e.g. 101, 52-2).');
             }
         } catch (err) {
             finishResidentPerfSpan('resident:login-room-lookup', {
                 result: 'error',
             });
             console.error(err);
-            toast.error('Failed to connect to database.');
+            notifyError('Failed to connect to database.');
         } finally {
             setLoading(false);
         }
@@ -141,7 +141,7 @@ export default function LoginScreen() {
         if (pin === correctPin) {
             setStep(2);
         } else {
-            toast.error('Incorrect Room PIN.');
+            notifyError('Incorrect Room PIN.');
         }
     };
 
@@ -193,7 +193,7 @@ export default function LoginScreen() {
         <div className="login-split">
             <div className="login-left">
                 <div
-                    className="glass-panel animate-fade-in"
+                    className="glass-panel"
                     style={{
                         padding: '48px',
                         width: '100%',
@@ -223,7 +223,7 @@ export default function LoginScreen() {
                     </div>
 
                     {step === 1 ? (
-                        <form className="animate-fade-in" onSubmit={handleRoomSubmit}>
+                        <form onSubmit={handleRoomSubmit}>
                                 <div style={{ marginBottom: '20px' }}>
                                     <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>
                                         Room Number
@@ -270,7 +270,7 @@ export default function LoginScreen() {
                                 </button>
                         </form>
                     ) : step === 1.5 ? (
-                        <form className="animate-fade-in" onSubmit={handlePinSubmit}>
+                        <form onSubmit={handlePinSubmit}>
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>Enter Room PIN</p>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
                                     <input
@@ -312,7 +312,7 @@ export default function LoginScreen() {
                                 </button>
                         </form>
                     ) : (
-                        <div className="animate-fade-in">
+                        <div>
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>Who are you?</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {roommates.map(student => (

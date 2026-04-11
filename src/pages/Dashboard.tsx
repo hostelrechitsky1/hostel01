@@ -1028,7 +1028,7 @@ export default function Dashboard() {
             )}
 
             {/* Announcements Carousel */}
-            <div className="animate-fade-in">
+            <div>
                 <BannerCarousel
                     banners={banners}
                     isLoading={bannersLoading}
@@ -1038,7 +1038,7 @@ export default function Dashboard() {
 
             {/* Main Action */}
             <div
-                className="glass-panel main-action-layout animate-fade-in"
+                className="glass-panel main-action-layout"
                 style={{
                     padding: '20px 24px',
                     borderRadius: '16px',
@@ -1079,7 +1079,7 @@ export default function Dashboard() {
 
 
             {/* Machine Status - Live View */}
-            <section className="animate-fade-in">
+            <section>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Status
@@ -1168,19 +1168,18 @@ export default function Dashboard() {
                             </div>
                         </div>
                         <div className="grid-cols-2">
-                            {machines.map((machine, index) => {
+                            {machines.map((machine) => {
                                 const status = getMachineRealTimeStatus(machine);
                                 return (
                                     <div
                                         key={machine.id}
-                                        className="glass-panel animate-fade-in"
+                                        className="glass-panel"
                                         style={{
                                             padding: '16px',
                                             borderRadius: '16px',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            gap: '12px',
-                                            animationDelay: `${Math.min(index * 0.06, 0.18)}s`
+                                            gap: '12px'
                                         }}
                                     >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

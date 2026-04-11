@@ -4,11 +4,11 @@ import {
     Reply,
     Send
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
 import { residentFirestoreService } from '../services/residentFirestoreService';
 import type { Feedback, FeedbackType } from '../types';
 import { formatBelarusCompactTimestamp } from '../utils/time';
+import { notifyError, notifySuccess } from '../utils/notify';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -133,10 +133,10 @@ export default function DashboardFeedback() {
             });
 
             setText('');
-            toast.success('Feedback sent. Admin replies will appear below.');
+            notifySuccess('Feedback sent. Admin replies will appear below.');
         } catch (error) {
             console.error('Failed to send feedback', error);
-            toast.error('Failed to send feedback.');
+            notifyError('Failed to send feedback.');
         } finally {
             setLoading(false);
         }

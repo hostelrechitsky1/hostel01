@@ -7,7 +7,6 @@ import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
-import { toast } from 'sonner';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
     addBelarusDays,
@@ -30,6 +29,7 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from '../components/ActionSpinner';
 import { finishResidentPerfSpan } from '../utils/performance';
+import { notifyError } from '../utils/notify';
 
 let confettiPromise: Promise<typeof import('react-confetti')> | null = null;
 
@@ -232,7 +232,7 @@ export default function BookingFlow() {
             })
             .catch((error) => {
                 handleBookingLoadError('Booking snapshot fetch error:', error);
-                toast.error('Failed to load booking settings. Using saved defaults.');
+                notifyError('Failed to load booking settings. Using saved defaults.');
             });
 
         return () => {
@@ -478,7 +478,7 @@ export default function BookingFlow() {
             const now = getBelarusNow();
             const [h, m] = startTime.split(':').map(Number);
             if (h < now.getUTCHours() || (h === now.getUTCHours() && m < now.getUTCMinutes())) {
-                toast.error('This slot has already passed. Please refresh.');
+                notifyError('This slot has already passed. Please refresh.');
                 setSubmitting(false);
                 return;
             }
@@ -521,12 +521,12 @@ export default function BookingFlow() {
                 setSelectedMachine(null);
                 setPendingBooking(null);
             } else {
-                toast.error(result.error || 'Booking failed');
+                notifyError(result.error || 'Booking failed');
             }
         } catch (e: any) {
             console.error('Booking transaction failed:', e);
             console.error('Error details:', e.message, e.code);
-            toast.error(`System error: ${e.message || 'Please try again.'}`);
+            notifyError(`System error: ${e.message || 'Please try again.'}`);
         } finally {
             if (!bookingSucceeded) {
                 setPendingBooking(null);
@@ -588,7 +588,7 @@ export default function BookingFlow() {
 
     if (loading && !showBlockingBookingNotice) {
         return (
-            <div className="container animate-fade-in" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="container" style={{ paddingBottom: '100px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
                     <div style={{ width: '150px', height: '28px', borderRadius: '8px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
@@ -610,7 +610,7 @@ export default function BookingFlow() {
     if (showBlockingBookingNotice) {
         return (
             <div
-                className="container animate-fade-in flex-center"
+                className="container flex-center"
                 style={{ minHeight: '100vh', padding: '24px', textAlign: 'left' }}
             >
                 <DataLoadNotice

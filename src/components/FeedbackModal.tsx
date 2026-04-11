@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { bookingService } from '../services/bookingService';
 import { X, Check } from 'lucide-react';
-import { toast } from 'sonner';
+import { notifyError, notifySuccess } from '../utils/notify';
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -39,7 +39,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 read: false
             });
             setSuccess(true);
-            toast.success('Feedback sent!');
+            notifySuccess('Feedback sent!');
             setTimeout(() => {
                 setSuccess(false);
                 setText('');
@@ -47,7 +47,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 onClose();
             }, 2000);
         } catch (error) {
-            toast.error('Failed to send feedback. Please try again.');
+            notifyError('Failed to send feedback. Please try again.');
         } finally {
             setLoading(false);
         }
