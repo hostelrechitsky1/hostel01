@@ -18,6 +18,7 @@ import {
 import type { AppSettings, Banner, Booking, Feedback, Machine, Student, VipRecurringRule } from '../types';
 import { legacyPinMap } from '../data/pinMap';
 import { parseRawStudentData } from '../utils/studentParser';
+import { normalizeBannerSource } from '../utils/bannerImages';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
@@ -683,7 +684,13 @@ export const firestoreService = {
         return resolveWithCache(cacheKeys.banners, CACHE_MAX_AGE_MS.banners, async () => {
             const snapshot = await getDocs(collection(db, 'banners'));
             return snapshot.docs
-                .map((bannerDoc) => bannerDoc.data() as Banner)
+                .map((bannerDoc) => {
+                    const banner = bannerDoc.data() as Banner;
+                    return {
+                        ...banner,
+                        imageUrl: normalizeBannerSource(banner.imageUrl)
+                    };
+                })
                 .sort((left, right) => (left.priority || 99) - (right.priority || 99));
         });
     },

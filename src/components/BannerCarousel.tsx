@@ -2,11 +2,11 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Banner } from '../types';
 import {
     ensureBannerPreloadLink,
-    getAdaptiveBannerSrc,
-    getTinyBannerSrc,
+    getBannerWarmSources,
     hasWarmBannerImage,
     markBannerImageLoaded,
     preloadBannerImage,
+    warmBannerSource,
 } from '../utils/bannerImages';
 
 interface InternalBannerCarouselProps {
@@ -21,7 +21,8 @@ const SmartImage = ({
     className,
     style,
     priority,
-    shouldLoad
+    shouldLoad,
+    onFullLoad
 }: {
     src: string;
     alt: string;
@@ -29,35 +30,54 @@ const SmartImage = ({
     style?: any;
     priority?: boolean;
     shouldLoad?: boolean;
+    onFullLoad?: () => void;
 }) => {
-    const initialAdaptiveSrc = getAdaptiveBannerSrc(src, { priority });
-    const initialPreviewSrc = priority ? initialAdaptiveSrc : getTinyBannerSrc(src);
-    const [imgSrc, setImgSrc] = useState(initialPreviewSrc);
+    const initialSources = getBannerWarmSources(src, { priority });
+    const initialPreviewSrc = initialSources.previewSource;
+    const initialAdaptiveSrc = initialSources.fullSource;
+    const initialDisplaySrc = hasWarmBannerImage(initialAdaptiveSrc) ? initialAdaptiveSrc : initialPreviewSrc;
+    const [imgSrc, setImgSrc] = useState(initialDisplaySrc);
     const [error, setError] = useState(false);
-    const [loaded, setLoaded] = useState(() => hasWarmBannerImage(initialPreviewSrc));
+    const [loaded, setLoaded] = useState(() => hasWarmBannerImage(initialDisplaySrc));
     const [previewLoaded, setPreviewLoaded] = useState(() => hasWarmBannerImage(initialPreviewSrc));
     const imgRef = useRef<HTMLImageElement>(null);
     const adaptiveSrcRef = useRef<string | null>(null);
     const previewSrcRef = useRef<string | null>(null);
 
     useEffect(() => {
-        const tinySrc = getTinyBannerSrc(src);
-        const optimizedSrc = getAdaptiveBannerSrc(src, { priority });
-        const nextPreviewSrc = priority ? optimizedSrc : tinySrc;
+        const { previewSource, fullSource } = getBannerWarmSources(src, { priority });
+        const nextDisplaySrc = hasWarmBannerImage(fullSource) ? fullSource : previewSource;
 
-        adaptiveSrcRef.current = optimizedSrc;
-        previewSrcRef.current = nextPreviewSrc;
-        setPreviewLoaded(hasWarmBannerImage(nextPreviewSrc));
-        setLoaded(hasWarmBannerImage(nextPreviewSrc));
-        setImgSrc(nextPreviewSrc);
+        adaptiveSrcRef.current = fullSource;
+        previewSrcRef.current = previewSource;
+        setPreviewLoaded(hasWarmBannerImage(previewSource));
+        setLoaded(hasWarmBannerImage(nextDisplaySrc));
+        setImgSrc(nextDisplaySrc);
         setError(false);
 
         if (!shouldLoad) {
             return;
         }
 
-        ensureBannerPreloadLink(optimizedSrc);
-        void preloadBannerImage(priority ? optimizedSrc : nextPreviewSrc);
+        ensureBannerPreloadLink(previewSource);
+        void preloadBannerImage(previewSource);
+
+        if (previewSource === fullSource) {
+            ensureBannerPreloadLink(fullSource);
+            void preloadBannerImage(fullSource);
+            return;
+        }
+
+        if (priority || hasWarmBannerImage(previewSource)) {
+            ensureBannerPreloadLink(fullSource);
+            void preloadBannerImage(fullSource);
+            return;
+        }
+
+        void preloadBannerImage(previewSource).then(() => {
+            ensureBannerPreloadLink(fullSource);
+            return preloadBannerImage(fullSource);
+        });
     }, [priority, shouldLoad, src]);
 
     useEffect(() => {
@@ -87,12 +107,21 @@ const SmartImage = ({
         }
     }, [imgSrc, shouldLoad]);
 
+    useEffect(() => {
+        if (!loaded) return;
+        if (!adaptiveSrcRef.current) return;
+        if (imgSrc !== adaptiveSrcRef.current) return;
+        onFullLoad?.();
+    }, [imgSrc, loaded, onFullLoad]);
+
     const handleError = () => {
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
         if (imgSrc.includes('drive.google.com/thumbnail')) {
             const idMatch = imgSrc.match(/id=([^&]+)/);
             if (idMatch && idMatch[1]) {
                 const newSrc = `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
+                adaptiveSrcRef.current = newSrc;
+                previewSrcRef.current = newSrc;
                 setImgSrc(newSrc);
                 // We are trying a new source, so we are "loading" again
                 setLoaded(false);
@@ -171,9 +200,54 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState(0);
     const [activatedIndexes, setActivatedIndexes] = useState<Set<number>>(() => new Set([0]));
+    const [fullyReadyIndexes, setFullyReadyIndexes] = useState<Set<number>>(() => new Set());
+    const [pendingAutoAdvanceIndex, setPendingAutoAdvanceIndex] = useState<number | null>(null);
 
     // Minimum swipe distance to trigger slide change
     const minSwipeDistance = 50;
+
+    const markIndexActivated = (index: number) => {
+        setActivatedIndexes((currentIndexes) => {
+            if (currentIndexes.has(index)) {
+                return currentIndexes;
+            }
+
+            const nextIndexes = new Set(currentIndexes);
+            nextIndexes.add(index);
+            return nextIndexes;
+        });
+    };
+
+    const markIndexReady = (index: number) => {
+        setFullyReadyIndexes((currentIndexes) => {
+            if (currentIndexes.has(index)) {
+                return currentIndexes;
+            }
+
+            const nextIndexes = new Set(currentIndexes);
+            nextIndexes.add(index);
+            return nextIndexes;
+        });
+    };
+
+    const prepareBannerIndex = (index: number, priority = false) => {
+        const banner = activeBanners[index];
+        if (!banner?.imageUrl) return;
+
+        markIndexActivated(index);
+
+        const { fullSource } = getBannerWarmSources(banner.imageUrl, { priority: true });
+        if (hasWarmBannerImage(fullSource)) {
+            markIndexReady(index);
+        }
+
+        void warmBannerSource(banner.imageUrl, {
+            priority,
+            eagerFull: priority
+        }).then(() => {
+            markIndexReady(index);
+        });
+    };
 
     // Auto-play
     useEffect(() => {
@@ -203,11 +277,23 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
     }, []);
 
     useEffect(() => {
-        if (activeBanners.length <= 1 || isDragging || !isVisible || !isPageVisible) return;
+        if (activeBanners.length <= 1 || isDragging || !isVisible || !isPageVisible || pendingAutoAdvanceIndex !== null) return;
 
         const startInterval = () => {
             intervalRef.current = setInterval(() => {
-                setCurrentIndex(prev => (prev + 1) % activeBanners.length);
+                const nextIndex = (currentIndex + 1) % activeBanners.length;
+                const nextBanner = activeBanners[nextIndex];
+                if (!nextBanner?.imageUrl) return;
+
+                const { fullSource } = getBannerWarmSources(nextBanner.imageUrl, { priority: true });
+                prepareBannerIndex(nextIndex, true);
+
+                if (hasWarmBannerImage(fullSource) || fullyReadyIndexes.has(nextIndex)) {
+                    setCurrentIndex(nextIndex);
+                    return;
+                }
+
+                setPendingAutoAdvanceIndex(nextIndex);
             }, 5000); // 5 seconds
         };
 
@@ -216,27 +302,11 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [activeBanners.length, isDragging, isPageVisible, isVisible]);
+    }, [activeBanners, currentIndex, fullyReadyIndexes, isDragging, isPageVisible, isVisible, pendingAutoAdvanceIndex]);
 
     useEffect(() => {
         if (activeBanners.length === 0 || !isVisible) return;
-
-        setActivatedIndexes((currentIndexes) => {
-            if (currentIndexes.has(currentIndex)) {
-                return currentIndexes;
-            }
-
-            const nextIndexes = new Set(currentIndexes);
-            nextIndexes.add(currentIndex);
-            return nextIndexes;
-        });
-
-        const banner = activeBanners[currentIndex];
-        if (!banner?.imageUrl) return;
-
-        const source = getAdaptiveBannerSrc(banner.imageUrl, { priority: true });
-        ensureBannerPreloadLink(source);
-        void preloadBannerImage(source);
+        prepareBannerIndex(currentIndex, true);
     }, [activeBanners, currentIndex, isVisible]);
 
     useEffect(() => {
@@ -247,15 +317,25 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         if (!nextBanner?.imageUrl) return;
 
         const warmNextBannerTimer = window.setTimeout(() => {
-            const source = getAdaptiveBannerSrc(nextBanner.imageUrl, { priority: true });
-            ensureBannerPreloadLink(source);
-            void preloadBannerImage(source);
+            prepareBannerIndex(nextIndex, true);
         }, 900);
 
         return () => {
             window.clearTimeout(warmNextBannerTimer);
         };
     }, [activeBanners, currentIndex, isPageVisible, isVisible]);
+
+    useEffect(() => {
+        if (pendingAutoAdvanceIndex === null) return;
+        if (fullyReadyIndexes.has(pendingAutoAdvanceIndex)) {
+            setCurrentIndex(pendingAutoAdvanceIndex);
+            setPendingAutoAdvanceIndex(null);
+        }
+    }, [fullyReadyIndexes, pendingAutoAdvanceIndex]);
+
+    useEffect(() => {
+        setPendingAutoAdvanceIndex(null);
+    }, [currentIndex]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchStart(e.targetTouches[0].clientX);
@@ -292,10 +372,14 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
 
         if (isLeftSwipe) {
             // Next slide
-            setCurrentIndex(prev => (prev + 1) % activeBanners.length);
+            const nextIndex = (currentIndex + 1) % activeBanners.length;
+            prepareBannerIndex(nextIndex, true);
+            setCurrentIndex(nextIndex);
         } else if (isRightSwipe) {
             // Prev slide
-            setCurrentIndex(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
+            const previousIndex = (currentIndex - 1 + activeBanners.length) % activeBanners.length;
+            prepareBannerIndex(previousIndex, true);
+            setCurrentIndex(previousIndex);
         }
 
         // Reset drag offset - CSS transition will handle the snap
@@ -400,6 +484,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                                 alt={showTitle ? banner.title : 'Banner'}
                                 priority={index === currentIndex}
                                 shouldLoad={activatedIndexes.has(index) || index === currentIndex}
+                                onFullLoad={() => markIndexReady(index)}
                                 style={{
                                     width: '100%',
                                     height: '100%',
@@ -459,6 +544,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                         <div
                             key={idx}
                             onClick={() => {
+                                prepareBannerIndex(idx, true);
                                 setCurrentIndex(idx);
                                 if (intervalRef.current) clearInterval(intervalRef.current);
                             }}

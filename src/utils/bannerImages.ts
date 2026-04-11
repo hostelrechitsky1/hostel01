@@ -15,6 +15,29 @@ const BANNER_WIDTH_STEPS = [240, 360, 480, 640, 800, 960, 1200, 1440];
 const warmedBannerSources = new Set<string>();
 const warmingBannerSources = new Map<string, Promise<void>>();
 
+const getDriveFileId = (source: string) => {
+    try {
+        const url = new URL(source);
+        const idFromQuery = url.searchParams.get('id');
+        if (idFromQuery) return idFromQuery;
+
+        const fileMatch = url.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileMatch?.[1]) return fileMatch[1];
+
+        const thumbnailMatch = url.pathname.includes('/thumbnail') ? url.searchParams.get('id') : null;
+        if (thumbnailMatch) return thumbnailMatch;
+
+        return null;
+    } catch {
+        const idMatch = source.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]+)/);
+        return idMatch?.[1] ?? null;
+    }
+};
+
+const buildDriveThumbnailUrl = (fileId: string, width = 1920) => {
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${width}`;
+};
+
 const getConnectionInfo = () => {
     if (typeof navigator === 'undefined') return undefined;
     const navigatorConnection = navigator as NavigatorWithConnection;
@@ -31,6 +54,17 @@ const isDriveThumbnailBanner = (source: string) => {
 
 const replaceDriveThumbnailWidth = (source: string, width: number) => {
     return source.replace(/sz=w\d+/, `sz=w${width}`);
+};
+
+const getFetchMode = (source: string): RequestMode => {
+    if (typeof window === 'undefined') return 'cors';
+
+    try {
+        const requestUrl = new URL(source, window.location.href);
+        return requestUrl.origin === window.location.origin ? 'same-origin' : 'no-cors';
+    } catch {
+        return 'no-cors';
+    }
 };
 
 const getViewportScaledWidth = (priority: boolean) => {
@@ -53,15 +87,34 @@ const getViewportScaledWidth = (priority: boolean) => {
     return roundBannerWidth(requestedWidth);
 };
 
+export const normalizeBannerSource = (source: string) => {
+    const trimmedSource = source.trim();
+    if (!trimmedSource) return trimmedSource;
+
+    const fileId = getDriveFileId(trimmedSource);
+    if (!fileId) return trimmedSource;
+
+    return buildDriveThumbnailUrl(fileId);
+};
+
 export const getAdaptiveBannerSrc = (source: string, options?: { priority?: boolean }) => {
-    if (!isDriveThumbnailBanner(source)) return source;
-    return replaceDriveThumbnailWidth(source, getViewportScaledWidth(Boolean(options?.priority)));
+    const normalizedSource = normalizeBannerSource(source);
+    if (!isDriveThumbnailBanner(normalizedSource)) return normalizedSource;
+    return replaceDriveThumbnailWidth(normalizedSource, getViewportScaledWidth(Boolean(options?.priority)));
 };
 
 export const getTinyBannerSrc = (source: string) => {
-    if (!isDriveThumbnailBanner(source)) return source;
+    const normalizedSource = normalizeBannerSource(source);
+    if (!isDriveThumbnailBanner(normalizedSource)) return normalizedSource;
     const viewportWidth = typeof window === 'undefined' ? 640 : Math.max(window.innerWidth, 360);
-    return replaceDriveThumbnailWidth(source, roundBannerWidth(Math.max(240, Math.min(Math.ceil(viewportWidth * 0.35), 480))));
+    return replaceDriveThumbnailWidth(normalizedSource, roundBannerWidth(Math.max(240, Math.min(Math.ceil(viewportWidth * 0.35), 480))));
+};
+
+export const getBannerWarmSources = (source: string, options?: { priority?: boolean }) => {
+    return {
+        previewSource: getTinyBannerSrc(source),
+        fullSource: getAdaptiveBannerSrc(source, options)
+    };
 };
 
 export const hasWarmBannerImage = (source: string) => {
@@ -103,13 +156,33 @@ export const preloadBannerImage = (source: string) => {
     }
 
     const loadPromise = new Promise<void>((resolve) => {
+        const finish = () => {
+            warmedBannerSources.add(source);
+            warmingBannerSources.delete(source);
+            resolve();
+        };
+
+        try {
+            void fetch(source, {
+                mode: getFetchMode(source),
+                credentials: 'omit',
+                cache: 'force-cache'
+            }).catch(() => undefined);
+        } catch {
+            // Fallback to image loading only when fetch hints are unavailable.
+        }
+
         const img = new Image();
         img.referrerPolicy = 'no-referrer';
         img.decoding = 'async';
         img.onload = () => {
-            warmedBannerSources.add(source);
-            warmingBannerSources.delete(source);
-            resolve();
+            if (typeof img.decode === 'function') {
+                img.decode()
+                    .catch(() => undefined)
+                    .finally(finish);
+                return;
+            }
+            finish();
         };
         img.onerror = () => {
             warmingBannerSources.delete(source);
@@ -118,14 +191,34 @@ export const preloadBannerImage = (source: string) => {
         img.src = source;
 
         if (img.complete) {
-            warmedBannerSources.add(source);
-            warmingBannerSources.delete(source);
-            resolve();
+            finish();
         }
     });
 
     warmingBannerSources.set(source, loadPromise);
     return loadPromise;
+};
+
+export const warmBannerSource = (source: string, options?: { priority?: boolean; eagerFull?: boolean }) => {
+    const { previewSource, fullSource } = getBannerWarmSources(source, options);
+
+    ensureBannerPreloadLink(previewSource);
+    const previewWarmup = preloadBannerImage(previewSource);
+
+    if (previewSource === fullSource) {
+        return previewWarmup.then(() => fullSource);
+    }
+
+    const warmFullSource = () => {
+        ensureBannerPreloadLink(fullSource);
+        return preloadBannerImage(fullSource).then(() => fullSource);
+    };
+
+    if (options?.eagerFull || hasWarmBannerImage(previewSource)) {
+        return warmFullSource();
+    }
+
+    return previewWarmup.then(warmFullSource);
 };
 
 export const warmBannerImages = (banners: Banner[], count = 2) => {
@@ -135,8 +228,9 @@ export const warmBannerImages = (banners: Banner[], count = 2) => {
         .slice(0, count);
 
     activeBanners.forEach((banner, index) => {
-        const source = getAdaptiveBannerSrc(banner.imageUrl, { priority: index === 0 });
-        ensureBannerPreloadLink(source);
-        void preloadBannerImage(source);
+        void warmBannerSource(banner.imageUrl, {
+            priority: index === 0,
+            eagerFull: index <= 1
+        });
     });
 };

@@ -25,6 +25,7 @@ import { useAdminDialog } from '../components/useAdminDialog';
 import { toast } from 'sonner';
 import { TIME_SLOTS } from '../types';
 import { addBelarusDays, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
+import { normalizeBannerSource } from '../utils/bannerImages';
 
 const BOOKING_ITEMS_PER_PAGE = 12;
 const INITIAL_RECENT_BOOKINGS_LIMIT = 80;
@@ -277,13 +278,7 @@ export default function ManagerPanel() {
     // --- Banner Management ---
     // Helper to convert Google Drive share links to direct image URLs
     const getDirectImageUrl = (url: string): string => {
-        if (url.includes('drive.google.com')) {
-            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-            if (match && match[1]) {
-                return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1920`;
-            }
-        }
-        return url;
+        return normalizeBannerSource(url);
     };
 
     const handleAddBanner = async () => {
