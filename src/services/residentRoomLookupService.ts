@@ -1,31 +1,13 @@
 import type { Student } from '../types';
+import { decodeFirestoreDocument, runFirestoreQueryDocuments } from './residentFirestoreRest';
 
 const STUDENTS_COL = 'students';
 const CACHE_PREFIX = 'hostel-cache:v4';
 const STUDENTS_BY_ROOM_MAX_AGE_MS = 15 * 60 * 1000;
-const FIRESTORE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-const FIRESTORE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
 
 type CacheRecord<T> = {
     savedAt: number;
     value: T;
-};
-
-type FirestoreValue =
-    | { stringValue: string }
-    | { integerValue: string }
-    | { doubleValue: number }
-    | { booleanValue: boolean }
-    | { nullValue: null }
-    | { mapValue: { fields?: Record<string, FirestoreValue> } };
-
-type FirestoreDocument = {
-    name: string;
-    fields?: Record<string, FirestoreValue>;
-};
-
-type FirestoreRunQueryResult = {
-    document?: FirestoreDocument;
 };
 
 const runtimeCache = new Map<string, CacheRecord<unknown>>();
@@ -82,75 +64,19 @@ const writeCache = <T>(key: string, value: T) => {
     }
 };
 
-const decodeFirestoreValue = (value?: FirestoreValue): unknown => {
-    if (!value) return undefined;
-
-    if ('stringValue' in value) return value.stringValue;
-    if ('integerValue' in value) return Number(value.integerValue);
-    if ('doubleValue' in value) return value.doubleValue;
-    if ('booleanValue' in value) return value.booleanValue;
-    if ('nullValue' in value) return null;
-    if ('mapValue' in value) {
-        const fields = value.mapValue.fields ?? {};
-        return Object.fromEntries(
-            Object.entries(fields).map(([fieldName, fieldValue]) => [fieldName, decodeFirestoreValue(fieldValue)])
-        );
-    }
-
-    return undefined;
-};
-
-const mapFirestoreStudent = (document: FirestoreDocument): Student => {
-    const fields = document.fields ?? {};
-    const fallbackId = document.name.split('/').pop() ?? '';
-    const id = decodeFirestoreValue(fields.id) ?? fallbackId;
-    const name = decodeFirestoreValue(fields.name) ?? '';
-    const roomNumber = decodeFirestoreValue(fields.roomNumber) ?? '';
-    const pin = decodeFirestoreValue(fields.pin);
-
-    return {
-        id: String(id),
-        name: String(name),
-        roomNumber: String(roomNumber),
-        pin: typeof pin === 'string' ? pin : undefined,
-    };
-};
-
 const fetchStudentsByRoomViaRest = async (roomNumber: string): Promise<Student[]> => {
-    if (!FIRESTORE_PROJECT_ID || !FIRESTORE_API_KEY) {
-        throw new Error('Missing Firebase REST configuration');
-    }
+    const documents = await runFirestoreQueryDocuments({
+        collectionId: STUDENTS_COL,
+        filters: [{
+            fieldPath: 'roomNumber',
+            op: 'EQUAL',
+            value: { stringValue: roomNumber },
+        }],
+        limit: 8,
+    });
 
-    const response = await fetch(
-        `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIRESTORE_API_KEY}`,
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                structuredQuery: {
-                    from: [{ collectionId: STUDENTS_COL }],
-                    where: {
-                        fieldFilter: {
-                            field: { fieldPath: 'roomNumber' },
-                            op: 'EQUAL',
-                            value: { stringValue: roomNumber },
-                        },
-                    },
-                    limit: 8,
-                },
-            }),
-        }
-    );
-
-    if (!response.ok) {
-        throw new Error(`Firestore REST room lookup failed with ${response.status}`);
-    }
-
-    const results = await response.json() as FirestoreRunQueryResult[];
-    return results
-        .flatMap((result) => result.document ? [mapFirestoreStudent(result.document)] : [])
+    return documents
+        .map((document) => decodeFirestoreDocument<Student>(document))
         .filter((student) => student.roomNumber === roomNumber);
 };
 
