@@ -19,7 +19,7 @@ interface InternalBannerCarouselProps {
 
 // Helper component to handle image loading and retries
 const SmartImage = ({
-    src,
+    source,
     alt,
     className,
     style,
@@ -28,7 +28,7 @@ const SmartImage = ({
     onDisplayReady,
     onFullLoad
 }: {
-    src: string;
+    source: Banner;
     alt: string;
     className?: string;
     style?: any;
@@ -37,7 +37,7 @@ const SmartImage = ({
     onDisplayReady?: () => void;
     onFullLoad?: () => void;
 }) => {
-    const initialSources = getBannerWarmSources(src, { priority });
+    const initialSources = getBannerWarmSources(source, { priority });
     const initialPreviewSrc = initialSources.previewSource;
     const initialAdaptiveSrc = initialSources.fullSource;
     const initialDisplaySrc = hasWarmBannerImage(initialAdaptiveSrc) ? initialAdaptiveSrc : initialPreviewSrc;
@@ -48,16 +48,16 @@ const SmartImage = ({
     const imgRef = useRef<HTMLImageElement>(null);
     const adaptiveSrcRef = useRef<string | null>(null);
     const previewSrcRef = useRef<string | null>(null);
-    const responsiveSrcSetRef = useRef<string | undefined>(getBannerResponsiveSrcSet(src, { priority }));
+    const responsiveSrcSetRef = useRef<string | undefined>(getBannerResponsiveSrcSet(source, { priority }));
     const displayReadySourceRef = useRef<string | null>(null);
 
     useEffect(() => {
-        const { previewSource, fullSource } = getBannerWarmSources(src, { priority });
+        const { previewSource, fullSource } = getBannerWarmSources(source, { priority });
         const nextDisplaySrc = hasWarmBannerImage(fullSource) ? fullSource : previewSource;
 
         adaptiveSrcRef.current = fullSource;
         previewSrcRef.current = previewSource;
-        responsiveSrcSetRef.current = getBannerResponsiveSrcSet(src, { priority });
+        responsiveSrcSetRef.current = getBannerResponsiveSrcSet(source, { priority });
         displayReadySourceRef.current = null;
         setPreviewLoaded(hasWarmBannerImage(previewSource));
         setLoaded(hasWarmBannerImage(nextDisplaySrc));
@@ -87,7 +87,7 @@ const SmartImage = ({
             ensureBannerPreloadLink(fullSource);
             return preloadBannerImage(fullSource);
         });
-    }, [priority, shouldLoad, src]);
+    }, [priority, shouldLoad, source]);
 
     useEffect(() => {
         if (!shouldLoad) return;
@@ -196,7 +196,7 @@ const SmartImage = ({
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
                 srcSet={shouldUseResponsiveSourceSet ? responsiveSrcSetRef.current : undefined}
-                sizes={shouldUseResponsiveSourceSet ? getBannerResponsiveSizes() : undefined}
+                sizes={shouldUseResponsiveSourceSet ? getBannerResponsiveSizes(source) : undefined}
             />
         </>
     );
@@ -255,12 +255,12 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
 
         markIndexActivated(index);
 
-        const { fullSource } = getBannerWarmSources(banner.imageUrl, { priority });
+        const { fullSource } = getBannerWarmSources(banner, { priority });
         if (!previewOnly && hasWarmBannerImage(fullSource)) {
             markIndexReady(index);
         }
 
-        void warmBannerSource(banner.imageUrl, {
+        void warmBannerSource(banner, {
             priority,
             eagerFull: priority,
             previewOnly
@@ -307,7 +307,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
                 const nextBanner = activeBanners[nextIndex];
                 if (!nextBanner?.imageUrl) return;
 
-                const { fullSource } = getBannerWarmSources(nextBanner.imageUrl, { priority: true });
+                const { fullSource } = getBannerWarmSources(nextBanner, { priority: true });
                 prepareBannerIndex(nextIndex, true);
 
                 if (hasWarmBannerImage(fullSource) || fullyReadyIndexes.has(nextIndex)) {
@@ -496,7 +496,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
                             }}
                         >
                             <SmartImage
-                                src={banner.imageUrl}
+                                source={banner}
                                 alt={showTitle ? banner.title : 'Banner'}
                                 priority={index === currentIndex}
                                 shouldLoad={activatedIndexes.has(index) || index === currentIndex}
@@ -557,7 +557,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
                     gap: '6px',
                     zIndex: 10
                 }}>
-                    {activeBanners.map((_, idx) => (
+                {activeBanners.map((_, idx) => (
                         <div
                             key={idx}
                             onClick={() => {

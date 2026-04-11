@@ -15,6 +15,11 @@ const BANNER_WIDTH_STEPS = [180, 240, 360, 480, 640, 720, 840, 960];
 const warmedBannerSources = new Set<string>();
 const warmingBannerSources = new Map<string, Promise<void>>();
 
+type BannerImageSource = Pick<
+    Banner,
+    'imageUrl' | 'previewImageUrl' | 'optimizedImageUrl' | 'mobileImageUrl' | 'desktopImageUrl' | 'responsiveSrcSet' | 'responsiveSizes'
+> | string;
+
 const getDriveFileId = (source: string) => {
     try {
         const url = new URL(source);
@@ -43,6 +48,12 @@ const getConnectionInfo = () => {
     const navigatorConnection = navigator as NavigatorWithConnection;
     return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
 };
+
+const asBannerImageObject = (source: BannerImageSource) => (
+    typeof source === 'string'
+        ? { imageUrl: source }
+        : source
+);
 
 const roundBannerWidth = (requestedWidth: number) => {
     return BANNER_WIDTH_STEPS.find((step) => step >= requestedWidth) ?? BANNER_WIDTH_STEPS[BANNER_WIDTH_STEPS.length - 1];
@@ -113,6 +124,66 @@ export const normalizeBannerSource = (source: string) => {
     return buildDriveThumbnailUrl(fileId);
 };
 
+const normalizeOptionalBannerSource = (source?: string) => {
+    if (!source) return undefined;
+    const normalized = normalizeBannerSource(source);
+    return normalized || undefined;
+};
+
+const getPreferredBannerFullSource = (source: BannerImageSource, options?: { priority?: boolean }) => {
+    const banner = asBannerImageObject(source);
+    const viewportWidth = typeof window === 'undefined' ? 1280 : Math.max(window.innerWidth, 360);
+    const prefersMobile = viewportWidth <= 768;
+    const preferredSource = prefersMobile
+        ? banner.mobileImageUrl ?? banner.optimizedImageUrl ?? banner.desktopImageUrl ?? banner.imageUrl
+        : banner.desktopImageUrl ?? banner.optimizedImageUrl ?? banner.mobileImageUrl ?? banner.imageUrl;
+
+    return getAdaptiveBannerSrc(preferredSource, options);
+};
+
+const getPreferredBannerPreviewSource = (source: BannerImageSource) => {
+    const banner = asBannerImageObject(source);
+    if (banner.previewImageUrl) {
+        return normalizeBannerSource(banner.previewImageUrl);
+    }
+
+    const fallbackSource = banner.optimizedImageUrl ?? banner.mobileImageUrl ?? banner.desktopImageUrl ?? banner.imageUrl;
+    return getTinyBannerSrc(fallbackSource);
+};
+
+const createExplicitResponsiveSrcSet = (source: BannerImageSource) => {
+    const banner = asBannerImageObject(source);
+    const candidates = [
+        banner.mobileImageUrl ? { src: normalizeBannerSource(banner.mobileImageUrl), width: 480 } : null,
+        banner.optimizedImageUrl ? { src: normalizeBannerSource(banner.optimizedImageUrl), width: 720 } : null,
+        banner.desktopImageUrl ? { src: normalizeBannerSource(banner.desktopImageUrl), width: 960 } : null,
+        banner.imageUrl ? { src: normalizeBannerSource(banner.imageUrl), width: 1280 } : null,
+    ].filter((candidate): candidate is { src: string; width: number } => Boolean(candidate?.src));
+
+    const uniqueCandidates = candidates.filter((candidate, index) => (
+        candidates.findIndex((other) => other.src === candidate.src) === index
+    ));
+
+    if (uniqueCandidates.length <= 1) {
+        return undefined;
+    }
+
+    return uniqueCandidates
+        .map((candidate) => `${candidate.src} ${candidate.width}w`)
+        .join(', ');
+};
+
+export const normalizeBannerRecord = (banner: Banner): Banner => ({
+    ...banner,
+    imageUrl: normalizeBannerSource(banner.imageUrl),
+    previewImageUrl: normalizeOptionalBannerSource(banner.previewImageUrl),
+    optimizedImageUrl: normalizeOptionalBannerSource(banner.optimizedImageUrl),
+    mobileImageUrl: normalizeOptionalBannerSource(banner.mobileImageUrl),
+    desktopImageUrl: normalizeOptionalBannerSource(banner.desktopImageUrl),
+    responsiveSrcSet: banner.responsiveSrcSet?.trim() || undefined,
+    responsiveSizes: banner.responsiveSizes?.trim() || undefined,
+});
+
 export const getAdaptiveBannerSrc = (source: string, options?: { priority?: boolean }) => {
     const normalizedSource = normalizeBannerSource(source);
     if (!isDriveThumbnailBanner(normalizedSource)) return normalizedSource;
@@ -126,15 +197,25 @@ export const getTinyBannerSrc = (source: string) => {
     return replaceDriveThumbnailWidth(normalizedSource, roundBannerWidth(Math.max(180, Math.min(Math.ceil(viewportWidth * 0.28), 360))));
 };
 
-export const getBannerWarmSources = (source: string, options?: { priority?: boolean }) => {
+export const getBannerWarmSources = (source: BannerImageSource, options?: { priority?: boolean }) => {
     return {
-        previewSource: getTinyBannerSrc(source),
-        fullSource: getAdaptiveBannerSrc(source, options)
+        previewSource: getPreferredBannerPreviewSource(source),
+        fullSource: getPreferredBannerFullSource(source, options)
     };
 };
 
-export const getBannerResponsiveSrcSet = (source: string, options?: { priority?: boolean }) => {
-    const normalizedSource = normalizeBannerSource(source);
+export const getBannerResponsiveSrcSet = (source: BannerImageSource, options?: { priority?: boolean }) => {
+    const banner = asBannerImageObject(source);
+    if (banner.responsiveSrcSet?.trim()) {
+        return banner.responsiveSrcSet.trim();
+    }
+
+    const explicitResponsiveSet = createExplicitResponsiveSrcSet(source);
+    if (explicitResponsiveSet) {
+        return explicitResponsiveSet;
+    }
+
+    const normalizedSource = normalizeBannerSource(banner.optimizedImageUrl ?? banner.desktopImageUrl ?? banner.mobileImageUrl ?? banner.imageUrl);
     if (!isDriveThumbnailBanner(normalizedSource)) {
         return undefined;
     }
@@ -144,7 +225,11 @@ export const getBannerResponsiveSrcSet = (source: string, options?: { priority?:
         .join(', ');
 };
 
-export const getBannerResponsiveSizes = () => {
+export const getBannerResponsiveSizes = (source?: BannerImageSource) => {
+    if (source && typeof source !== 'string' && source.responsiveSizes?.trim()) {
+        return source.responsiveSizes.trim();
+    }
+
     return '(max-width: 640px) calc(100vw - 32px), (max-width: 960px) 92vw, 720px';
 };
 
@@ -230,7 +315,7 @@ export const preloadBannerImage = (source: string) => {
     return loadPromise;
 };
 
-export const warmBannerSource = (source: string, options?: { priority?: boolean; eagerFull?: boolean; previewOnly?: boolean }) => {
+export const warmBannerSource = (source: BannerImageSource, options?: { priority?: boolean; eagerFull?: boolean; previewOnly?: boolean }) => {
     const { previewSource, fullSource } = getBannerWarmSources(source, options);
 
     ensureBannerPreloadLink(previewSource);
@@ -263,7 +348,7 @@ export const warmBannerImages = (banners: Banner[], count = 2) => {
         .slice(0, count);
 
     activeBanners.forEach((banner, index) => {
-        void warmBannerSource(banner.imageUrl, {
+        void warmBannerSource(banner, {
             priority: index === 0,
             eagerFull: index === 0,
             previewOnly: index > 0,

@@ -1,5 +1,5 @@
 import type { AppSettings, Banner, Booking, Feedback, Machine, Student } from '../types';
-import { normalizeBannerSource } from '../utils/bannerImages';
+import { normalizeBannerRecord } from '../utils/bannerImages';
 import {
     CACHE_MAX_AGE_MS,
     DEFAULT_APP_SETTINGS,
@@ -82,10 +82,7 @@ const normalizeAppSettings = (settings: Partial<AppSettings> | null | undefined)
     };
 };
 
-const normalizeBanner = (banner: Banner): Banner => ({
-    ...banner,
-    imageUrl: normalizeBannerSource(banner.imageUrl),
-});
+const normalizeBanner = (banner: Banner): Banner => normalizeBannerRecord(banner);
 
 const sortBanners = (banners: Banner[]) => (
     [...banners].sort((left, right) => (left.priority || 99) - (right.priority || 99))

@@ -50,6 +50,12 @@ export interface Banner {
   id: string;
   title: string;
   imageUrl: string;
+  previewImageUrl?: string;
+  optimizedImageUrl?: string;
+  mobileImageUrl?: string;
+  desktopImageUrl?: string;
+  responsiveSrcSet?: string;
+  responsiveSizes?: string;
   linkUrl?: string; // Optional external link
   isActive: boolean;
   createdAt: number;

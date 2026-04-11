@@ -22,25 +22,12 @@ export const warmResidentAppData = (studentId?: string, options: WarmResidentApp
         return existingWarmup;
     }
 
-    const warmup = import('../services/residentFirestoreService')
-        .then(({ residentFirestoreService }) => {
-            const tasks: Promise<unknown>[] = [
-                residentFirestoreService.getSettings(),
-                residentFirestoreService.getMachines(),
-                residentFirestoreService.getBanners(),
-                residentFirestoreService.getBookingsForWeekIds(relevantWeekIds),
-            ];
-
-            if (studentId && includeRecentBookings) {
-                tasks.push(residentFirestoreService.getRecentBookingsForStudent(studentId, 12));
-            }
-
-            return Promise.allSettled(tasks).then((results) => {
-                const bannersResult = results[2];
-                if (bannersResult?.status === 'fulfilled') {
-                    warmBannerImages(bannersResult.value as Banner[], 2);
-                }
-            });
+    const warmup = import('../services/residentSnapshotService')
+        .then(({ residentSnapshotService }) => {
+            return residentSnapshotService.getWarmSnapshot(relevantWeekIds, studentId, includeRecentBookings)
+                .then((snapshot) => {
+                    warmBannerImages((snapshot.banners ?? []) as Banner[], 2);
+                });
         })
         .then(() => undefined)
         .finally(() => {

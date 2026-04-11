@@ -2,6 +2,7 @@ import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState }
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
+import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, WashingMachine as Washer } from 'lucide-react';
@@ -248,57 +249,25 @@ export default function Dashboard() {
 
         finishLoadingIfReady();
 
-        if (!hasCachedMachines) {
-            void residentFirestoreService.getMachines()
-                .then((nextMachines) => {
-                    if (!isMounted) return;
-                    machinesReady = true;
-                    startTransition(() => {
-                        setMachines(nextMachines);
-                    });
-                    finishLoadingIfReady();
-                })
-                .catch((error) => {
-                    handleResidentDataError('Dashboard machines fetch error:', error);
-                });
-        }
-
-        if (!hasCachedWeekBookings) {
-            void residentFirestoreService.getBookingsForWeekIds(dashboardWeekIds)
-                .then((nextBookings) => {
-                    if (!isMounted) return;
-                    weekBookingsReady = true;
-                    startTransition(() => {
-                        setWeekBookings(nextBookings);
-                    });
-                    finishLoadingIfReady();
-                })
-                .catch((error) => {
-                    handleResidentDataError('Dashboard week bookings fetch error:', error);
-                });
-        }
-
-        void residentFirestoreService.getSettings()
-            .then((fetchedSettings) => {
+        void residentSnapshotService.getDashboardSnapshot(dashboardWeekIds)
+            .then((snapshot) => {
                 if (!isMounted) return;
+
+                machinesReady = true;
+                weekBookingsReady = true;
+
                 startTransition(() => {
-                    setSettings(fetchedSettings);
+                    setMachines(snapshot.machines);
+                    setWeekBookings(snapshot.weekBookings);
+                    setSettings(snapshot.settings);
+                    setBanners(snapshot.banners ?? []);
                 });
+
+                warmBannerImages(snapshot.banners ?? [], 2);
+                finishLoadingIfReady();
             })
             .catch((error) => {
-                console.error('Failed to refresh dashboard settings', error);
-            });
-
-        void residentFirestoreService.getBanners()
-            .then((fetchedBanners) => {
-                if (!isMounted) return;
-                startTransition(() => {
-                    setBanners(fetchedBanners);
-                });
-                warmBannerImages(fetchedBanners, 2);
-            })
-            .catch((error) => {
-                console.error('Failed to refresh dashboard banners', error);
+                handleResidentDataError('Dashboard snapshot fetch error:', error);
             })
             .finally(() => {
                 if (isMounted) {
@@ -376,7 +345,7 @@ export default function Dashboard() {
             unsubscribeMachines();
             unsubscribeWeekBookings();
         };
-    }, [dashboardWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
+    }, [dashboardWeekIds, navigate, reloadKey, userId]);
 
     useEffect(() => {
         if (!userId || !isBookingSummaryActive) {

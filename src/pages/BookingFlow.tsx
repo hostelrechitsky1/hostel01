@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
+import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
@@ -183,52 +184,30 @@ export default function BookingFlow() {
 
         finishLoadingIfReady();
 
-        if (!hasCachedMachines) {
-            void residentFirestoreService.getMachines()
-                .then((nextMachines) => {
-                    if (!isMounted) return;
-                    machinesReady = true;
-                    startTransition(() => {
-                        setMachines(nextMachines);
-                    });
-                    finishLoadingIfReady();
-                })
-                .catch((error) => {
-                    handleBookingLoadError('Machine fetching error:', error);
-                });
-        }
-
-        if (!hasCachedWeekBookings) {
-            void residentFirestoreService.getBookingsForWeekIds(bookingWeekIds)
-                .then((nextBookings) => {
-                    if (!isMounted) return;
-                    bookingsReady = true;
-                    startTransition(() => {
-                        setBookings(nextBookings);
-                    });
-                    finishLoadingIfReady();
-                })
-                .catch((error) => {
-                    handleBookingLoadError('Booking fetch error:', error);
-                });
-        }
-
-        void residentFirestoreService.getSettings()
-            .then((nextSettings) => {
+        void residentSnapshotService.getBookingSnapshot(bookingWeekIds)
+            .then((snapshot) => {
                 if (!isMounted) return;
+
+                machinesReady = true;
+                bookingsReady = true;
+
                 startTransition(() => {
-                    setSettings(nextSettings);
+                    setMachines(snapshot.machines);
+                    setBookings(snapshot.weekBookings);
+                    setSettings(snapshot.settings);
                 });
+
+                finishLoadingIfReady();
             })
             .catch((error) => {
-                console.error('Failed to load booking settings', error);
+                handleBookingLoadError('Booking snapshot fetch error:', error);
                 toast.error('Failed to load booking settings. Using saved defaults.');
             });
 
         return () => {
             isMounted = false;
         };
-    }, [bookingWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
+    }, [bookingWeekIds, navigate, reloadKey, userId]);
 
     useEffect(() => {
         if (!userId || loading || liveSyncRequested) {
