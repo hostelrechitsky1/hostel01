@@ -23,9 +23,22 @@ import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPort
 const RECENT_BOOKINGS_LIMIT = 12;
 const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
-const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
-const LazyDashboardBookingSummary = lazy(() => import('../components/DashboardBookingSummary'));
+let dashboardFeedbackModulePromise: Promise<typeof import('../components/DashboardFeedback')> | null = null;
+let dashboardBookingSummaryModulePromise: Promise<typeof import('../components/DashboardBookingSummary')> | null = null;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
+
+const loadDashboardFeedback = () => {
+    dashboardFeedbackModulePromise ??= import('../components/DashboardFeedback');
+    return dashboardFeedbackModulePromise;
+};
+
+const loadDashboardBookingSummary = () => {
+    dashboardBookingSummaryModulePromise ??= import('../components/DashboardBookingSummary');
+    return dashboardBookingSummaryModulePromise;
+};
+
+const LazyDashboardFeedback = lazy(loadDashboardFeedback);
+const LazyDashboardBookingSummary = lazy(loadDashboardBookingSummary);
 
 const loadResidentLiveService = () => {
     residentLiveServicePromise ??= import('../services/residentLiveService');
@@ -176,17 +189,17 @@ export default function Dashboard() {
         ref: bookingSummarySectionRef,
         isActive: isBookingSummaryActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '0px 0px -12% 0px',
+        rootMargin: '0px 0px -6% 0px',
         idleTimeout: null,
-        threshold: 0.18,
+        threshold: 0.01,
     });
     const {
         ref: feedbackSectionRef,
         isActive: isFeedbackActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '0px 0px -10% 0px',
+        rootMargin: '0px 0px -6% 0px',
         idleTimeout: null,
-        threshold: 0.14,
+        threshold: 0.01,
     });
     const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
     const [roommatesLoading, setRoommatesLoading] = useState(false);
@@ -230,7 +243,7 @@ export default function Dashboard() {
     const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
     const [bannersLoading, setBannersLoading] = useState(() => cachedBanners === undefined);
     const [loading, setLoading] = useState(() => Boolean(userId) && !hasCachedMachines && !hasCachedWeekBookings);
-    const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && isBookingSummaryActive && !hasCachedRecentBookings);
+    const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && !hasCachedRecentBookings);
     const [recentBookingsHydrated, setRecentBookingsHydrated] = useState(() => hasCachedRecentBookings);
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
     const [reloadKey, setReloadKey] = useState(0);
@@ -380,14 +393,54 @@ export default function Dashboard() {
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
+        if (!userId || loading || typeof window === 'undefined') {
+            return;
+        }
+
+        let cancelled = false;
+        let idleHandle: number | null = null;
+        let timeoutId: number | null = null;
+
+        const primeBelowFoldSections = () => {
+            void Promise.allSettled([
+                loadDashboardBookingSummary(),
+                loadDashboardFeedback(),
+            ]).then(() => {
+                if (cancelled) return;
+            });
+        };
+
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleHandle = idleWindow.requestIdleCallback(primeBelowFoldSections, { timeout: 900 });
+        } else {
+            timeoutId = window.setTimeout(primeBelowFoldSections, 180);
+        }
+
+        return () => {
+            cancelled = true;
+            if (idleHandle !== null) {
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+        };
+    }, [loading, userId]);
+
+    useEffect(() => {
         setRoommates(getInitialRoommates(user));
     }, [user?.id, user?.roomNumber]);
 
     useEffect(() => {
         setRecentBookings(cachedRecentBookings ?? []);
         setRecentBookingsHydrated(hasCachedRecentBookings);
-        setRecentBookingsLoading(Boolean(userId) && isBookingSummaryActive && !hasCachedRecentBookings);
-    }, [cachedRecentBookings, hasCachedRecentBookings, isBookingSummaryActive, userId]);
+        setRecentBookingsLoading(Boolean(userId) && !hasCachedRecentBookings);
+    }, [cachedRecentBookings, hasCachedRecentBookings, userId]);
     /* eslint-enable react-hooks/set-state-in-effect */
 
     useEffect(() => {
@@ -597,7 +650,7 @@ export default function Dashboard() {
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
-        if (!userId || !isBookingSummaryActive) {
+        if (!userId) {
             return;
         }
 
@@ -684,7 +737,7 @@ export default function Dashboard() {
             }
             unsubscribeRecentBookings();
         };
-    }, [hasCachedRecentBookings, isBookingSummaryActive, reloadKey, userId]);
+    }, [hasCachedRecentBookings, reloadKey, userId]);
     /* eslint-enable react-hooks/set-state-in-effect */
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
@@ -831,7 +884,7 @@ export default function Dashboard() {
         });
         setLoading(false);
         setRecentBookingsHydrated(cachedBookings !== undefined);
-        setRecentBookingsLoading(isBookingSummaryActive && cachedBookings === undefined);
+        setRecentBookingsLoading(cachedBookings === undefined);
         setLoadIssue(null);
         setLoadErrorMessage(null);
         setIsRoommateMenuOpen(false);
@@ -854,7 +907,7 @@ export default function Dashboard() {
             setLoading(true);
         }
         setRecentBookingsHydrated(hasCachedRecentBookings);
-        setRecentBookingsLoading(isBookingSummaryActive && !hasCachedRecentBookings);
+        setRecentBookingsLoading(!hasCachedRecentBookings);
         if (!hasResidentSnapshot) {
             setBannersLoading(banners.length === 0);
         }
@@ -906,21 +959,7 @@ export default function Dashboard() {
 
     if (!user) return null;
 
-    const feedbackFallback = (
-        <div className="glass-panel scroll-loading-shell" style={{ marginTop: '40px', padding: '18px', borderRadius: '18px', opacity: 0.92 }}>
-            <div style={{ height: '18px', width: '120px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '14px' }} className="skeleton-pulse"></div>
-            <div style={{ height: '48px', width: '100%', borderRadius: '14px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
-        </div>
-    );
-    const bookingsFallback = (
-        <div className="animate-fade-in" style={{ marginTop: '32px' }}>
-            <div style={{ height: '18px', width: '180px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '16px' }} className="skeleton-pulse"></div>
-            <div className="glass-panel scroll-loading-shell" style={{ height: '156px', width: '100%', borderRadius: '20px', marginBottom: '24px' }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: '20px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
-            </div>
-        </div>
-    );
-    const shouldShowRecentBookingsLoading = isBookingSummaryActive && (!recentBookingsHydrated || recentBookingsLoading);
+    const shouldShowRecentBookingsLoading = !recentBookingsHydrated || recentBookingsLoading;
     const statusOverviewSkeleton = (
         <div
             className="glass-panel"
@@ -1474,41 +1513,47 @@ export default function Dashboard() {
 
             <div
                 ref={bookingSummarySectionRef}
-                style={{ minHeight: '220px' }}
+                className={`scroll-reveal${isBookingSummaryActive ? ' scroll-reveal--visible' : ''}`}
+                style={{
+                    minHeight: '220px',
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '220px'
+                }}
             >
-                {isBookingSummaryActive ? (
-                    <div className="scroll-reveal scroll-reveal--visible scroll-reveal-content">
-                        <Suspense fallback={bookingsFallback}>
-                            <LazyDashboardBookingSummary
-                                key={userId}
-                                user={user}
-                                machines={machines}
-                                recentBookings={recentBookings}
-                                recentBookingsLoading={shouldShowRecentBookingsLoading}
-                                weekBookings={weekBookings}
-                                settings={settings}
-                                isNextWeekOpen={isNextWeekOpen}
-                                isRussian={isRussian}
-                                onBookingCreated={handleResidentBookingCreated}
-                                onBookingCancelled={handleResidentBookingCancelled}
-                            />
-                        </Suspense>
-                    </div>
-                ) : bookingsFallback}
+                <div className={isBookingSummaryActive ? 'scroll-reveal-content' : undefined}>
+                    <Suspense fallback={null}>
+                        <LazyDashboardBookingSummary
+                            key={userId}
+                            user={user}
+                            machines={machines}
+                            recentBookings={recentBookings}
+                            recentBookingsLoading={shouldShowRecentBookingsLoading}
+                            weekBookings={weekBookings}
+                            settings={settings}
+                            isNextWeekOpen={isNextWeekOpen}
+                            isRussian={isRussian}
+                            onBookingCreated={handleResidentBookingCreated}
+                            onBookingCancelled={handleResidentBookingCancelled}
+                        />
+                    </Suspense>
+                </div>
             </div>
 
             {/* Inline Feedback Section */}
             <div
                 ref={feedbackSectionRef}
-                style={{ minHeight: '132px' }}
+                className={`scroll-reveal${isFeedbackActive ? ' scroll-reveal--visible' : ''}`}
+                style={{
+                    minHeight: '132px',
+                    contentVisibility: 'auto',
+                    containIntrinsicSize: '132px'
+                }}
             >
-                {isFeedbackActive ? (
-                    <div className="scroll-reveal scroll-reveal--visible scroll-reveal-content">
-                        <Suspense fallback={feedbackFallback}>
-                            <LazyDashboardFeedback isRussian={isRussian} />
-                        </Suspense>
-                    </div>
-                ) : feedbackFallback}
+                <div className={isFeedbackActive ? 'scroll-reveal-content' : undefined}>
+                    <Suspense fallback={null}>
+                        <LazyDashboardFeedback isRussian={isRussian} />
+                    </Suspense>
+                </div>
             </div>
         </div>
     );
