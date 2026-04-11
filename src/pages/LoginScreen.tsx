@@ -152,9 +152,13 @@ export default function LoginScreen() {
         const root = document.documentElement;
         const body = document.body;
         const viewport = window.visualViewport;
+        const keyboardGapThreshold = 110;
         const setViewportHeight = () => {
             const viewportHeight = viewport?.height ?? window.innerHeight;
             root.style.setProperty('--resident-login-vh', `${viewportHeight}px`);
+            const keyboardOpen = Boolean(viewport && window.innerHeight - viewport.height > keyboardGapThreshold);
+            root.classList.toggle('resident-login-keyboard-open', keyboardOpen);
+            body.classList.toggle('resident-login-keyboard-open', keyboardOpen);
         };
 
         root.classList.add('resident-login-route');
@@ -167,7 +171,9 @@ export default function LoginScreen() {
 
         return () => {
             root.classList.remove('resident-login-route');
+            root.classList.remove('resident-login-keyboard-open');
             body.classList.remove('resident-login-route');
+            body.classList.remove('resident-login-keyboard-open');
             root.style.removeProperty('--resident-login-vh');
             window.removeEventListener('resize', setViewportHeight);
             viewport?.removeEventListener('resize', setViewportHeight);
@@ -344,7 +350,7 @@ export default function LoginScreen() {
                         justifyContent: 'center'
                     }}
                 >
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                    <div className="login-card-toolbar" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
                         <button
                             type="button"
                             onClick={toggleLanguage}
@@ -356,8 +362,8 @@ export default function LoginScreen() {
                         </button>
                     </div>
 
-                    <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                        <div style={{
+                    <div className="login-card-intro" style={{ textAlign: 'center', marginBottom: '30px' }}>
+                        <div className="login-card-icon" style={{
                             background: 'rgba(99, 102, 241, 0.2)',
                             width: '80px',
                             height: '80px',
@@ -369,13 +375,13 @@ export default function LoginScreen() {
                         }}>
                             <Building size={40} color="#818cf8" />
                         </div>
-                        <h1 className="text-gradient" style={{ margin: 0, fontSize: '28px' }}>{t.portalTitle}</h1>
-                        <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>{t.portalSubtitle}</p>
+                        <h1 className="text-gradient login-card-title" style={{ margin: 0, fontSize: '28px' }}>{t.portalTitle}</h1>
+                        <p className="login-card-subtitle" style={{ color: 'var(--text-muted)', marginTop: '8px' }}>{t.portalSubtitle}</p>
                     </div>
 
                     {step === 1 ? (
-                        <form onSubmit={handleRoomSubmit}>
-                                <div style={{ marginBottom: '20px' }}>
+                        <form className="login-card-form" onSubmit={handleRoomSubmit}>
+                                <div className="login-card-field" style={{ marginBottom: '20px' }}>
                                     <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>
                                         {t.roomLabel}
                                     </label>
@@ -421,9 +427,9 @@ export default function LoginScreen() {
                                 </button>
                         </form>
                     ) : step === 1.5 ? (
-                        <form onSubmit={handlePinSubmit}>
+                        <form className="login-card-form" onSubmit={handlePinSubmit}>
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>{t.enterRoomPin}</p>
-                                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
+                                <div className="login-card-field" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
                                     <input
                                         type="password"
                                         inputMode="numeric"
@@ -463,7 +469,7 @@ export default function LoginScreen() {
                                 </button>
                         </form>
                     ) : (
-                        <div>
+                        <div className="login-card-form">
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>{t.whoAreYou}</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {roommates.map(student => (
@@ -505,7 +511,7 @@ export default function LoginScreen() {
                         </div>
                     )}
 
-                    <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', marginTop: '24px' }}>
+                    <p className="login-card-footnote" style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', marginTop: '24px' }}>
                         {t.residentsOnly}
                     </p>
                 </div>

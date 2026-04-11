@@ -669,6 +669,11 @@ button {
   box-sizing: border-box;
 }
 
+.login-card-form {
+  display: flex;
+  flex-direction: column;
+}
+
 @media (min-width: 768px) {
   .login-split {
     flex-direction: row;
@@ -692,5 +697,50 @@ button {
     padding: 28px 20px !important;
     border-radius: 24px !important;
     justify-content: flex-start !important;
+  }
+
+  .resident-login-keyboard-open .login-left {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+    padding-bottom: 8px;
+  }
+
+  .resident-login-keyboard-open .login-card {
+    padding: 18px 16px 16px !important;
+    border-radius: 20px !important;
+  }
+
+  .resident-login-keyboard-open .login-card-toolbar {
+    margin-bottom: 8px !important;
+  }
+
+  .resident-login-keyboard-open .login-card-intro {
+    margin-bottom: 16px !important;
+  }
+
+  .resident-login-keyboard-open .login-card-icon {
+    width: 56px !important;
+    height: 56px !important;
+    margin: 0 auto 12px auto !important;
+  }
+
+  .resident-login-keyboard-open .login-card-title {
+    font-size: 22px !important;
+  }
+
+  .resident-login-keyboard-open .login-card-subtitle {
+    margin-top: 4px !important;
+    font-size: 15px;
+  }
+
+  .resident-login-keyboard-open .login-card-form {
+    gap: 12px;
+  }
+
+  .resident-login-keyboard-open .login-card-field {
+    margin-bottom: 14px !important;
+  }
+
+  .resident-login-keyboard-open .login-card-footnote {
+    margin-top: 14px !important;
   }
 }
