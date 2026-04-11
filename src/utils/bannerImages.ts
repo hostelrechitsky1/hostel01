@@ -22,10 +22,14 @@ const PROXIED_BANNER_HOSTS = [
 const warmedBannerSources = new Set<string>();
 const warmingBannerSources = new Map<string, Promise<void>>();
 
-type BannerImageSource = Pick<
+type BannerImageDescriptor = Partial<Pick<
     Banner,
-    'imageUrl' | 'previewImageUrl' | 'optimizedImageUrl' | 'mobileImageUrl' | 'desktopImageUrl' | 'responsiveSrcSet' | 'responsiveSizes'
-> | string;
+    'id' | 'imageUrl' | 'previewImageUrl' | 'optimizedImageUrl' | 'mobileImageUrl' | 'desktopImageUrl' | 'responsiveSrcSet' | 'responsiveSizes'
+>> & {
+    imageUrl: string;
+};
+
+type BannerImageSource = BannerImageDescriptor | string;
 
 const getDriveFileId = (source: string) => {
     try {
@@ -56,7 +60,9 @@ const getConnectionInfo = () => {
     return navigatorConnection.connection || navigatorConnection.mozConnection || navigatorConnection.webkitConnection;
 };
 
-const asBannerImageObject = (source: BannerImageSource) => (
+const canUseSessionStorage = () => typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
+
+const asBannerImageObject = (source: BannerImageSource): BannerImageDescriptor => (
     typeof source === 'string'
         ? { imageUrl: source }
         : source
@@ -185,6 +191,12 @@ export const normalizeBannerSource = (source: string) => {
     if (!fileId) return trimmedSource;
 
     return buildDriveThumbnailUrl(fileId);
+};
+
+const getBannerDisplayMemoryKey = (source: BannerImageSource) => {
+    const banner = asBannerImageObject(source);
+    const normalizedSource = normalizeBannerSource(banner.imageUrl);
+    return `hostel-banner:display:${banner.id ?? normalizedSource}`;
 };
 
 const normalizeOptionalBannerSource = (source?: string) => {
@@ -336,6 +348,30 @@ export const getBannerResponsiveSizes = (source?: BannerImageSource) => {
     return '(max-width: 640px) calc(100vw - 32px), (max-width: 960px) 92vw, 720px';
 };
 
+export const getRememberedBannerDisplaySource = (source: BannerImageSource) => {
+    if (!canUseSessionStorage()) {
+        return undefined;
+    }
+
+    try {
+        return window.sessionStorage.getItem(getBannerDisplayMemoryKey(source)) ?? undefined;
+    } catch {
+        return undefined;
+    }
+};
+
+export const rememberBannerDisplaySource = (source: BannerImageSource, displaySource: string) => {
+    if (!displaySource || !canUseSessionStorage()) {
+        return;
+    }
+
+    try {
+        window.sessionStorage.setItem(getBannerDisplayMemoryKey(source), displaySource);
+    } catch {
+        // Ignore storage failures and keep runtime warm cache only.
+    }
+};
+
 export const hasWarmBannerImage = (source: string) => {
     return warmedBannerSources.has(source);
 };
@@ -450,11 +486,11 @@ export const warmBannerImages = (banners: Banner[], count = 2) => {
         .sort((left, right) => left.priority - right.priority)
         .slice(0, count);
 
-    activeBanners.forEach((banner, index) => {
-        void warmBannerSource(banner, {
+    return Promise.allSettled(activeBanners.map((banner, index) => {
+        return warmBannerSource(banner, {
             priority: index === 0,
             eagerFull: index === 0,
             previewOnly: index > 0,
         });
-    });
+    })).then(() => undefined);
 };

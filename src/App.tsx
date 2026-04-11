@@ -111,7 +111,7 @@ const PageWrapper = ({ children }: { children: React.ReactNode }) => (
 
 function RouteWarmup() {
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const startWarmup = () => {
       const currentUser = bookingService.getCurrentUser();
       if (currentUser) {
         preloadResidentRoutes();
@@ -132,8 +132,19 @@ function RouteWarmup() {
         preloadManagerRoutes();
         void import('./utils/warmAdminApp').then(({ warmAdminAppData }) => warmAdminAppData('staff'));
       }
-    }, 200);
+    };
 
+    const idleWindow = window as Window & typeof globalThis & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      const idleId = idleWindow.requestIdleCallback(startWarmup, { timeout: 1600 });
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timer = window.setTimeout(startWarmup, 450);
     return () => window.clearTimeout(timer);
   }, []);
 

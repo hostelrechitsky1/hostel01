@@ -29,7 +29,7 @@ export const warmResidentAppData = (studentId?: string, options: WarmResidentApp
             .then(({ residentSnapshotService }) => {
                 return residentSnapshotService.getWarmSnapshot(relevantWeekIds, studentId, includeRecentBookings)
                     .then((snapshot) => {
-                        warmBannerImages((snapshot.banners ?? []) as Banner[], 2);
+                        return warmBannerImages((snapshot.banners ?? []) as Banner[], 2);
                     });
             }),
         roomNumber

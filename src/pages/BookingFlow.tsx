@@ -70,9 +70,17 @@ export default function BookingFlow() {
         () => residentSnapshotService.getCachedBookingSnapshot(bookingWeekIds),
         [bookingWeekIds]
     );
-    const cachedMachines = cachedBookingSnapshot?.machines;
-    const cachedWeekBookings = cachedBookingSnapshot?.weekBookings;
-    const cachedSettings = cachedBookingSnapshot?.settings;
+    const cachedDashboardSnapshot = useMemo(
+        () => residentSnapshotService.getCachedDashboardSnapshot(bookingWeekIds),
+        [bookingWeekIds]
+    );
+    const cachedCoreWarmSnapshot = useMemo(
+        () => (userId ? residentSnapshotService.getCachedWarmSnapshot(bookingWeekIds, userId, false) : undefined),
+        [bookingWeekIds, userId]
+    );
+    const cachedMachines = cachedBookingSnapshot?.machines ?? cachedDashboardSnapshot?.machines ?? cachedCoreWarmSnapshot?.machines;
+    const cachedWeekBookings = cachedBookingSnapshot?.weekBookings ?? cachedDashboardSnapshot?.weekBookings ?? cachedCoreWarmSnapshot?.weekBookings;
+    const cachedSettings = cachedBookingSnapshot?.settings ?? cachedDashboardSnapshot?.settings ?? cachedCoreWarmSnapshot?.settings;
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
 
@@ -123,18 +131,22 @@ export default function BookingFlow() {
         bookingShellMetricRef.current = true;
         finishResidentPerfSpan('resident:dashboard-to-booking-shell', {
             cachedCore: hasBookingSnapshot,
-            source: cachedBookingSnapshot ? 'snapshot' : 'resource-cache',
+            source: cachedBookingSnapshot
+                ? 'snapshot'
+                : (cachedDashboardSnapshot ? 'dashboard-snapshot' : (cachedCoreWarmSnapshot ? 'warm-snapshot' : 'resource-cache')),
         });
-    }, [cachedBookingSnapshot, hasBookingSnapshot, userId]);
+    }, [cachedBookingSnapshot, cachedCoreWarmSnapshot, cachedDashboardSnapshot, hasBookingSnapshot, userId]);
 
     useEffect(() => {
         if (!userId || loading || bookingDataMetricRef.current) return;
         bookingDataMetricRef.current = true;
         finishResidentPerfSpan('resident:booking-data-ready', {
             cachedCore: hasBookingSnapshot,
-            source: cachedBookingSnapshot ? 'snapshot' : 'resource-cache',
+            source: cachedBookingSnapshot
+                ? 'snapshot'
+                : (cachedDashboardSnapshot ? 'dashboard-snapshot' : (cachedCoreWarmSnapshot ? 'warm-snapshot' : 'resource-cache')),
         });
-    }, [cachedBookingSnapshot, hasBookingSnapshot, loading, userId]);
+    }, [cachedBookingSnapshot, cachedCoreWarmSnapshot, cachedDashboardSnapshot, hasBookingSnapshot, loading, userId]);
 
     useEffect(() => {
         if (!userId || !liveSyncAttached || bookingLiveMetricRef.current) return;

@@ -3,11 +3,13 @@ import type { Banner } from '../types';
 import {
     ensureBannerPreloadLink,
     getBannerWarmSources,
+    getRememberedBannerDisplaySource,
     getBannerResponsiveSizes,
     getBannerResponsiveSrcSet,
     hasWarmBannerImage,
     markBannerImageLoaded,
     preloadBannerImage,
+    rememberBannerDisplaySource,
     warmBannerSource,
 } from '../utils/bannerImages';
 
@@ -40,27 +42,43 @@ const SmartImage = ({
     const initialSources = getBannerWarmSources(source, { priority });
     const initialPreviewSrc = initialSources.previewSource;
     const initialAdaptiveSrc = initialSources.fullSource;
-    const initialDisplaySrc = hasWarmBannerImage(initialAdaptiveSrc) ? initialAdaptiveSrc : initialPreviewSrc;
+    const initialRememberedSrc = getRememberedBannerDisplaySource(source);
+    const initialDisplaySrc = hasWarmBannerImage(initialAdaptiveSrc)
+        ? initialAdaptiveSrc
+        : (initialRememberedSrc ?? initialPreviewSrc);
     const [imgSrc, setImgSrc] = useState(initialDisplaySrc);
     const [error, setError] = useState(false);
-    const [loaded, setLoaded] = useState(() => hasWarmBannerImage(initialDisplaySrc));
-    const [previewLoaded, setPreviewLoaded] = useState(() => hasWarmBannerImage(initialPreviewSrc));
+    const [loaded, setLoaded] = useState(() => hasWarmBannerImage(initialDisplaySrc) || initialRememberedSrc === initialDisplaySrc);
+    const [previewLoaded, setPreviewLoaded] = useState(() => (
+        hasWarmBannerImage(initialPreviewSrc)
+        || initialRememberedSrc === initialPreviewSrc
+        || initialRememberedSrc === initialAdaptiveSrc
+    ));
     const imgRef = useRef<HTMLImageElement>(null);
     const adaptiveSrcRef = useRef<string | null>(null);
     const previewSrcRef = useRef<string | null>(null);
+    const rememberedDisplaySrcRef = useRef<string | undefined>(initialRememberedSrc);
     const responsiveSrcSetRef = useRef<string | undefined>(getBannerResponsiveSrcSet(source, { priority }));
     const displayReadySourceRef = useRef<string | null>(null);
 
     useEffect(() => {
         const { previewSource, fullSource } = getBannerWarmSources(source, { priority });
-        const nextDisplaySrc = hasWarmBannerImage(fullSource) ? fullSource : previewSource;
+        const rememberedDisplaySrc = getRememberedBannerDisplaySource(source);
+        const nextDisplaySrc = hasWarmBannerImage(fullSource)
+            ? fullSource
+            : (rememberedDisplaySrc ?? previewSource);
 
         adaptiveSrcRef.current = fullSource;
         previewSrcRef.current = previewSource;
+        rememberedDisplaySrcRef.current = rememberedDisplaySrc;
         responsiveSrcSetRef.current = getBannerResponsiveSrcSet(source, { priority });
         displayReadySourceRef.current = null;
-        setPreviewLoaded(hasWarmBannerImage(previewSource));
-        setLoaded(hasWarmBannerImage(nextDisplaySrc));
+        setPreviewLoaded(
+            hasWarmBannerImage(previewSource)
+            || rememberedDisplaySrc === previewSource
+            || rememberedDisplaySrc === fullSource
+        );
+        setLoaded(hasWarmBannerImage(nextDisplaySrc) || rememberedDisplaySrc === nextDisplaySrc);
         setImgSrc(nextDisplaySrc);
         setError(false);
 
@@ -131,6 +149,13 @@ const SmartImage = ({
     }, [imgSrc, loaded, onFullLoad]);
 
     const handleError = () => {
+        if (rememberedDisplaySrcRef.current && imgSrc === rememberedDisplaySrcRef.current && previewSrcRef.current && previewSrcRef.current !== imgSrc) {
+            setImgSrc(previewSrcRef.current);
+            setLoaded(false);
+            setError(false);
+            return;
+        }
+
         // If it's a Google Drive thumbnail link that failed, try the view link as fallback
         if (imgSrc.includes('drive.google.com/thumbnail')) {
             const idMatch = imgSrc.match(/id=([^&]+)/);
@@ -186,6 +211,7 @@ const SmartImage = ({
                 }}
                 onLoad={() => {
                     markBannerImageLoaded(imgSrc);
+                    rememberBannerDisplaySource(source, imgSrc);
                     setPreviewLoaded(true);
                     setLoaded(true);
                 }}
@@ -224,6 +250,24 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
 
     // Minimum swipe distance to trigger slide change
     const minSwipeDistance = 50;
+
+    const requestIndexTransition = (index: number) => {
+        const nextBanner = activeBanners[index];
+        if (!nextBanner?.imageUrl) {
+            return;
+        }
+
+        prepareBannerIndex(index, true);
+
+        const { fullSource } = getBannerWarmSources(nextBanner, { priority: true });
+        if (hasWarmBannerImage(fullSource) || fullyReadyIndexes.has(index)) {
+            setCurrentIndex(index);
+            setPendingAutoAdvanceIndex(null);
+            return;
+        }
+
+        setPendingAutoAdvanceIndex(index);
+    };
 
     const markIndexActivated = (index: number) => {
         setActivatedIndexes((currentIndexes) => {
@@ -304,18 +348,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
         const startInterval = () => {
             intervalRef.current = setInterval(() => {
                 const nextIndex = (currentIndex + 1) % activeBanners.length;
-                const nextBanner = activeBanners[nextIndex];
-                if (!nextBanner?.imageUrl) return;
-
-                const { fullSource } = getBannerWarmSources(nextBanner, { priority: true });
-                prepareBannerIndex(nextIndex, true);
-
-                if (hasWarmBannerImage(fullSource) || fullyReadyIndexes.has(nextIndex)) {
-                    setCurrentIndex(nextIndex);
-                    return;
-                }
-
-                setPendingAutoAdvanceIndex(nextIndex);
+                requestIndexTransition(nextIndex);
             }, 5000); // 5 seconds
         };
 
@@ -395,13 +428,11 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
         if (isLeftSwipe) {
             // Next slide
             const nextIndex = (currentIndex + 1) % activeBanners.length;
-            prepareBannerIndex(nextIndex, true);
-            setCurrentIndex(nextIndex);
+            requestIndexTransition(nextIndex);
         } else if (isRightSwipe) {
             // Prev slide
             const previousIndex = (currentIndex - 1 + activeBanners.length) % activeBanners.length;
-            prepareBannerIndex(previousIndex, true);
-            setCurrentIndex(previousIndex);
+            requestIndexTransition(previousIndex);
         }
 
         // Reset drag offset - CSS transition will handle the snap
@@ -410,7 +441,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
         setTouchEnd(null);
     };
 
-    if (isLoading) {
+    if (isLoading && activeBanners.length === 0) {
         return (
             <div
                 className="banner-carousel-container"
@@ -561,8 +592,7 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
                         <div
                             key={idx}
                             onClick={() => {
-                                prepareBannerIndex(idx, true);
-                                setCurrentIndex(idx);
+                                requestIndexTransition(idx);
                                 if (intervalRef.current) clearInterval(intervalRef.current);
                             }}
                             style={{

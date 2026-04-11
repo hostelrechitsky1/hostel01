@@ -67,13 +67,15 @@ export default function Dashboard() {
         ref: bookingSummarySectionRef,
         isActive: isBookingSummaryActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '320px 0px',
+        rootMargin: '120px 0px',
+        idleTimeout: 1400,
     });
     const {
         ref: feedbackSectionRef,
         isActive: isFeedbackActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '240px 0px',
+        rootMargin: '60px 0px',
+        idleTimeout: 2200,
     });
     const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
     const [roommatesLoading, setRoommatesLoading] = useState(false);
@@ -92,16 +94,21 @@ export default function Dashboard() {
         () => residentSnapshotService.getCachedDashboardSnapshot(dashboardWeekIds),
         [dashboardWeekIds]
     );
-    const cachedWarmSnapshot = useMemo(() => (
+    const cachedCoreWarmSnapshot = useMemo(() => (
+        userId
+            ? residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, userId, false)
+            : undefined
+    ), [dashboardWeekIds, userId]);
+    const cachedRecentWarmSnapshot = useMemo(() => (
         userId
             ? residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, userId, true)
             : undefined
     ), [dashboardWeekIds, userId]);
-    const cachedMachines = cachedDashboardSnapshot?.machines;
-    const cachedWeekBookings = cachedDashboardSnapshot?.weekBookings;
-    const cachedSettings = cachedDashboardSnapshot?.settings;
-    const cachedBanners = cachedDashboardSnapshot?.banners;
-    const cachedRecentBookings = cachedWarmSnapshot?.recentBookings
+    const cachedMachines = cachedDashboardSnapshot?.machines ?? cachedCoreWarmSnapshot?.machines;
+    const cachedWeekBookings = cachedDashboardSnapshot?.weekBookings ?? cachedCoreWarmSnapshot?.weekBookings;
+    const cachedSettings = cachedDashboardSnapshot?.settings ?? cachedCoreWarmSnapshot?.settings;
+    const cachedBanners = cachedDashboardSnapshot?.banners ?? cachedCoreWarmSnapshot?.banners;
+    const cachedRecentBookings = cachedRecentWarmSnapshot?.recentBookings
         ?? (userId ? residentFirestoreService.getCachedRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT) : undefined);
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
@@ -152,9 +159,9 @@ export default function Dashboard() {
         dashboardShellMetricRef.current = true;
         finishResidentPerfSpan('resident:login-to-dashboard-shell', {
             cachedCore: hasCoreResidentSnapshot,
-            source: cachedDashboardSnapshot ? 'snapshot' : 'resource-cache',
+            source: cachedDashboardSnapshot ? 'snapshot' : (cachedCoreWarmSnapshot ? 'warm-snapshot' : 'resource-cache'),
         });
-    }, [cachedDashboardSnapshot, hasCoreResidentSnapshot, userId]);
+    }, [cachedCoreWarmSnapshot, cachedDashboardSnapshot, hasCoreResidentSnapshot, userId]);
 
     useEffect(() => {
         if (!userId || loading || dashboardDataMetricRef.current) return;
@@ -162,9 +169,11 @@ export default function Dashboard() {
         finishResidentPerfSpan('resident:login-to-dashboard-data', {
             cachedCore: hasCoreResidentSnapshot,
             cachedRecentBookings: hasCachedRecentBookings,
-            source: cachedWarmSnapshot ? 'warm-snapshot' : (cachedDashboardSnapshot ? 'snapshot' : 'resource-cache'),
+            source: cachedRecentWarmSnapshot
+                ? 'warm-snapshot'
+                : (cachedDashboardSnapshot ? 'snapshot' : (cachedCoreWarmSnapshot ? 'warm-core' : 'resource-cache')),
         });
-    }, [cachedDashboardSnapshot, cachedWarmSnapshot, hasCachedRecentBookings, hasCoreResidentSnapshot, loading, userId]);
+    }, [cachedCoreWarmSnapshot, cachedDashboardSnapshot, cachedRecentWarmSnapshot, hasCachedRecentBookings, hasCoreResidentSnapshot, loading, userId]);
 
     useEffect(() => {
         if (bannersLoading || bannerReadyMetricRef.current) return;
@@ -225,11 +234,45 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (!userId) {
-            navigate('/login');
             return;
         }
 
-        preloadBookingRoute();
+        if (typeof window === 'undefined') {
+            preloadBookingRoute();
+            return;
+        }
+
+        let idleHandle: number | null = null;
+        let timeoutHandle: number | null = null;
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleHandle = idleWindow.requestIdleCallback(() => {
+                idleHandle = null;
+                preloadBookingRoute();
+            }, { timeout: 1400 });
+        } else {
+            timeoutHandle = window.setTimeout(preloadBookingRoute, 420);
+        }
+
+        return () => {
+            if (idleHandle !== null) {
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            if (timeoutHandle !== null) {
+                window.clearTimeout(timeoutHandle);
+            }
+        };
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId) {
+            navigate('/login');
+            return;
+        }
 
         let isMounted = true;
         let machinesReady = hasCachedMachines;
