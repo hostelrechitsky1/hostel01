@@ -541,51 +541,6 @@ button {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-/* Light Mode Support */
-:root[data-theme="light"] {
-  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  --bg-solid: #f8fafc;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-button-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --primary: #4f46e5;
-  --primary-glow: rgba(79, 70, 229, 0.2);
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --success: #059669;
-  --resident-ready-green: #10b981;
-  --resident-ready-green-soft: rgba(16, 185, 129, 0.1);
-  --resident-ready-green-border: rgba(16, 185, 129, 0.28);
-  --resident-ready-green-glow: rgba(16, 185, 129, 0.3);
-  --error: #dc2626;
-  --floating-bar-bg: rgba(255, 255, 255, 0.95);
-  color-scheme: light;
-}
-
-html[data-theme="light"],
-html[data-theme="light"] body,
-html[data-theme="light"] #root {
-  background: var(--bg-gradient);
-  background-color: var(--bg-solid);
-}
-
-:root[data-theme="light"] .glass-button {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-:root[data-theme="light"] .glass-button:hover {
-  background: rgba(255, 255, 255, 0.8);
-}
-
-:root[data-theme="light"] .text-gradient {
-  background: linear-gradient(to right, #4f46e5, #6366f1);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
 @media (prefers-color-scheme: light) {
   :root {
     --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);

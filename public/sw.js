@@ -1,4 +1,4 @@
-const VERSION = 'v8'
+const VERSION = 'v9'
 const STATIC_CACHE = `app-static-${VERSION}`
 const DOCUMENT_CACHE = `app-documents-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`

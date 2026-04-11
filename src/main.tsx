@@ -34,45 +34,6 @@ const ensureConnectionHints = () => {
   });
 };
 
-const applyPreferredTheme = () => {
-  if (typeof window === 'undefined') return;
-
-  const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-  const theme = prefersLight ? 'light' : 'dark';
-  const root = document.documentElement;
-
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme;
-
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', theme === 'light' ? '#f8fafc' : '#0f172a');
-};
-
-const syncPreferredTheme = () => {
-  if (typeof window === 'undefined') return;
-
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
-  const updateTheme = () => applyPreferredTheme();
-  const handleVisibility = () => {
-    if (document.visibilityState === 'visible') {
-      updateTheme();
-    }
-  };
-
-  updateTheme();
-
-  if (typeof mediaQuery.addEventListener === 'function') {
-    mediaQuery.addEventListener('change', updateTheme);
-  } else {
-    mediaQuery.addListener(updateTheme);
-  }
-
-  window.addEventListener('pageshow', updateTheme);
-  window.addEventListener('focus', updateTheme);
-  document.addEventListener('visibilitychange', handleVisibility);
-};
-
 const registerServiceWorker = () => {
   if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
 
@@ -102,7 +63,6 @@ const registerServiceWorker = () => {
 };
 
 ensureConnectionHints();
-syncPreferredTheme();
 registerServiceWorker();
 observeResidentWebPaintMetrics();
 
