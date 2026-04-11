@@ -388,23 +388,22 @@ button {
 }
 
 .resident-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 14px;
 }
 
 .resident-header-main {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 14px;
   min-width: 0;
-  flex: 1 1 280px;
 }
 
 .resident-header-copy {
   min-width: 0;
-  flex: 1;
 }
 
 .resident-header-title {
@@ -412,7 +411,9 @@ button {
   font-size: 24px;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  text-wrap: balance;
 }
 
 .resident-header-meta {
@@ -441,7 +442,7 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  justify-self: end;
 }
 
 .grid-auto-fit {
@@ -481,11 +482,10 @@ button {
 }
 
 /* Light Mode Support */
-:root[data-theme="light"] {
+@media (prefers-color-scheme: light) {
+  :root {
     --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     --bg-solid: #f8fafc;
-    /* Light Mode Solid */
-
     --glass-bg: rgba(255, 255, 255, 0.7);
     --glass-button-bg: rgba(255, 255, 255, 0.8);
     --glass-border: rgba(0, 0, 0, 0.1);
@@ -497,56 +497,50 @@ button {
     --error: #dc2626;
     --floating-bar-bg: rgba(255, 255, 255, 0.95);
     color-scheme: light;
-}
+  }
 
-html[data-theme="light"],
-html[data-theme="light"] body,
-html[data-theme="light"] #root {
-  background: var(--bg-gradient);
-  background-color: var(--bg-solid);
-}
+  html,
+  body,
+  #root {
+    background: var(--bg-gradient);
+    background-color: var(--bg-solid);
+  }
 
-:root[data-theme="light"] .glass-button {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
+  .glass-button {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
 
-:root[data-theme="light"] .glass-button:hover {
-  background: rgba(255, 255, 255, 0.8);
-}
+  .glass-button:hover {
+    background: rgba(255, 255, 255, 0.8);
+  }
 
-:root[data-theme="light"] .text-gradient {
-  background: linear-gradient(to right, #4f46e5, #6366f1);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]),
-  :root[data-theme="light"] {
-    color-scheme: light;
+  .text-gradient {
+    background: linear-gradient(to right, #4f46e5, #6366f1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 }
 
 @media (max-width: 640px) {
   .resident-header {
-    align-items: stretch;
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .resident-header-main {
-    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .resident-header-title {
     font-size: 20px;
+    text-wrap: pretty;
   }
 
   .resident-header-actions {
-    width: 100%;
-    justify-content: flex-start;
+    justify-self: start;
     padding-left: 66px;
   }
 }

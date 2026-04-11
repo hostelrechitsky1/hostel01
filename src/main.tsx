@@ -51,41 +51,8 @@ const registerServiceWorker = () => {
   setTimeout(startRegistration, 1200);
 };
 
-const applyPreferredTheme = (theme: 'light' | 'dark') => {
-  if (typeof document === 'undefined') return;
-
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-
-  let themeColorMeta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
-  if (!themeColorMeta) {
-    themeColorMeta = document.createElement('meta');
-    themeColorMeta.name = 'theme-color';
-    document.head.appendChild(themeColorMeta);
-  }
-
-  themeColorMeta.content = theme === 'light' ? '#f8fafc' : '#0f172a';
-};
-
-const syncPreferredTheme = () => {
-  if (typeof window === 'undefined') return;
-
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
-  const updateTheme = () => applyPreferredTheme(mediaQuery.matches ? 'light' : 'dark');
-
-  updateTheme();
-
-  if (typeof mediaQuery.addEventListener === 'function') {
-    mediaQuery.addEventListener('change', updateTheme);
-    return;
-  }
-
-  mediaQuery.addListener(updateTheme);
-};
-
 ensureConnectionHints();
 registerServiceWorker();
-syncPreferredTheme();
 observeResidentWebPaintMetrics();
 
 createRoot(document.getElementById('root')!).render(
