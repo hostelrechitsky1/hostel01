@@ -24,7 +24,6 @@
 
   --bg-solid: #0f172a;
   /* Default Dark Mode Solid */
-  color-scheme: dark;
 }
 
 html {
@@ -559,7 +558,6 @@ button {
     --resident-ready-green-glow: rgba(16, 185, 129, 0.3);
     --error: #dc2626;
     --floating-bar-bg: rgba(255, 255, 255, 0.95);
-    color-scheme: light;
   }
 
   html,
