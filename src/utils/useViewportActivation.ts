@@ -4,12 +4,14 @@ interface ViewportActivationOptions {
     rootMargin?: string;
     initiallyActive?: boolean;
     idleTimeout?: number | null;
+    threshold?: number | number[];
 }
 
 export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
     rootMargin = '280px 0px',
     initiallyActive = false,
     idleTimeout = null,
+    threshold = 0,
 }: ViewportActivationOptions = {}) {
     const [node, setNode] = useState<T | null>(null);
     const [isActive, setIsActive] = useState(() => initiallyActive || typeof window === 'undefined');
@@ -41,7 +43,7 @@ export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
                 activateSection();
                 observer?.disconnect();
                 observer = null;
-            }, { rootMargin });
+            }, { rootMargin, threshold });
 
             observer.observe(node);
         } else {
@@ -76,7 +78,7 @@ export function useViewportActivation<T extends HTMLElement = HTMLDivElement>({
                 window.clearTimeout(immediateActivationTimeoutId);
             }
         };
-    }, [idleTimeout, isActive, node, rootMargin]);
+    }, [idleTimeout, isActive, node, rootMargin, threshold]);
 
     return {
         ref,

@@ -86,12 +86,12 @@ button {
 
 .scroll-reveal {
   opacity: 0;
-  transform: translateY(18px) scale(0.99);
-  filter: blur(1.5px);
+  transform: translateY(28px) scale(0.985);
+  filter: blur(3px);
   transition:
-    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 320ms ease;
+    opacity 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 420ms ease;
   will-change: transform, opacity;
 }
 
@@ -99,6 +99,10 @@ button {
   opacity: 1;
   transform: translateY(0) scale(1);
   filter: blur(0);
+}
+
+.scroll-reveal-content {
+  animation: fadeIn 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes pulse {

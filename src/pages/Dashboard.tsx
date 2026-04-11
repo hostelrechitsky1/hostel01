@@ -176,15 +176,17 @@ export default function Dashboard() {
         ref: bookingSummarySectionRef,
         isActive: isBookingSummaryActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '0px 0px 56px 0px',
+        rootMargin: '0px 0px -12% 0px',
         idleTimeout: null,
+        threshold: 0.18,
     });
     const {
         ref: feedbackSectionRef,
         isActive: isFeedbackActive,
     } = useViewportActivation<HTMLDivElement>({
-        rootMargin: '0px 0px 48px 0px',
+        rootMargin: '0px 0px -10% 0px',
         idleTimeout: null,
+        threshold: 0.14,
     });
     const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
     const [roommatesLoading, setRoommatesLoading] = useState(false);
@@ -1474,21 +1476,23 @@ export default function Dashboard() {
                 style={{ minHeight: '220px' }}
             >
                 {isBookingSummaryActive ? (
-                    <Suspense fallback={bookingsFallback}>
-                        <LazyDashboardBookingSummary
-                            key={userId}
-                            user={user}
-                            machines={machines}
-                            recentBookings={recentBookings}
-                            recentBookingsLoading={shouldShowRecentBookingsLoading}
-                            weekBookings={weekBookings}
-                            settings={settings}
-                            isNextWeekOpen={isNextWeekOpen}
-                            isRussian={isRussian}
-                            onBookingCreated={handleResidentBookingCreated}
-                            onBookingCancelled={handleResidentBookingCancelled}
-                        />
-                    </Suspense>
+                    <div className="scroll-reveal-content">
+                        <Suspense fallback={bookingsFallback}>
+                            <LazyDashboardBookingSummary
+                                key={userId}
+                                user={user}
+                                machines={machines}
+                                recentBookings={recentBookings}
+                                recentBookingsLoading={shouldShowRecentBookingsLoading}
+                                weekBookings={weekBookings}
+                                settings={settings}
+                                isNextWeekOpen={isNextWeekOpen}
+                                isRussian={isRussian}
+                                onBookingCreated={handleResidentBookingCreated}
+                                onBookingCancelled={handleResidentBookingCancelled}
+                            />
+                        </Suspense>
+                    </div>
                 ) : bookingsFallback}
             </div>
 
@@ -1499,9 +1503,11 @@ export default function Dashboard() {
                 style={{ minHeight: '132px' }}
             >
                 {isFeedbackActive ? (
-                    <Suspense fallback={feedbackFallback}>
-                        <LazyDashboardFeedback isRussian={isRussian} />
-                    </Suspense>
+                    <div className="scroll-reveal-content">
+                        <Suspense fallback={feedbackFallback}>
+                            <LazyDashboardFeedback isRussian={isRussian} />
+                        </Suspense>
+                    </div>
                 ) : feedbackFallback}
             </div>
         </div>
