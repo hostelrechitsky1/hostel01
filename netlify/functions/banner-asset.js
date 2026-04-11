@@ -98,6 +98,8 @@ export const handler = async (event) => {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+        'Netlify-CDN-Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=2592000',
+        Vary: 'Accept',
         ...(upstreamLength ? { 'Content-Length': upstreamLength } : {}),
       },
       body: bodyBuffer.toString('base64'),

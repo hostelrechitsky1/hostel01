@@ -142,19 +142,35 @@ export const decodeFirestoreDocument = (document, includeFallbackId = true) => {
   return decoded
 }
 
-export const listFirestoreCollectionDocuments = async (collectionId, pageSize = 100) => {
-  const response = await fetchFirestoreJson(`/${collectionId}?pageSize=${pageSize}`)
+const appendFieldMaskParams = (params, fieldPaths = []) => {
+  fieldPaths
+    .filter(Boolean)
+    .forEach((fieldPath) => {
+      params.append('mask.fieldPaths', fieldPath)
+    })
+}
+
+export const listFirestoreCollectionDocuments = async (collectionId, pageSize = 100, fieldPaths = []) => {
+  const params = new URLSearchParams({
+    pageSize: String(pageSize),
+  })
+  appendFieldMaskParams(params, fieldPaths)
+  const response = await fetchFirestoreJson(`/${collectionId}?${params.toString()}`)
   return response?.documents ?? []
 }
 
-export const getFirestoreDocument = async (collectionId, documentId) => {
-  return fetchFirestoreJson(`/${collectionId}/${documentId}`, undefined, true)
+export const getFirestoreDocument = async (collectionId, documentId, fieldPaths = []) => {
+  const params = new URLSearchParams()
+  appendFieldMaskParams(params, fieldPaths)
+  const maskQuery = params.toString()
+  return fetchFirestoreJson(`/${collectionId}/${documentId}${maskQuery ? `?${maskQuery}` : ''}`, undefined, true)
 }
 
 export const runFirestoreQueryDocuments = async ({
   collectionId,
   filters = [],
   limit,
+  fieldPaths = [],
 }) => {
   const where = filters.length === 0
     ? undefined
@@ -187,6 +203,13 @@ export const runFirestoreQueryDocuments = async ({
     body: JSON.stringify({
       structuredQuery: {
         from: [{ collectionId }],
+        ...(fieldPaths.length > 0
+          ? {
+              select: {
+                fields: fieldPaths.map((fieldPath) => ({ fieldPath })),
+              },
+            }
+          : {}),
         ...(where ? { where } : {}),
         ...(typeof limit === 'number' ? { limit } : {}),
       },

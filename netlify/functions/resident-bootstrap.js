@@ -11,6 +11,46 @@ const SETTINGS_DOC_ID = 'config'
 const MACHINES_COL = 'machines'
 const BOOKINGS_COL = 'bookings'
 const BANNERS_COL = 'banners'
+const SETTINGS_FIELDS = [
+  'forceShowNextWeek',
+  'forceCloseBookings',
+  'maintenanceDay',
+  'autoOpenWeekday',
+  'autoOpenTime',
+  'autoOpenDurationHours',
+  'vipAutoEnabled',
+  'vipLastAppliedWeekId',
+  'topAlert',
+]
+const MACHINE_FIELDS = ['id', 'name', 'status']
+const BOOKING_FIELDS = [
+  'machineId',
+  'studentId',
+  'date',
+  'startTime',
+  'endTime',
+  'weekId',
+  'studentName',
+  'roomNumber',
+  'createdAt',
+]
+const BANNER_FIELDS = [
+  'id',
+  'title',
+  'imageUrl',
+  'previewImageUrl',
+  'optimizedImageUrl',
+  'mobileImageUrl',
+  'desktopImageUrl',
+  'responsiveSrcSet',
+  'responsiveSizes',
+  'linkUrl',
+  'isActive',
+  'createdAt',
+  'priority',
+  'type',
+  'message',
+]
 
 const DEFAULT_APP_SETTINGS = {
   forceShowNextWeek: false,
@@ -94,10 +134,11 @@ export const handler = async (event) => {
     }
 
     const [settingsDoc, machineDocs, bookingDocs, bannerDocs, recentBookingDocs] = await Promise.all([
-      getFirestoreDocument(SETTINGS_COL, SETTINGS_DOC_ID),
-      listFirestoreCollectionDocuments(MACHINES_COL),
+      getFirestoreDocument(SETTINGS_COL, SETTINGS_DOC_ID, SETTINGS_FIELDS),
+      listFirestoreCollectionDocuments(MACHINES_COL, 100, MACHINE_FIELDS),
       runFirestoreQueryDocuments({
         collectionId: BOOKINGS_COL,
+        fieldPaths: BOOKING_FIELDS,
         filters: [{
           fieldPath: 'weekId',
           op: 'IN',
@@ -108,10 +149,11 @@ export const handler = async (event) => {
           },
         }],
       }),
-      includeBanners ? listFirestoreCollectionDocuments(BANNERS_COL) : Promise.resolve([]),
+      includeBanners ? listFirestoreCollectionDocuments(BANNERS_COL, 100, BANNER_FIELDS) : Promise.resolve([]),
       includeRecentBookings && studentId
         ? runFirestoreQueryDocuments({
             collectionId: BOOKINGS_COL,
+            fieldPaths: BOOKING_FIELDS,
             filters: [{
               fieldPath: 'studentId',
               op: 'EQUAL',
@@ -149,7 +191,8 @@ export const handler = async (event) => {
     }
 
     return jsonResponse(200, payload, {
-      'Cache-Control': 'public, max-age=15, stale-while-revalidate=120',
+      'Cache-Control': 'public, max-age=20, stale-while-revalidate=180',
+      'Netlify-CDN-Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
     })
   } catch (error) {
     console.error('resident-bootstrap failed', error)

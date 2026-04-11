@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { Building, ArrowRight, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { ActionSpinner } from '../components/ActionSpinner';
 import type { Student } from '../types';
 import { preloadResidentRoutes } from '../utils/preloadRoutes';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
@@ -22,6 +23,7 @@ export default function LoginScreen() {
     const [roommates, setRoommates] = useState<Student[]>([]);
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [selectingStudentId, setSelectingStudentId] = useState<string | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -98,7 +100,13 @@ export default function LoginScreen() {
         }
     };
 
-    const handleStudentSelect = (student: Student) => {
+    const handleStudentSelect = async (student: Student) => {
+        if (selectingStudentId) {
+            return;
+        }
+
+        setSelectingStudentId(student.id);
+
         const activeElement = document.activeElement;
         if (activeElement instanceof HTMLElement) {
             activeElement.blur();
@@ -112,13 +120,22 @@ export default function LoginScreen() {
         bookingService.setCurrentUser(student);
         bookingService.setCurrentRoommates(roommates);
         preloadResidentRoutes();
-        void warmResidentAppData(student.id, {
+        const warmupPromise = warmResidentAppData(student.id, {
             includeRecentBookings: true,
             roomNumber: student.roomNumber,
         });
         startResidentPerfSpan('resident:login-to-dashboard-shell');
         startResidentPerfSpan('resident:login-to-dashboard-data');
         startResidentPerfSpan('resident:dashboard-banner-ready');
+
+        try {
+            await Promise.race([
+                warmupPromise,
+                new Promise((resolve) => window.setTimeout(resolve, 180)),
+            ]);
+        } catch {
+            // Navigation should continue even if the warmup request fails.
+        }
 
         requestAnimationFrame(() => {
             navigate('/', { replace: true });
@@ -258,6 +275,7 @@ export default function LoginScreen() {
                                             key={student.id}
                                             onClick={() => handleStudentSelect(student)}
                                             className="glass-button"
+                                            disabled={Boolean(selectingStudentId)}
                                             style={{
                                                 width: '100%',
                                                 padding: '16px',
@@ -265,13 +283,20 @@ export default function LoginScreen() {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '12px',
-                                                textAlign: 'left'
+                                                textAlign: 'left',
+                                                justifyContent: 'space-between',
+                                                opacity: selectingStudentId && selectingStudentId !== student.id ? 0.68 : 1
                                             }}
                                         >
-                                            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '50%' }}>
-                                                <User size={20} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                                                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '50%' }}>
+                                                    <User size={20} />
+                                                </div>
+                                                <span style={{ fontSize: '16px', fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {student.name}
+                                                </span>
                                             </div>
-                                            <span style={{ fontSize: '16px', fontWeight: 500 }}>{student.name}</span>
+                                            {selectingStudentId === student.id ? <ActionSpinner size={18} tone="neutral" /> : null}
                                         </button>
                                     ))}
                                 </div>
