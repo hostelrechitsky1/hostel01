@@ -30,6 +30,14 @@ type FirestoreFieldFilter = {
     value: FirestoreRestValue;
 };
 
+const appendFieldMaskParams = (params: URLSearchParams, fieldPaths: string[] = []) => {
+    fieldPaths
+        .filter(Boolean)
+        .forEach((fieldPath) => {
+            params.append('mask.fieldPaths', fieldPath);
+        });
+};
+
 const ensureFirestoreRestConfig = () => {
     if (!FIRESTORE_BASE_URL || !FIRESTORE_API_KEY) {
         throw new Error('Missing Firebase REST configuration');
@@ -94,17 +102,26 @@ export const decodeFirestoreDocument = <T>(document: FirestoreRestDocument, incl
     return decoded as T;
 };
 
-export const listFirestoreCollectionDocuments = async (collectionId: string, pageSize = 100) => {
+export const listFirestoreCollectionDocuments = async (collectionId: string, pageSize = 100, fieldPaths: string[] = []) => {
+    const params = new URLSearchParams({
+        pageSize: String(pageSize),
+    });
+    appendFieldMaskParams(params, fieldPaths);
+
     const response = await fetchFirestoreJson<{ documents?: FirestoreRestDocument[] }>(
-        `/${collectionId}?pageSize=${pageSize}`
+        `/${collectionId}?${params.toString()}`
     );
 
     return response?.documents ?? [];
 };
 
-export const getFirestoreDocument = async (collectionId: string, documentId: string) => {
+export const getFirestoreDocument = async (collectionId: string, documentId: string, fieldPaths: string[] = []) => {
+    const params = new URLSearchParams();
+    appendFieldMaskParams(params, fieldPaths);
+    const maskQuery = params.toString();
+
     return fetchFirestoreJson<FirestoreRestDocument>(
-        `/${collectionId}/${documentId}`,
+        `/${collectionId}/${documentId}${maskQuery ? `?${maskQuery}` : ''}`,
         undefined,
         true
     );
@@ -114,10 +131,12 @@ export const runFirestoreQueryDocuments = async ({
     collectionId,
     filters = [],
     limit,
+    fieldPaths = [],
 }: {
     collectionId: string;
     filters?: FirestoreFieldFilter[];
     limit?: number;
+    fieldPaths?: string[];
 }) => {
     const where = filters.length === 0
         ? undefined
@@ -152,6 +171,13 @@ export const runFirestoreQueryDocuments = async ({
             body: JSON.stringify({
                 structuredQuery: {
                     from: [{ collectionId }],
+                    ...(fieldPaths.length > 0
+                        ? {
+                            select: {
+                                fields: fieldPaths.map((fieldPath) => ({ fieldPath })),
+                            },
+                        }
+                        : {}),
                     ...(where ? { where } : {}),
                     ...(typeof limit === 'number' ? { limit } : {}),
                 },

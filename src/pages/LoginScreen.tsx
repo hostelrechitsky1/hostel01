@@ -46,6 +46,51 @@ export default function LoginScreen() {
         return () => window.clearTimeout(timeoutId);
     }, []);
 
+    useEffect(() => {
+        if (step !== 2 || roommates.length === 0 || typeof window === 'undefined') {
+            return;
+        }
+
+        let cancelled = false;
+        const warmRoommates = () => {
+            roommates.slice(0, 4).forEach((student) => {
+                void warmResidentAppData(student.id, {
+                    includeRecentBookings: true,
+                    roomNumber: student.roomNumber,
+                }).catch(() => undefined);
+            });
+        };
+
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            const idleId = idleWindow.requestIdleCallback(() => {
+                if (!cancelled) {
+                    warmRoommates();
+                }
+            }, { timeout: 900 });
+
+            return () => {
+                cancelled = true;
+                idleWindow.cancelIdleCallback?.(idleId);
+            };
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            if (!cancelled) {
+                warmRoommates();
+            }
+        }, 180);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeoutId);
+        };
+    }, [roommates, step]);
+
     const handleRoomFieldFocus = () => {
         void loadResidentLookup();
     };

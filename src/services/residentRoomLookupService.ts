@@ -4,6 +4,7 @@ import { decodeFirestoreDocument, runFirestoreQueryDocuments } from './residentF
 const STUDENTS_COL = 'students';
 const CACHE_PREFIX = 'hostel-cache:v4';
 const STUDENTS_BY_ROOM_MAX_AGE_MS = 15 * 60 * 1000;
+const STUDENT_ROOM_FIELDS = ['id', 'name', 'roomNumber', 'pin'];
 
 type CacheRecord<T> = {
     savedAt: number;
@@ -67,6 +68,7 @@ const writeCache = <T>(key: string, value: T) => {
 const fetchStudentsByRoomViaRest = async (roomNumber: string): Promise<Student[]> => {
     const documents = await runFirestoreQueryDocuments({
         collectionId: STUDENTS_COL,
+        fieldPaths: STUDENT_ROOM_FIELDS,
         filters: [{
             fieldPath: 'roomNumber',
             op: 'EQUAL',

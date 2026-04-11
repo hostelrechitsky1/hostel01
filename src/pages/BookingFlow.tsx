@@ -255,6 +255,42 @@ export default function BookingFlow() {
     }, [liveSyncRequested, loading, reloadKey, userId]);
 
     useEffect(() => {
+        if (!userId || loading || typeof window === 'undefined') {
+            return;
+        }
+
+        let idleHandle: number | null = null;
+        let timeoutHandle: number | null = null;
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        const prewarmBookingInteractions = () => {
+            void loadResidentMutationsService();
+            void preloadConfetti();
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleHandle = idleWindow.requestIdleCallback(() => {
+                idleHandle = null;
+                prewarmBookingInteractions();
+            }, { timeout: 1200 });
+        } else {
+            timeoutHandle = window.setTimeout(prewarmBookingInteractions, 320);
+        }
+
+        return () => {
+            if (idleHandle !== null) {
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
+            if (timeoutHandle !== null) {
+                window.clearTimeout(timeoutHandle);
+            }
+        };
+    }, [loading, userId]);
+
+    useEffect(() => {
         if (!userId || !liveSyncRequested) {
             return;
         }
