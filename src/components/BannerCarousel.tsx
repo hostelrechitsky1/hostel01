@@ -12,6 +12,7 @@ import {
 interface InternalBannerCarouselProps {
     banners: Banner[];
     isLoading?: boolean;
+    onPrimaryBannerReady?: () => void;
 }
 
 // Helper component to handle image loading and retries
@@ -22,6 +23,7 @@ const SmartImage = ({
     style,
     priority,
     shouldLoad,
+    onDisplayReady,
     onFullLoad
 }: {
     src: string;
@@ -30,6 +32,7 @@ const SmartImage = ({
     style?: any;
     priority?: boolean;
     shouldLoad?: boolean;
+    onDisplayReady?: () => void;
     onFullLoad?: () => void;
 }) => {
     const initialSources = getBannerWarmSources(src, { priority });
@@ -43,6 +46,7 @@ const SmartImage = ({
     const imgRef = useRef<HTMLImageElement>(null);
     const adaptiveSrcRef = useRef<string | null>(null);
     const previewSrcRef = useRef<string | null>(null);
+    const displayReadySourceRef = useRef<string | null>(null);
 
     useEffect(() => {
         const { previewSource, fullSource } = getBannerWarmSources(src, { priority });
@@ -50,6 +54,7 @@ const SmartImage = ({
 
         adaptiveSrcRef.current = fullSource;
         previewSrcRef.current = previewSource;
+        displayReadySourceRef.current = null;
         setPreviewLoaded(hasWarmBannerImage(previewSource));
         setLoaded(hasWarmBannerImage(nextDisplaySrc));
         setImgSrc(nextDisplaySrc);
@@ -106,6 +111,13 @@ const SmartImage = ({
             setPreviewLoaded(true);
         }
     }, [imgSrc, shouldLoad]);
+
+    useEffect(() => {
+        if (!loaded) return;
+        if (displayReadySourceRef.current === imgSrc) return;
+        displayReadySourceRef.current = imgSrc;
+        onDisplayReady?.();
+    }, [imgSrc, loaded, onDisplayReady]);
 
     useEffect(() => {
         if (!loaded) return;
@@ -183,7 +195,7 @@ const SmartImage = ({
     );
 };
 
-function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselProps) {
+function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: InternalBannerCarouselProps) {
     const activeBanners = useMemo(
         () => banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority),
         [banners]
@@ -230,22 +242,25 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         });
     };
 
-    const prepareBannerIndex = (index: number, priority = false) => {
+    const prepareBannerIndex = (index: number, priority = false, previewOnly = false) => {
         const banner = activeBanners[index];
         if (!banner?.imageUrl) return;
 
         markIndexActivated(index);
 
-        const { fullSource } = getBannerWarmSources(banner.imageUrl, { priority: true });
-        if (hasWarmBannerImage(fullSource)) {
+        const { fullSource } = getBannerWarmSources(banner.imageUrl, { priority });
+        if (!previewOnly && hasWarmBannerImage(fullSource)) {
             markIndexReady(index);
         }
 
         void warmBannerSource(banner.imageUrl, {
             priority,
-            eagerFull: priority
+            eagerFull: priority,
+            previewOnly
         }).then(() => {
-            markIndexReady(index);
+            if (!previewOnly) {
+                markIndexReady(index);
+            }
         });
     };
 
@@ -317,7 +332,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
         if (!nextBanner?.imageUrl) return;
 
         const warmNextBannerTimer = window.setTimeout(() => {
-            prepareBannerIndex(nextIndex, true);
+            prepareBannerIndex(nextIndex, false, true);
         }, 900);
 
         return () => {
@@ -484,6 +499,7 @@ function BannerCarousel({ banners, isLoading = false }: InternalBannerCarouselPr
                                 alt={showTitle ? banner.title : 'Banner'}
                                 priority={index === currentIndex}
                                 shouldLoad={activatedIndexes.has(index) || index === currentIndex}
+                                onDisplayReady={index === 0 ? onPrimaryBannerReady : undefined}
                                 onFullLoad={() => markIndexReady(index)}
                                 style={{
                                     width: '100%',

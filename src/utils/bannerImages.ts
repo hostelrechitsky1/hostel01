@@ -11,7 +11,7 @@ type NavigatorWithConnection = Navigator & {
     webkitConnection?: NetworkInformation;
 };
 
-const BANNER_WIDTH_STEPS = [240, 360, 480, 640, 800, 960, 1200, 1440];
+const BANNER_WIDTH_STEPS = [180, 240, 360, 480, 640, 720, 840, 960];
 const warmedBannerSources = new Set<string>();
 const warmingBannerSources = new Map<string, Promise<void>>();
 
@@ -74,14 +74,14 @@ const getViewportScaledWidth = (priority: boolean) => {
     const effectiveType = connection?.effectiveType;
     const saveData = connection?.saveData === true;
 
-    let requestedWidth = Math.ceil(viewportWidth * devicePixelRatio * (priority ? 1.05 : 0.8));
+    let requestedWidth = Math.ceil(viewportWidth * devicePixelRatio * (priority ? 0.95 : 0.7));
 
     if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
-        requestedWidth = Math.min(requestedWidth, priority ? 480 : 360);
+        requestedWidth = Math.min(requestedWidth, priority ? 360 : 240);
     } else if (effectiveType === '3g') {
-        requestedWidth = Math.min(requestedWidth, priority ? 800 : 640);
+        requestedWidth = Math.min(requestedWidth, priority ? 640 : 480);
     } else {
-        requestedWidth = Math.min(requestedWidth, priority ? 1200 : 960);
+        requestedWidth = Math.min(requestedWidth, priority ? 960 : 720);
     }
 
     return roundBannerWidth(requestedWidth);
@@ -107,7 +107,7 @@ export const getTinyBannerSrc = (source: string) => {
     const normalizedSource = normalizeBannerSource(source);
     if (!isDriveThumbnailBanner(normalizedSource)) return normalizedSource;
     const viewportWidth = typeof window === 'undefined' ? 640 : Math.max(window.innerWidth, 360);
-    return replaceDriveThumbnailWidth(normalizedSource, roundBannerWidth(Math.max(240, Math.min(Math.ceil(viewportWidth * 0.35), 480))));
+    return replaceDriveThumbnailWidth(normalizedSource, roundBannerWidth(Math.max(180, Math.min(Math.ceil(viewportWidth * 0.28), 360))));
 };
 
 export const getBannerWarmSources = (source: string, options?: { priority?: boolean }) => {
@@ -199,11 +199,15 @@ export const preloadBannerImage = (source: string) => {
     return loadPromise;
 };
 
-export const warmBannerSource = (source: string, options?: { priority?: boolean; eagerFull?: boolean }) => {
+export const warmBannerSource = (source: string, options?: { priority?: boolean; eagerFull?: boolean; previewOnly?: boolean }) => {
     const { previewSource, fullSource } = getBannerWarmSources(source, options);
 
     ensureBannerPreloadLink(previewSource);
     const previewWarmup = preloadBannerImage(previewSource);
+
+    if (options?.previewOnly) {
+        return previewWarmup.then(() => previewSource);
+    }
 
     if (previewSource === fullSource) {
         return previewWarmup.then(() => fullSource);
@@ -230,7 +234,8 @@ export const warmBannerImages = (banners: Banner[], count = 2) => {
     activeBanners.forEach((banner, index) => {
         void warmBannerSource(banner.imageUrl, {
             priority: index === 0,
-            eagerFull: index <= 1
+            eagerFull: index === 0,
+            previewOnly: index > 0,
         });
     });
 };

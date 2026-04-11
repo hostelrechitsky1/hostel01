@@ -14,6 +14,7 @@ import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
+import { finishResidentPerfSpan } from '../utils/performance';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
@@ -97,10 +98,46 @@ export default function Dashboard() {
         || weekBookings.length > 0;
     const residentLoadSlow = useSlowLoadFlag(loading, 4500);
     const coreResidentSnapshotRef = useRef(hasCoreResidentSnapshot);
+    const dashboardShellMetricRef = useRef(false);
+    const dashboardDataMetricRef = useRef(false);
+    const bannerReadyMetricRef = useRef(false);
 
     useEffect(() => {
         coreResidentSnapshotRef.current = hasCoreResidentSnapshot;
     }, [hasCoreResidentSnapshot]);
+
+    useEffect(() => {
+        dashboardShellMetricRef.current = false;
+        dashboardDataMetricRef.current = false;
+        bannerReadyMetricRef.current = false;
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId || dashboardShellMetricRef.current) return;
+        dashboardShellMetricRef.current = true;
+        finishResidentPerfSpan('resident:login-to-dashboard-shell', {
+            cachedCore: hasCoreResidentSnapshot,
+        });
+    }, [hasCoreResidentSnapshot, userId]);
+
+    useEffect(() => {
+        if (!userId || loading || dashboardDataMetricRef.current) return;
+        dashboardDataMetricRef.current = true;
+        finishResidentPerfSpan('resident:login-to-dashboard-data', {
+            cachedCore: hasCoreResidentSnapshot,
+            cachedRecentBookings: hasCachedRecentBookings,
+        });
+    }, [hasCachedRecentBookings, hasCoreResidentSnapshot, loading, userId]);
+
+    useEffect(() => {
+        if (bannersLoading || bannerReadyMetricRef.current) return;
+        if (banners.length > 0) return;
+
+        bannerReadyMetricRef.current = true;
+        finishResidentPerfSpan('resident:dashboard-banner-ready', {
+            banners: 0,
+        });
+    }, [banners.length, bannersLoading]);
 
     useEffect(() => {
         if (!user?.roomNumber) return;
@@ -247,7 +284,7 @@ export default function Dashboard() {
                 startTransition(() => {
                     setBanners(fetchedBanners);
                 });
-                warmBannerImages(fetchedBanners, 1);
+                warmBannerImages(fetchedBanners, 2);
             })
             .catch((error) => {
                 console.error('Failed to refresh dashboard banners', error);
@@ -415,22 +452,13 @@ export default function Dashboard() {
 
     const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasCoreResidentSnapshot)
         || (!loading && loadIssue === 'error' && !hasCoreResidentSnapshot);
+    const isDashboardShellBooting = loading && !hasCoreResidentSnapshot;
+    const showStatusSkeleton = isDashboardShellBooting
+        || (loading && (!hasCachedMachines || !hasCachedWeekBookings) && (machines.length === 0 || weekBookings.length === 0));
 
-    if (loading && !showBlockingDashboardNotice) {
-        return (
-            <div className="container animate-fade-in" style={{ height: '100vh', padding: '24px' }}>
-                <header style={{ marginBottom: '32px', marginTop: '16px' }}>
-                    <div style={{ height: '32px', width: '200px', background: 'var(--glass-border)', borderRadius: '8px', marginBottom: '8px' }} className="skeleton-pulse"></div>
-                    <div style={{ height: '20px', width: '100px', background: 'var(--glass-border)', borderRadius: '8px' }} className="skeleton-pulse"></div>
-                </header>
-                <div style={{ height: '140px', background: 'var(--glass-border)', borderRadius: '20px', marginBottom: '32px' }} className="skeleton-pulse"></div>
-                <div className="grid-cols-2">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} style={{ height: '120px', background: 'var(--glass-border)', borderRadius: '16px' }} className="skeleton-pulse"></div>
-                    ))}
-                </div>
-            </div>
-        );
+    if (isDashboardShellBooting) {
+        mainActionLabel = 'Open Slots';
+        mainActionSubtitle = 'We’re loading your latest booking status in the background.';
     }
 
     if (showBlockingDashboardNotice) {
@@ -461,6 +489,41 @@ export default function Dashboard() {
             <div style={{ height: '156px', width: '100%', borderRadius: '20px', background: 'var(--glass-border)', marginBottom: '24px' }} className="skeleton-pulse"></div>
         </div>
     );
+    const statusOverviewSkeleton = (
+        <div
+            className="glass-panel"
+            style={{
+                marginBottom: '20px',
+                padding: '20px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.2)'
+            }}
+        >
+            <div style={{ height: '20px', width: '132px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '14px' }} className="skeleton-pulse"></div>
+            <div style={{ height: '44px', width: '100%', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+        </div>
+    );
+    const machineStatusSkeleton = (
+        <div className="grid-cols-2">
+            {[1, 2, 3, 4].map((item) => (
+                <div
+                    key={item}
+                    className="glass-panel"
+                    style={{ height: '116px', borderRadius: '16px', background: 'var(--glass-border)' }}
+                >
+                    <div className="skeleton-pulse" style={{ width: '100%', height: '100%', borderRadius: '16px' }}></div>
+                </div>
+            ))}
+        </div>
+    );
+    const handlePrimaryBannerReady = () => {
+        if (bannerReadyMetricRef.current) return;
+        bannerReadyMetricRef.current = true;
+        finishResidentPerfSpan('resident:dashboard-banner-ready', {
+            banners: banners.length,
+        });
+    };
 
     const handleResidentBookingCreated = (createdBooking: Booking) => {
         startTransition(() => {
@@ -719,7 +782,11 @@ export default function Dashboard() {
 
             {/* Announcements Carousel */}
             <div className="animate-fade-in">
-                <BannerCarousel banners={banners} isLoading={bannersLoading} />
+                <BannerCarousel
+                    banners={banners}
+                    isLoading={bannersLoading}
+                    onPrimaryBannerReady={handlePrimaryBannerReady}
+                />
             </div>
 
             {/* Main Action */}
@@ -769,11 +836,11 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Status
-                        <span style={{
-                            fontSize: '12px',
-                            fontWeight: 'normal',
-                            background: 'var(--glass-button-bg)',
-                            border: '1px solid var(--glass-border)',
+                            <span style={{
+                                fontSize: '12px',
+                                fontWeight: 'normal',
+                                background: 'var(--glass-button-bg)',
+                                border: '1px solid var(--glass-border)',
                             padding: '4px 8px',
                             borderRadius: '12px',
                             color: 'var(--text-muted)'
@@ -783,115 +850,122 @@ export default function Dashboard() {
                     </h3>
                 </div>
 
-                <div className="glass-panel" style={{
-                    marginBottom: '20px',
-                    padding: '20px',
-                    borderRadius: '16px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
-                    border: '1px solid rgba(99, 102, 241, 0.2)'
-                }}>
-                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                            <div style={{
-                                background: 'rgba(99, 102, 241, 0.15)',
-                                padding: '12px',
-                                borderRadius: '14px',
-                                display: 'flex',
-                                position: 'relative'
-                            }}>
-                                {/* Pulse effect */}
-                                <div className="skeleton-pulse" style={{
-                                    position: 'absolute', inset: 0, borderRadius: '14px',
-                                    background: 'var(--primary)', opacity: 0.25, zIndex: 0
-                                }}></div>
-                                <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
-                            </div>
-                            <div>
-                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
-                                <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{
-                                        width: '8px', height: '8px', borderRadius: '50%',
-                                        background: isSystemClosed ? 'var(--error)' : 'var(--success)',
-                                        boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
-                                    }}></span>
-                                    {isSystemClosed ? 'Closed' : 'Active'}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
-                                <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
-                                    {slotCapacity.remainingSlots}
-                                </span>
-                                <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                    / {slotCapacity.totalSlots}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Progress Bar background effect */}
-                    <div style={{
-                        position: 'absolute', bottom: 0, left: 0, height: '4px',
-                        background: 'var(--glass-border)', width: '100%'
-                    }}>
-                        <div style={{
-                            height: '100%',
-                            background: 'var(--primary)',
-                            width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
-                            transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                            boxShadow: '0 0 12px var(--primary-glow)'
-                        }}></div>
-                    </div>
-                </div>
-                <div className="grid-cols-2">
-                    {machines.map((machine, index) => {
-                        const status = getMachineRealTimeStatus(machine);
-                        return (
-                            <div
-                                key={machine.id}
-                                className="glass-panel animate-fade-in"
-                                style={{
-                                    padding: '16px',
-                                    borderRadius: '16px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '12px',
-                                    animationDelay: `${Math.min(index * 0.06, 0.18)}s`
-                                }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                {showStatusSkeleton ? (
+                    <>
+                        {statusOverviewSkeleton}
+                        {machineStatusSkeleton}
+                    </>
+                ) : (
+                    <>
+                        <div className="glass-panel" style={{
+                            marginBottom: '20px',
+                            padding: '20px',
+                            borderRadius: '16px',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                            border: '1px solid rgba(99, 102, 241, 0.2)'
+                        }}>
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                                     <div style={{
-                                        background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.2)`,
-                                        padding: '8px',
-                                        borderRadius: '10px'
+                                        background: 'rgba(99, 102, 241, 0.15)',
+                                        padding: '12px',
+                                        borderRadius: '14px',
+                                        display: 'flex',
+                                        position: 'relative'
                                     }}>
-                                        {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
+                                        <div className="skeleton-pulse" style={{
+                                            position: 'absolute', inset: 0, borderRadius: '14px',
+                                            background: 'var(--primary)', opacity: 0.25, zIndex: 0
+                                        }}></div>
+                                        <Activity size={24} color="var(--primary)" style={{ zIndex: 1 }} />
                                     </div>
-                                    <span style={{
-                                        fontSize: '12px',
-                                        padding: '4px 8px',
-                                        borderRadius: '10px',
-                                        background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`,
-                                        color: status.color
-                                    }}>
-                                        {status.label}
-                                    </span>
+                                    <div>
+                                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>System Status</div>
+                                        <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{
+                                                width: '8px', height: '8px', borderRadius: '50%',
+                                                background: isSystemClosed ? 'var(--error)' : 'var(--success)',
+                                                boxShadow: `0 0 10px ${isSystemClosed ? 'var(--error)' : 'var(--success)'}`
+                                            }}></span>
+                                            {isSystemClosed ? 'Closed' : 'Active'}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
-                                    <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                        {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
-                                    </p>
+
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>Week Slots</div>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                        <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                            {slotCapacity.remainingSlots}
+                                        </span>
+                                        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                            / {slotCapacity.totalSlots}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
+
+                            <div style={{
+                                position: 'absolute', bottom: 0, left: 0, height: '4px',
+                                background: 'var(--glass-border)', width: '100%'
+                            }}>
+                                <div style={{
+                                    height: '100%',
+                                    background: 'var(--primary)',
+                                    width: `${Math.max(2, (slotCapacity.remainingSlots / Math.max(1, slotCapacity.totalSlots)) * 100)}%`,
+                                    transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    boxShadow: '0 0 12px var(--primary-glow)'
+                                }}></div>
+                            </div>
+                        </div>
+                        <div className="grid-cols-2">
+                            {machines.map((machine, index) => {
+                                const status = getMachineRealTimeStatus(machine);
+                                return (
+                                    <div
+                                        key={machine.id}
+                                        className="glass-panel animate-fade-in"
+                                        style={{
+                                            padding: '16px',
+                                            borderRadius: '16px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '12px',
+                                            animationDelay: `${Math.min(index * 0.06, 0.18)}s`
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div style={{
+                                                background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.2)`,
+                                                padding: '8px',
+                                                borderRadius: '10px'
+                                            }}>
+                                                {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
+                                            </div>
+                                            <span style={{
+                                                fontSize: '12px',
+                                                padding: '4px 8px',
+                                                borderRadius: '10px',
+                                                background: `rgba(${status.state === 'available' ? '16, 185, 129' : status.state === 'occupied' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`,
+                                                color: status.color
+                                            }}>
+                                                {status.label}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p style={{ margin: 0, fontWeight: 600 }}>{machine.name}</p>
+                                            <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
             </section>
 
             <Suspense fallback={bookingsFallback}>

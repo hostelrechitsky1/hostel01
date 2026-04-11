@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
+import { observeResidentWebPaintMetrics } from './utils/performance';
 
 const CONNECTION_HINTS = [
   'https://firestore.googleapis.com',
@@ -52,6 +53,7 @@ const registerServiceWorker = () => {
 
 ensureConnectionHints();
 registerServiceWorker();
+observeResidentWebPaintMetrics();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

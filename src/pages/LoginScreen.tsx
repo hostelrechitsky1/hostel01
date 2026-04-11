@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { Building, ArrowRight, User } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Student } from '../types';
 import { preloadResidentRoutes } from '../utils/preloadRoutes';
+import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 
 let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
@@ -22,6 +23,27 @@ export default function LoginScreen() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const startWarmup = () => {
+            void loadResidentLookup();
+        };
+
+        const idleWindow = window as Window & typeof globalThis & {
+            requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+            cancelIdleCallback?: (handle: number) => void;
+        };
+
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            const idleId = idleWindow.requestIdleCallback(startWarmup, { timeout: 900 });
+            return () => idleWindow.cancelIdleCallback?.(idleId);
+        }
+
+        const timeoutId = window.setTimeout(startWarmup, 250);
+        return () => window.clearTimeout(timeoutId);
+    }, []);
+
     const handleRoomFieldFocus = () => {
         void loadResidentLookup();
     };
@@ -29,10 +51,16 @@ export default function LoginScreen() {
     const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        startResidentPerfSpan('resident:login-room-lookup');
 
         try {
             const { residentRoomLookupService } = await loadResidentLookup();
+            const hadCachedRoom = residentRoomLookupService.getCachedStudentsByRoom(room) !== undefined;
             const roomStudents = await residentRoomLookupService.getStudentsByRoom(room);
+            finishResidentPerfSpan('resident:login-room-lookup', {
+                result: roomStudents.length > 0 ? 'found' : 'empty',
+                source: hadCachedRoom ? 'cache' : 'network',
+            });
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
@@ -50,6 +78,9 @@ export default function LoginScreen() {
                 toast.error('Room not found. Please check the number (e.g. 101, 52-2).');
             }
         } catch (err) {
+            finishResidentPerfSpan('resident:login-room-lookup', {
+                result: 'error',
+            });
             console.error(err);
             toast.error('Failed to connect to database.');
         } finally {
@@ -82,6 +113,9 @@ export default function LoginScreen() {
         bookingService.setCurrentRoommates(roommates);
         preloadResidentRoutes();
         void warmResidentAppData(student.id);
+        startResidentPerfSpan('resident:login-to-dashboard-shell');
+        startResidentPerfSpan('resident:login-to-dashboard-data');
+        startResidentPerfSpan('resident:dashboard-banner-ready');
 
         requestAnimationFrame(() => {
             navigate('/', { replace: true });
