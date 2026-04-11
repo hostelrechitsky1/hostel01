@@ -185,6 +185,35 @@ const sortFeedbacksByRecent = (feedbacks: Feedback[]) => {
     return [...feedbacks].sort((left, right) => right.timestamp - left.timestamp);
 };
 
+const normalizeFeedbackIdentity = (studentId: string, studentName: string, roomNumber: string) => ({
+    studentId: studentId.trim(),
+    studentName: studentName.trim().toLowerCase(),
+    roomNumber: roomNumber.trim().toLowerCase(),
+});
+
+const filterFeedbacksForResident = (
+    feedbacks: Feedback[],
+    studentId: string,
+    studentName: string,
+    roomNumber: string,
+    limitCount?: number
+) => {
+    const identity = normalizeFeedbackIdentity(studentId, studentName, roomNumber);
+    const filtered = feedbacks.filter((feedback) => {
+        const feedbackRoom = feedback.roomNumber?.trim().toLowerCase();
+        const feedbackName = feedback.studentName?.trim().toLowerCase();
+
+        if (feedback.studentId && identity.studentId) {
+            return feedback.studentId === identity.studentId;
+        }
+
+        return feedbackRoom === identity.roomNumber && feedbackName === identity.studentName;
+    });
+
+    const sorted = sortFeedbacksByRecent(filtered);
+    return typeof limitCount === 'number' ? sorted.slice(0, limitCount) : sorted;
+};
+
 const normalizeWeekIds = (weekIds: string[]) => {
     return Array.from(new Set(weekIds.filter(Boolean))).sort();
 };
@@ -194,6 +223,10 @@ const getBookingsByWeeksCacheKey = (weekIds: string[]) => `bookings:weeks:${norm
 const getStudentBookingsCacheKey = (studentId: string, limitCount: number) => `bookings:student:${studentId}:recent:${limitCount}`;
 const getRecentAdminBookingsCacheKey = (limitCount: number) => `bookings:admin:recent:${limitCount}`;
 const getFeedbacksCacheKey = (limitCount?: number) => `feedbacks:${typeof limitCount === 'number' ? `recent:${limitCount}` : 'all'}`;
+const getResidentFeedbacksCacheKey = (studentId: string, studentName: string, roomNumber: string, limitCount: number) => {
+    const identity = normalizeFeedbackIdentity(studentId, studentName, roomNumber);
+    return `feedbacks:resident:${identity.studentId || 'legacy'}:${identity.roomNumber}:${identity.studentName}:recent:${limitCount}`;
+};
 
 const cacheKeys = {
     banners: 'banners:all',
@@ -234,6 +267,14 @@ export const firestoreService = {
 
     getCachedFeedbacks(limitCount?: number) {
         return readCache<Feedback[]>(getFeedbacksCacheKey(limitCount), CACHE_MAX_AGE_MS.recentFeedbacks);
+    },
+
+    getCachedFeedbacksForResident(studentId: string, studentName: string, roomNumber: string, limitCount = 8) {
+        if (!roomNumber.trim()) return undefined;
+        return readCache<Feedback[]>(
+            getResidentFeedbacksCacheKey(studentId, studentName, roomNumber, limitCount),
+            CACHE_MAX_AGE_MS.recentFeedbacks
+        );
     },
 
     async getAllStudents(): Promise<Student[]> {
@@ -547,6 +588,7 @@ export const firestoreService = {
 
     async addFeedback(feedback: Feedback) {
         await setDoc(doc(db, 'feedbacks', feedback.id), feedback);
+        clearCacheByPrefix('feedbacks:');
     },
 
     async getFeedbacks(limitCount?: number): Promise<Feedback[]> {
@@ -558,6 +600,78 @@ export const firestoreService = {
             const snapshot = await getDocs(feedbacksQuery);
             return sortFeedbacksByRecent(snapshot.docs.map((feedbackDoc) => feedbackDoc.data() as Feedback));
         });
+    },
+
+    async getFeedbacksForResident(
+        studentId: string,
+        studentName: string,
+        roomNumber: string,
+        limitCount = 8
+    ): Promise<Feedback[]> {
+        const normalizedRoom = roomNumber.trim();
+        if (!normalizedRoom) return [];
+
+        return resolveWithCache(
+            getResidentFeedbacksCacheKey(studentId, studentName, normalizedRoom, limitCount),
+            CACHE_MAX_AGE_MS.recentFeedbacks,
+            async () => {
+                const residentFeedbackQuery = query(collection(db, 'feedbacks'), where('roomNumber', '==', normalizedRoom));
+                const snapshot = await getDocs(residentFeedbackQuery);
+                return filterFeedbacksForResident(
+                    snapshot.docs.map((feedbackDoc) => feedbackDoc.data() as Feedback),
+                    studentId,
+                    studentName,
+                    normalizedRoom,
+                    limitCount
+                );
+            }
+        );
+    },
+
+    subscribeToFeedbacksForResident(
+        studentId: string,
+        studentName: string,
+        roomNumber: string,
+        limitCount = 8,
+        callback: (feedbacks: Feedback[]) => void,
+        onError?: (error: unknown) => void
+    ): () => void {
+        const normalizedRoom = roomNumber.trim();
+        if (!normalizedRoom) {
+            callback([]);
+            return () => { /* noop */ };
+        }
+
+        const cacheKey = getResidentFeedbacksCacheKey(studentId, studentName, normalizedRoom, limitCount);
+        hydrateFromCache(cacheKey, CACHE_MAX_AGE_MS.recentFeedbacks, callback);
+
+        const residentFeedbackQuery = query(collection(db, 'feedbacks'), where('roomNumber', '==', normalizedRoom));
+        return onSnapshot(residentFeedbackQuery, (snapshot) => {
+            const feedbacks = filterFeedbacksForResident(
+                snapshot.docs.map((feedbackDoc) => feedbackDoc.data() as Feedback),
+                studentId,
+                studentName,
+                normalizedRoom,
+                limitCount
+            );
+            writeCache(cacheKey, feedbacks);
+            callback(feedbacks);
+        }, (error) => {
+            console.error('Error subscribing to resident feedback:', error);
+            onError?.(error);
+        });
+    },
+
+    async updateFeedbackReply(id: string, text: string, repliedBy = 'Hostel Team') {
+        await updateDoc(doc(db, 'feedbacks', id), {
+            adminReply: {
+                text,
+                repliedAt: Date.now(),
+                repliedBy
+            },
+            read: true
+        });
+        clearCacheByPrefix('feedbacks:');
     },
 
     async deleteFeedback(id: string) {

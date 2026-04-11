@@ -60,6 +60,12 @@ export interface Banner {
 
 export type FeedbackType = 'bug' | 'feature' | 'other';
 
+export interface FeedbackReply {
+  text: string;
+  repliedAt: number;
+  repliedBy: string;
+}
+
 export interface Feedback {
   id: string;
   studentId?: string;
@@ -69,6 +75,7 @@ export interface Feedback {
   type: 'bug' | 'feature' | 'other';
   timestamp: number;
   read: boolean;
+  adminReply?: FeedbackReply;
 }
 
 export interface TopAlert {

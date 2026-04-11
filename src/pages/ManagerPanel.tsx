@@ -1,5 +1,20 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Trash2, ShieldCheck, Printer, Plus, AlertTriangle, Database } from 'lucide-react';
+import {
+    Trash2,
+    ShieldCheck,
+    Printer,
+    Plus,
+    AlertTriangle,
+    Database,
+    MessageSquare,
+    Reply,
+    Send,
+    Bug,
+    Lightbulb,
+    Sparkles,
+    Clock3,
+    CheckCircle2
+} from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
@@ -7,10 +22,37 @@ import type { Booking, Machine, Student, Feedback, Banner, AppSettings } from '.
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
+import { toast } from 'sonner';
 
 const BOOKING_ITEMS_PER_PAGE = 12;
 const INITIAL_RECENT_BOOKINGS_LIMIT = 80;
 const INITIAL_RECENT_FEEDBACK_LIMIT = 40;
+const feedbackTypeMeta = {
+    bug: {
+        label: 'Bug',
+        color: '#f87171',
+        background: 'rgba(239, 68, 68, 0.14)',
+        border: 'rgba(239, 68, 68, 0.24)'
+    },
+    feature: {
+        label: 'Suggestion',
+        color: '#60a5fa',
+        background: 'rgba(59, 130, 246, 0.14)',
+        border: 'rgba(59, 130, 246, 0.24)'
+    },
+    other: {
+        label: 'General',
+        color: '#c4b5fd',
+        background: 'rgba(139, 92, 246, 0.14)',
+        border: 'rgba(139, 92, 246, 0.24)'
+    }
+} as const;
+
+const getFeedbackTypeIcon = (type: Feedback['type']) => {
+    if (type === 'bug') return Bug;
+    if (type === 'feature') return Lightbulb;
+    return Sparkles;
+};
 
 export default function ManagerPanel() {
     const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
@@ -44,6 +86,8 @@ export default function ManagerPanel() {
     });
     const [recentBookingLimit, setRecentBookingLimit] = useState(INITIAL_RECENT_BOOKINGS_LIMIT);
     const [recentFeedbackLimit, setRecentFeedbackLimit] = useState(INITIAL_RECENT_FEEDBACK_LIMIT);
+    const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+    const [replyingFeedbackId, setReplyingFeedbackId] = useState<string | null>(null);
     const navigate = useNavigate();
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
@@ -124,6 +168,17 @@ export default function ManagerPanel() {
             );
         });
     }, [bookingSearchTerm, bookings, machineById, studentById]);
+
+    const getReplyDraft = (feedback: Feedback) => {
+        return replyDrafts[feedback.id] ?? feedback.adminReply?.text ?? '';
+    };
+
+    const handleReplyDraftChange = (feedbackId: string, value: string) => {
+        setReplyDrafts((currentDrafts) => ({
+            ...currentDrafts,
+            [feedbackId]: value
+        }));
+    };
 
     const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKING_ITEMS_PER_PAGE));
 
@@ -233,6 +288,28 @@ export default function ManagerPanel() {
     const toggleBanner = async (banner: Banner) => {
         await firestoreService.toggleBannerStatus(banner.id, !banner.isActive);
         refreshCoreData();
+    };
+
+    const handleReplyToFeedback = async (feedback: Feedback) => {
+        const nextReply = getReplyDraft(feedback).trim();
+        if (!nextReply) {
+            toast.error('Write a reply first.');
+            return;
+        }
+
+        setReplyingFeedbackId(feedback.id);
+
+        try {
+            await firestoreService.updateFeedbackReply(feedback.id, nextReply, 'Hostel Team');
+            const nextFeedbacks = await firestoreService.getFeedbacks(recentFeedbackLimit);
+            setFeedbacks(nextFeedbacks);
+            toast.success(feedback.adminReply ? 'Reply updated.' : 'Reply sent to resident.');
+        } catch (error) {
+            console.error('Failed to reply to feedback', error);
+            toast.error('Failed to save reply.');
+        } finally {
+            setReplyingFeedbackId(null);
+        }
     };
 
     // --- Resident Management ---
@@ -965,9 +1042,12 @@ export default function ManagerPanel() {
             <section>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
                     <div>
-                        <h3 style={{ margin: 0 }}>Recent Feedback ({feedbacks.length})</h3>
+                        <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <MessageSquare size={20} />
+                            Feedback Inbox ({feedbacks.length})
+                        </h3>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                            Showing the latest {feedbacks.length} feedback messages to keep this page responsive.
+                            Reply to resident suggestions and bugs here. Your answer will appear inside their dashboard.
                         </div>
                     </div>
                     {!activityLoading && feedbacks.length >= recentFeedbackLimit && (
@@ -980,61 +1060,205 @@ export default function ManagerPanel() {
                         </button>
                     )}
                 </div>
-                <div className="glass-panel" style={{ padding: 0, borderRadius: '16px', maxHeight: '400px', overflowY: 'auto', overflowX: 'auto' }}>
+                <div className="glass-panel" style={{ padding: '12px', borderRadius: '18px', maxHeight: '620px', overflowY: 'auto' }}>
                     {feedbacks.length > 0 ? (
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                            <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0, backdropFilter: 'blur(10px)' }}>
-                                <tr>
-                                    <th style={{ padding: '12px', textAlign: 'left' }}>Type</th>
-                                    <th style={{ padding: '12px', textAlign: 'left' }}>From</th>
-                                    <th style={{ padding: '12px', textAlign: 'left' }}>Message</th>
-                                    <th style={{ padding: '12px', textAlign: 'right' }}>Time</th>
-                                    <th style={{ padding: '12px', textAlign: 'right' }}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {feedbacks.map(f => (
-                                    <tr key={f.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                        <td style={{ padding: '12px' }}>
-                                            <span style={{
-                                                padding: '4px 8px', borderRadius: '4px', fontSize: '12px',
-                                                background: f.type === 'bug' ? 'rgba(239, 68, 68, 0.2)' : f.type === 'feature' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(107, 114, 128, 0.2)',
-                                                color: f.type === 'bug' ? '#ef4444' : f.type === 'feature' ? '#3b82f6' : '#9ca3af'
-                                            }}>
-                                                {f.type.toUpperCase()}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '12px' }}>
-                                            <div style={{ fontWeight: 600 }}>{f.studentName}</div>
-                                            <div style={{ fontSize: '12px', opacity: 0.7 }}>Room {f.roomNumber}</div>
-                                        </td>
-                                        <td style={{ padding: '12px' }}>{f.text}</td>
-                                        <td style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                            {format(f.timestamp, 'MMM d, H:mm')}
-                                        </td>
-                                        <td style={{ padding: '12px', textAlign: 'right' }}>
-                                            <button
-                                                onClick={async () => {
-                                                    const confirmed = await confirmDialog('Delete Feedback?', 'Delete this feedback entry?', {
-                                                        confirmText: 'Delete',
-                                                        cancelText: 'Cancel',
-                                                        isDanger: true
-                                                    });
-                                                    if (confirmed) {
-                                                        await firestoreService.deleteFeedback(f.id);
-                                                        const nextFeedbacks = await firestoreService.getFeedbacks(recentFeedbackLimit);
-                                                        setFeedbacks(nextFeedbacks);
-                                                    }
+                        <div style={{ display: 'grid', gap: '14px' }}>
+                            {feedbacks.map((feedback) => {
+                                const meta = feedbackTypeMeta[feedback.type];
+                                const Icon = getFeedbackTypeIcon(feedback.type);
+                                const hasReply = Boolean(feedback.adminReply?.text?.trim());
+                                const replyDraft = getReplyDraft(feedback);
+
+                                return (
+                                    <div
+                                        key={feedback.id}
+                                        className="glass-panel"
+                                        style={{
+                                            padding: '18px',
+                                            borderRadius: '18px',
+                                            border: hasReply ? '1px solid rgba(16, 185, 129, 0.24)' : `1px solid ${meta.border}`,
+                                            background: hasReply
+                                                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.28) 100%)'
+                                                : 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(15, 23, 42, 0.26) 100%)'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                                <div
+                                                    style={{
+                                                        width: '42px',
+                                                        height: '42px',
+                                                        borderRadius: '14px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        background: meta.background,
+                                                        border: `1px solid ${meta.border}`
+                                                    }}
+                                                >
+                                                    <Icon size={18} color={meta.color} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                                                        {feedback.studentName}
+                                                    </div>
+                                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                        Room {feedback.roomNumber}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                                <span
+                                                    style={{
+                                                        padding: '6px 10px',
+                                                        borderRadius: '999px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 700,
+                                                        color: meta.color,
+                                                        background: meta.background,
+                                                        border: `1px solid ${meta.border}`
+                                                    }}
+                                                >
+                                                    {meta.label}
+                                                </span>
+                                                <span
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        padding: '6px 10px',
+                                                        borderRadius: '999px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 700,
+                                                        color: hasReply ? '#6ee7b7' : '#fbbf24',
+                                                        background: hasReply ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
+                                                        border: hasReply ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(245, 158, 11, 0.2)'
+                                                    }}
+                                                >
+                                                    {hasReply ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}
+                                                    {hasReply ? 'Replied' : 'Awaiting reply'}
+                                                </span>
+                                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                    {format(feedback.timestamp, 'MMM d, HH:mm')}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                padding: '14px 16px',
+                                                borderRadius: '14px',
+                                                background: 'rgba(255,255,255,0.04)',
+                                                border: '1px solid rgba(255,255,255,0.06)',
+                                                color: 'var(--text-main)',
+                                                lineHeight: 1.6,
+                                                whiteSpace: 'pre-wrap'
+                                            }}
+                                        >
+                                            {feedback.text}
+                                        </div>
+
+                                        {hasReply && (
+                                            <div
+                                                style={{
+                                                    marginTop: '14px',
+                                                    padding: '16px',
+                                                    borderRadius: '16px',
+                                                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0.06) 100%)',
+                                                    border: '1px solid rgba(16, 185, 129, 0.18)'
                                                 }}
-                                                style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}
                                             >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a7f3d0', fontWeight: 700 }}>
+                                                        <Reply size={16} />
+                                                        Current reply
+                                                    </div>
+                                                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.72)' }}>
+                                                        {format(feedback.adminReply!.repliedAt, 'MMM d, HH:mm')}
+                                                    </div>
+                                                </div>
+                                                <div style={{ color: 'white', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                                                    {feedback.adminReply?.text}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
+                                            <textarea
+                                                value={replyDraft}
+                                                onChange={(event) => handleReplyDraftChange(feedback.id, event.target.value)}
+                                                placeholder="Write a helpful reply for the resident..."
+                                                style={{
+                                                    width: '100%',
+                                                    minHeight: '92px',
+                                                    borderRadius: '14px',
+                                                    padding: '14px 16px',
+                                                    background: 'rgba(0,0,0,0.18)',
+                                                    border: '1px solid rgba(255,255,255,0.08)',
+                                                    color: 'white',
+                                                    outline: 'none',
+                                                    resize: 'vertical',
+                                                    boxSizing: 'border-box',
+                                                    lineHeight: 1.5
+                                                }}
+                                            />
+
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                    {hasReply
+                                                        ? 'Update the reply any time. Residents will see the latest version in their dashboard.'
+                                                        : 'Send a reply to publish it to the resident dashboard.'}
+                                                </div>
+
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const confirmed = await confirmDialog('Delete Feedback?', 'Delete this feedback entry?', {
+                                                                confirmText: 'Delete',
+                                                                cancelText: 'Cancel',
+                                                                isDanger: true
+                                                            });
+                                                            if (confirmed) {
+                                                                await firestoreService.deleteFeedback(feedback.id);
+                                                                const nextFeedbacks = await firestoreService.getFeedbacks(recentFeedbackLimit);
+                                                                setFeedbacks(nextFeedbacks);
+                                                            }
+                                                        }}
+                                                        className="glass-button"
+                                                        style={{
+                                                            padding: '10px 14px',
+                                                            borderRadius: '12px',
+                                                            color: 'var(--error)',
+                                                            border: '1px solid rgba(239, 68, 68, 0.22)'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={15} style={{ marginRight: '6px' }} />
+                                                        Delete
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleReplyToFeedback(feedback)}
+                                                        disabled={replyingFeedbackId === feedback.id}
+                                                        className="primary-button"
+                                                        style={{
+                                                            padding: '10px 16px',
+                                                            borderRadius: '12px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '8px',
+                                                            opacity: replyingFeedbackId === feedback.id ? 0.75 : 1
+                                                        }}
+                                                    >
+                                                        {replyingFeedbackId === feedback.id ? <Clock3 size={15} /> : <Send size={15} />}
+                                                        {replyingFeedbackId === feedback.id ? 'Saving...' : hasReply ? 'Update Reply' : 'Send Reply'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
                             {activityLoading ? 'Loading recent feedback...' : 'No feedback yet.'}
