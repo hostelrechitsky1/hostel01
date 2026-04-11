@@ -4,6 +4,9 @@ const FIRESTORE_API_KEY = process.env.VITE_FIREBASE_API_KEY || process.env.FIREB
 const FIRESTORE_BASE_URL = FIRESTORE_PROJECT_ID
   ? `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents`
   : ''
+const FIRESTORE_DATABASE = FIRESTORE_PROJECT_ID
+  ? `projects/${FIRESTORE_PROJECT_ID}/databases/(default)`
+  : ''
 
 const ensureFirestoreRestConfig = () => {
   if (!FIRESTORE_BASE_URL || !FIRESTORE_API_KEY) {
@@ -29,6 +32,76 @@ const fetchFirestoreJson = async (path, init, allowNotFound = false) => {
   }
 
   return response.json()
+}
+
+export const getFirestoreDocumentName = (collectionId, documentId) => {
+  ensureFirestoreRestConfig()
+  return `${FIRESTORE_DATABASE}/documents/${collectionId}/${documentId}`
+}
+
+export const encodeFirestoreValue = (value) => {
+  if (value === null) {
+    return { nullValue: null }
+  }
+
+  if (typeof value === 'string') {
+    return { stringValue: value }
+  }
+
+  if (typeof value === 'boolean') {
+    return { booleanValue: value }
+  }
+
+  if (typeof value === 'number') {
+    if (Number.isInteger(value)) {
+      return { integerValue: String(value) }
+    }
+
+    return { doubleValue: value }
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      arrayValue: {
+        values: value.map((item) => encodeFirestoreValue(item)),
+      },
+    }
+  }
+
+  if (typeof value === 'object') {
+    return {
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(value)
+            .filter(([, fieldValue]) => typeof fieldValue !== 'undefined')
+            .map(([fieldName, fieldValue]) => [fieldName, encodeFirestoreValue(fieldValue)])
+        ),
+      },
+    }
+  }
+
+  return { stringValue: String(value) }
+}
+
+export const encodeFirestoreDocument = (collectionId, documentId, data) => ({
+  name: getFirestoreDocumentName(collectionId, documentId),
+  fields: Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => typeof value !== 'undefined')
+      .map(([fieldName, value]) => [fieldName, encodeFirestoreValue(value)])
+  ),
+})
+
+export const commitFirestoreWrites = async (writes) => {
+  return fetchFirestoreJson(':commit', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      writes,
+    }),
+  })
 }
 
 export const decodeFirestoreValue = (value) => {

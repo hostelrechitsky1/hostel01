@@ -444,10 +444,13 @@ export default function BookingFlow() {
             const { residentMutationsService } = await loadResidentMutationsService();
             const result = await residentMutationsService.createBooking(bookingData);
             if (result.success) {
-                const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
+                const createdBooking = result.booking ?? {
+                    ...bookingData,
+                    id: `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`,
+                };
                 hapticSuccess();
                 startTransition(() => {
-                    setBookings((currentBookings) => upsertBooking(currentBookings, { ...bookingData, id: createdSlotId }));
+                    setBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
                 });
                 setShowConfirmModal(false);
                 setShowConfirmation(true);

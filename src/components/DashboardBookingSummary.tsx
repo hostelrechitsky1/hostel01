@@ -150,8 +150,10 @@ export default function DashboardBookingSummary({
                 return;
             }
 
-            const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
-            const createdBooking = { ...bookingData, id: createdSlotId };
+            const createdBooking = result.booking ?? {
+                ...bookingData,
+                id: `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`,
+            };
             hapticSuccess();
             onBookingCreated(createdBooking);
             setQuickBookModalMessage({ type: 'success', text: `Booked ${booking.startTime} on ${targetDateLabel}.` });
