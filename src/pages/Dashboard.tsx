@@ -223,7 +223,7 @@ export default function Dashboard() {
 
         return {
             upcomingBookings: upcoming,
-            history: past.slice(0, 5)
+            history: past.slice(0, 3)
         };
     }, [recentBookings]);
 
@@ -974,7 +974,7 @@ export default function Dashboard() {
                             <History size={20} /> Past Bookings
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {history.slice(0, 5).map((booking) => {
+                            {history.slice(0, 3).map((booking) => {
                                 const machine = machines.find((m) => m.id === booking.machineId);
                                 const machineLabel = machine?.name || `Machine ${booking.machineId}`;
                                 return (

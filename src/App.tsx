@@ -6,7 +6,8 @@ import { PrivateRoute } from './components/PrivateRoute';
 import { RouteFallback } from './components/RouteFallback';
 import { bookingService } from './services/bookingService';
 import { lazyRoute } from './utils/lazyRoute';
-import { preloadResidentRoutes } from './utils/preloadRoutes';
+import { preloadManagerRoutes, preloadResidentRoutes } from './utils/preloadRoutes';
+import { warmAdminAppData } from './utils/warmAdminApp';
 import { warmResidentAppData } from './utils/warmResidentApp';
 
 const LoginScreen = lazyRoute(() => import('./pages/LoginScreen'));
@@ -87,6 +88,18 @@ function RouteWarmup() {
       if (currentUser) {
         preloadResidentRoutes();
         void warmResidentAppData(currentUser.id);
+        return;
+      }
+
+      if (sessionStorage.getItem('manager_auth')) {
+        preloadManagerRoutes();
+        void warmAdminAppData('manager');
+        return;
+      }
+
+      if (sessionStorage.getItem('hostel_admin_auth')) {
+        preloadManagerRoutes();
+        void warmAdminAppData('staff');
       }
     }, 200);
 

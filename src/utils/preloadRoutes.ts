@@ -16,4 +16,6 @@ export const preloadManagerRoutes = () => {
     void import('../pages/ManagerPanel');
     void import('../pages/PrintSchedule');
     void import('../pages/PrintCredentials');
+    void import('../pages/HostelAdminLogin');
+    void import('../pages/HostelAdminDashboard');
 };

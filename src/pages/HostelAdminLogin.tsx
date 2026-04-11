@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, KeyRound, ArrowRight } from 'lucide-react';
+import { preloadManagerRoutes } from '../utils/preloadRoutes';
+import { warmAdminAppData } from '../utils/warmAdminApp';
 
 export default function HostelAdminLogin() {
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
+    useEffect(() => {
+        preloadManagerRoutes();
+        void warmAdminAppData('staff');
+    }, []);
+
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         // Hardcoded PIN for Hostel Staff
         if (pin === '2001') {
             sessionStorage.setItem('hostel_admin_auth', 'true');
+            preloadManagerRoutes();
+            void warmAdminAppData('staff');
             navigate('/hostel-admin/dashboard');
         } else {
             setError('Incorrect PIN');
@@ -40,6 +49,7 @@ export default function HostelAdminLogin() {
                                 type="password"
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
+                                onFocus={preloadManagerRoutes}
                                 placeholder="Enter PIN"
                                 style={{ fontSize: '24px', letterSpacing: '8px', textAlign: 'center', fontFamily: 'monospace' }}
                                 maxLength={4}

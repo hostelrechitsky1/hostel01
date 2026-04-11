@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, ArrowRight } from 'lucide-react';
+import { preloadManagerRoutes } from '../utils/preloadRoutes';
+import { warmAdminAppData } from '../utils/warmAdminApp';
 
 export default function ManagerLogin() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+
+    useEffect(() => {
+        preloadManagerRoutes();
+        void warmAdminAppData('manager');
+    }, []);
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
@@ -14,6 +21,8 @@ export default function ManagerLogin() {
 
         if (password === correctPassword) {
             sessionStorage.setItem('manager_auth', 'true');
+            preloadManagerRoutes();
+            void warmAdminAppData('manager');
             navigate('/manager');
         } else {
             setError('Incorrect Password');
@@ -46,6 +55,7 @@ export default function ManagerLogin() {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            onFocus={preloadManagerRoutes}
                             placeholder="Enter Password"
                             autoFocus
                             style={{
