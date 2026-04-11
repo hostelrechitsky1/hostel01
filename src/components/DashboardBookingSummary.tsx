@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer } from 'lucide-react';
+import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { addBelarusDays, addBelarusMinutes, addMinutesToTimeString, formatBelarusDate, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday, parseBelarusDateTime } from '../utils/time';
-import { hapticSuccess } from '../utils/haptics';
+import { hapticSelection, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from './ActionSpinner';
-import { getQuickBookFailureMessage } from '../utils/bookingMutations';
+import { getCancelBookingFailureMessage, getQuickBookFailureMessage } from '../utils/bookingMutations';
 
 interface DashboardBookingSummaryProps {
     user: Student;
@@ -17,6 +17,7 @@ interface DashboardBookingSummaryProps {
     settings: AppSettings;
     isNextWeekOpen: boolean;
     onBookingCreated: (booking: Booking) => void;
+    onBookingCancelled: (bookingId: string) => void;
 }
 
 let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
@@ -34,11 +35,15 @@ export default function DashboardBookingSummary({
     weekBookings,
     settings,
     isNextWeekOpen,
-    onBookingCreated
+    onBookingCreated,
+    onBookingCancelled
 }: DashboardBookingSummaryProps) {
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
+    const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
+    const [cancelModalMessage, setCancelModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -73,6 +78,51 @@ export default function DashboardBookingSummary({
         void loadResidentMutationsService();
         setQuickBookModalBooking(booking);
         setQuickBookModalMessage(null);
+    };
+
+    const canCancelBooking = (booking: Booking) => (
+        parseBelarusDateTime(booking.date, booking.startTime).getTime() > getBelarusNow().getTime()
+    );
+
+    const handleOpenCancelBooking = (booking: Booking) => {
+        if (!canCancelBooking(booking)) return;
+        void loadResidentMutationsService();
+        hapticSelection();
+        setCancelModalBooking(booking);
+        setCancelModalMessage(null);
+    };
+
+    const handleConfirmCancelBooking = async () => {
+        if (!cancelModalBooking || cancelBookingId) return;
+
+        setCancelBookingId(cancelModalBooking.id);
+
+        try {
+            const { residentMutationsService } = await loadResidentMutationsService();
+            const result = await residentMutationsService.cancelBooking(cancelModalBooking.id, user.id);
+
+            if (!result.success) {
+                setCancelModalMessage({ type: 'error', text: getCancelBookingFailureMessage(result.errorCode, result.error) });
+                return;
+            }
+
+            hapticSuccess();
+            onBookingCancelled(cancelModalBooking.id);
+            setCancelModalMessage({
+                type: 'success',
+                text: 'Booking cancelled. The slot is now free again.'
+            });
+
+            setTimeout(() => {
+                setCancelModalBooking(null);
+                setCancelModalMessage(null);
+            }, 1600);
+        } catch (error) {
+            console.error('Cancel booking failed', error);
+            setCancelModalMessage({ type: 'error', text: 'Could not cancel the booking right now.' });
+        } finally {
+            setCancelBookingId(null);
+        }
     };
 
     const handleConfirmQuickBook = async () => {
@@ -207,6 +257,10 @@ export default function DashboardBookingSummary({
         ? machines.find((machine) => machine.id === quickBookModalBooking.machineId)
         : null;
     const quickBookMachineLabel = quickBookMachine?.name || `Machine ${quickBookModalBooking?.machineId || ''}`;
+    const cancelBookingMachine = cancelModalBooking
+        ? machines.find((machine) => machine.id === cancelModalBooking.machineId)
+        : null;
+    const cancelBookingMachineLabel = cancelBookingMachine?.name || `Machine ${cancelModalBooking?.machineId || ''}`;
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
 
     return (
@@ -423,6 +477,40 @@ export default function DashboardBookingSummary({
                                 <Download size={18} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple / Outlook</span>
                             </button>
+
+                            <button
+                                onClick={() => handleOpenCancelBooking(primaryUpcomingBooking)}
+                                disabled={!canCancelBooking(primaryUpcomingBooking) || cancelBookingId === primaryUpcomingBooking.id}
+                                className="glass-button"
+                                style={{
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    flex: 1,
+                                    minWidth: '140px',
+                                    justifyContent: 'center',
+                                    background: 'rgba(239, 68, 68, 0.08)',
+                                    border: '1px solid rgba(239, 68, 68, 0.22)',
+                                    color: 'var(--error)',
+                                    opacity: !canCancelBooking(primaryUpcomingBooking) ? 0.55 : 1,
+                                    cursor: !canCancelBooking(primaryUpcomingBooking) ? 'not-allowed' : 'pointer'
+                                }}
+                                title={canCancelBooking(primaryUpcomingBooking) ? 'Cancel upcoming booking' : 'Started bookings can no longer be cancelled'}
+                            >
+                                {cancelBookingId === primaryUpcomingBooking.id ? (
+                                    <>
+                                        <ActionSpinner size={16} tone="neutral" />
+                                        Cancelling...
+                                    </>
+                                ) : (
+                                    <>
+                                        <XCircle size={18} />
+                                        <span style={{ fontSize: '14px', fontWeight: 600 }}>Cancel Booking</span>
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </div>
                 ) : (
@@ -515,6 +603,39 @@ export default function DashboardBookingSummary({
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
+                                            {canCancelBooking(booking) && (
+                                                <button
+                                                    onClick={() => handleOpenCancelBooking(booking)}
+                                                    className="glass-button"
+                                                    disabled={cancelBookingId === booking.id}
+                                                    style={{
+                                                        padding: '10px 14px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '13px',
+                                                        fontWeight: 600,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        border: '1px solid rgba(239, 68, 68, 0.24)',
+                                                        color: 'var(--error)',
+                                                        background: 'rgba(239, 68, 68, 0.05)',
+                                                        opacity: cancelBookingId === booking.id ? 0.7 : 1,
+                                                        cursor: cancelBookingId === booking.id ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                >
+                                                    {cancelBookingId === booking.id ? (
+                                                        <>
+                                                            <ActionSpinner size={14} tone="neutral" />
+                                                            Cancelling...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <XCircle size={14} />
+                                                            Cancel
+                                                        </>
+                                                    )}
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => handleQuickBookFromHistory(booking)}
                                                 className="glass-button"
@@ -641,6 +762,103 @@ export default function DashboardBookingSummary({
                                                 Booking...
                                             </>
                                         ) : 'Confirm Quick Book'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>,
+                modalRoot
+            )}
+
+            {modalRoot && cancelModalBooking && createPortal(
+                <div className="modal-overlay" onClick={() => cancelBookingId ? undefined : setCancelModalBooking(null)}>
+                    <div className="glass-panel modal-card" onClick={(event) => event.stopPropagation()}>
+                        {cancelModalMessage?.type === 'success' ? (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <div
+                                    style={{
+                                        background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                                    }}
+                                >
+                                    <CheckCircle size={32} color="var(--success)" />
+                                </div>
+                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Cancelled</h3>
+                                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{cancelModalMessage.text}</p>
+                            </div>
+                        ) : (
+                            <>
+                                <h3 style={{ margin: '0 0 12px' }}>Cancel This Booking?</h3>
+                                <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
+                                    {formatBelarusShortDateLabel(parseBelarusDateTime(cancelModalBooking.date))} at {cancelModalBooking.startTime}
+                                </p>
+                                <p style={{ margin: '0 0 12px', fontWeight: 700 }}>
+                                    Machine: {cancelBookingMachineLabel}
+                                </p>
+                                <div
+                                    style={{
+                                        marginBottom: '14px',
+                                        padding: '10px 12px',
+                                        borderRadius: '12px',
+                                        fontSize: '13px',
+                                        color: 'var(--text-muted)',
+                                        border: '1px solid rgba(239,68,68,0.18)',
+                                        background: 'rgba(239,68,68,0.08)'
+                                    }}
+                                >
+                                    Cancelling frees this slot immediately for other residents.
+                                </div>
+
+                                {cancelModalMessage && (
+                                    <div
+                                        style={{
+                                            marginBottom: '14px',
+                                            padding: '10px 12px',
+                                            borderRadius: '10px',
+                                            fontSize: '13px',
+                                            color: 'var(--error)',
+                                            border: '1px solid rgba(239,68,68,0.4)',
+                                            background: 'rgba(239,68,68,0.12)'
+                                        }}
+                                    >
+                                        {cancelModalMessage.text}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                    <button
+                                        onClick={() => setCancelModalBooking(null)}
+                                        className="glass-button"
+                                        disabled={cancelBookingId === cancelModalBooking.id}
+                                        style={{ padding: '10px 18px', borderRadius: '10px' }}
+                                    >
+                                        Keep Booking
+                                    </button>
+                                    <button
+                                        onClick={handleConfirmCancelBooking}
+                                        disabled={cancelBookingId === cancelModalBooking.id}
+                                        className="glass-button"
+                                        style={{
+                                            padding: '10px 18px',
+                                            borderRadius: '10px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            background: 'rgba(239, 68, 68, 0.12)',
+                                            border: '1px solid rgba(239, 68, 68, 0.28)',
+                                            color: 'var(--error)',
+                                            opacity: cancelBookingId === cancelModalBooking.id ? 0.7 : 1,
+                                            cursor: cancelBookingId === cancelModalBooking.id ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        {cancelBookingId === cancelModalBooking.id ? (
+                                            <>
+                                                <ActionSpinner size={16} tone="neutral" />
+                                                Cancelling...
+                                            </>
+                                        ) : 'Cancel Booking'}
                                     </button>
                                 </div>
                             </>

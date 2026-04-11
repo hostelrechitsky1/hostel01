@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+    getCancelBookingFailureMessage,
     getBookNowFailureMessage,
     getQuickBookFailureMessage,
     isBookingAvailabilityConflict,
+    resolveCancelBookingMutationErrorCode,
     resolveBookingMutationErrorCode,
 } from '../bookingMutations';
 
@@ -24,5 +26,11 @@ describe('bookingMutations', () => {
         expect(getBookNowFailureMessage('slot_conflict')).toBe('That slot was just booked by another resident.');
         expect(getQuickBookFailureMessage('weekly_limit')).toBe('You already have a booking for this week, including bookings made from Book Now.');
         expect(getBookNowFailureMessage(undefined, 'Custom backend error')).toBe('Custom backend error');
+    });
+
+    it('resolves resident cancel errors and user-facing messages', () => {
+        expect(resolveCancelBookingMutationErrorCode('already_started')).toBe('already_started');
+        expect(resolveCancelBookingMutationErrorCode(undefined, 'This booking was already removed.')).toBe('not_found');
+        expect(getCancelBookingFailureMessage('not_allowed')).toBe('You can only cancel your own booking.');
     });
 });

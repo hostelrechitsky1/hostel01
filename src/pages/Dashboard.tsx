@@ -787,6 +787,13 @@ export default function Dashboard() {
             setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
         });
     };
+
+    const handleResidentBookingCancelled = (cancelledBookingId: string) => {
+        startTransition(() => {
+            setWeekBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== cancelledBookingId));
+            setRecentBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== cancelledBookingId));
+        });
+    };
     const topAlertType = settings.topAlert?.type ?? 'info';
     const topAlertBackground = topAlertType === 'urgent'
         ? 'rgba(239, 68, 68, 0.2)'
@@ -1255,6 +1262,7 @@ export default function Dashboard() {
                             settings={settings}
                             isNextWeekOpen={isNextWeekOpen}
                             onBookingCreated={handleResidentBookingCreated}
+                            onBookingCancelled={handleResidentBookingCancelled}
                         />
                     </Suspense>
                 ) : bookingsFallback}
