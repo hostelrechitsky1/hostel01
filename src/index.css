@@ -92,6 +92,58 @@ button {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+.action-spinner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.action-spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid var(--spinner-glow);
+  border-top-color: var(--spinner-ring);
+  border-right-color: var(--spinner-ring);
+  box-shadow: 0 0 16px var(--spinner-glow);
+  animation: action-spinner-rotate 0.9s linear infinite;
+}
+
+.action-spinner-core {
+  width: var(--spinner-core-size);
+  height: var(--spinner-core-size);
+  border-radius: 999px;
+  background: var(--spinner-dot);
+  box-shadow: 0 0 10px var(--spinner-glow);
+  animation: action-spinner-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes action-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes action-spinner-pulse {
+  0%,
+  100% {
+    transform: scale(0.88);
+    opacity: 0.78;
+  }
+
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
 @keyframes modalOverlayIn {
   from {
     opacity: 0;

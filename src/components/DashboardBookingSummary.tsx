@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { format, addMinutes, parseISO } from 'date-fns';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday } from '../utils/time';
+import { addBelarusDays, addBelarusMinutes, formatBelarusDate, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday, parseBelarusDateTime } from '../utils/time';
 import { hapticSuccess } from '../utils/haptics';
+import { ActionSpinner } from './ActionSpinner';
 
 interface DashboardBookingSummaryProps {
     user: Student;
@@ -45,9 +45,9 @@ export default function DashboardBookingSummary({
         );
 
         const now = getBelarusNow();
-        const upcoming = chronological.filter((booking) => addMinutes(parseISO(booking.date + 'T' + booking.startTime + '+03:00'), 90) > now);
+        const upcoming = chronological.filter((booking) => addBelarusMinutes(parseBelarusDateTime(booking.date, booking.startTime), 90) > now);
         const past = chronological
-            .filter((booking) => addMinutes(parseISO(booking.date + 'T' + booking.startTime + '+03:00'), 90) <= now)
+            .filter((booking) => addBelarusMinutes(parseBelarusDateTime(booking.date, booking.startTime), 90) <= now)
             .reverse();
 
         return {
@@ -80,7 +80,7 @@ export default function DashboardBookingSummary({
         const booking = quickBookModalBooking;
         const sourceDate = new Date(`${booking.date}T00:00:00Z`);
         const targetDate = getUpcomingDateForWeekday(getBelarusWeekday(sourceDate));
-        const targetDateLabel = format(targetDate, 'EEE, MMM d');
+        const targetDateLabel = formatBelarusShortDateLabel(targetDate);
 
         if (settings.forceCloseBookings || !isNextWeekOpen) {
             setQuickBookModalMessage({ type: 'error', text: 'Quick Book is closed right now. Booking window is not open yet.' });
@@ -258,7 +258,7 @@ export default function DashboardBookingSummary({
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
                                     <div>
                                         <h4 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
-                                            {format(new Date(primaryUpcomingBooking.date), 'EEEE, MMMM d')}
+                                            {formatBelarusLongDateLabel(parseBelarusDateTime(primaryUpcomingBooking.date))}
                                         </h4>
                                         <p style={{ margin: '4px 0 0', fontSize: '15px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{primaryUpcomingBooking.startTime}</span>
@@ -319,7 +319,7 @@ export default function DashboardBookingSummary({
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '2px' }}>
-                                                    {format(new Date(booking.date), 'EEEE, MMM d')}
+                                                    {formatBelarusShortDateLabel(parseBelarusDateTime(booking.date))}
                                                 </div>
                                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{booking.startTime}</span>
@@ -337,8 +337,8 @@ export default function DashboardBookingSummary({
                             <button
                                 onClick={() => {
                                     if (!primaryUpcomingBooking) return;
-                                    const start = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
-                                    const end = addMinutes(start, 90);
+                                    const start = parseBelarusDateTime(primaryUpcomingBooking.date, primaryUpcomingBooking.startTime);
+                                    const end = addBelarusMinutes(start, 90);
 
                                     const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, '').slice(0, 15) + 'Z';
 
@@ -362,8 +362,8 @@ export default function DashboardBookingSummary({
                                 onClick={async () => {
                                     if (!primaryUpcomingBooking) return;
 
-                                    const startDate = new Date(primaryUpcomingBooking.date + 'T' + primaryUpcomingBooking.startTime);
-                                    const endDate = addMinutes(startDate, 90);
+                                    const startDate = parseBelarusDateTime(primaryUpcomingBooking.date, primaryUpcomingBooking.startTime);
+                                    const endDate = addBelarusMinutes(startDate, 90);
                                     const uid = `${primaryUpcomingBooking.id || Date.now()}@hostel-wash`;
 
                                     const icsContent = [
@@ -512,7 +512,7 @@ export default function DashboardBookingSummary({
                                                 </div>
                                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <CheckCircle size={14} color="var(--success)" />
-                                                    {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
+                                                    {formatBelarusLongDateYearLabel(parseBelarusDateTime(booking.date))}
                                                 </div>
                                             </div>
                                         </div>
@@ -547,7 +547,12 @@ export default function DashboardBookingSummary({
                                                     }
                                                 }}
                                             >
-                                                {quickBookingId === booking.id ? 'Booking...' : (
+                                                {quickBookingId === booking.id ? (
+                                                    <>
+                                                        <ActionSpinner size={14} tone="primary" />
+                                                        Booking...
+                                                    </>
+                                                ) : (
                                                     <>
                                                         Quick Book
                                                         <ArrowRight size={14} />
@@ -584,7 +589,7 @@ export default function DashboardBookingSummary({
                             <>
                                 <h3 style={{ margin: '0 0 12px' }}>Quick Book Confirmation</h3>
                                 <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                                    {quickBookTargetDate ? `${format(quickBookTargetDate, 'EEE, MMM d')}` : ''} at {quickBookModalBooking.startTime}
+                                    {quickBookTargetDate ? `${formatBelarusShortDateLabel(quickBookTargetDate)}` : ''} at {quickBookModalBooking.startTime}
                                 </p>
                                 <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
                                     Machine: {quickBookMachineLabel}
@@ -625,11 +630,20 @@ export default function DashboardBookingSummary({
                                         style={{
                                             padding: '10px 18px',
                                             borderRadius: '10px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
                                             opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
                                             cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
                                         }}
                                     >
-                                        {quickBookingId === quickBookModalBooking.id ? 'Booking...' : 'Confirm Quick Book'}
+                                        {quickBookingId === quickBookModalBooking.id ? (
+                                            <>
+                                                <ActionSpinner size={16} tone="inverted" />
+                                                Booking...
+                                            </>
+                                        ) : 'Confirm Quick Book'}
                                     </button>
                                 </div>
                             </>

@@ -5,7 +5,6 @@ import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
-import { isAfter } from 'date-fns';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
 import { toast } from 'sonner';
@@ -29,6 +28,7 @@ import {
 import { preloadDashboardRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
+import { ActionSpinner } from '../components/ActionSpinner';
 
 const LazyConfetti = lazy(() => import('react-confetti'));
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -255,7 +255,7 @@ export default function BookingFlow() {
 
         if (isNextWeekOpen) {
             const nextMonday = addBelarusDays(currentWeekEnd, 1);
-            if (!isAfter(start, currentWeekEnd)) {
+            if (start.getTime() <= currentWeekEnd.getTime()) {
                 start = nextMonday;
             }
             maxDate = addBelarusDays(currentWeekEnd, 7);
@@ -263,7 +263,7 @@ export default function BookingFlow() {
 
         const dates = [];
         let current = start;
-        while (!isAfter(current, maxDate)) {
+        while (current.getTime() <= maxDate.getTime()) {
             dates.push(current);
             current = addBelarusDays(current, 1);
         }
@@ -847,11 +847,33 @@ export default function BookingFlow() {
                                 </p>
                                 <p style={{ fontWeight: 600, margin: '0 0 24px' }}>{selectedMachine.name}</p>
 
+                                {submitting && (
+                                    <div
+                                        style={{
+                                            marginBottom: '18px',
+                                            padding: '12px 14px',
+                                            borderRadius: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            background: 'linear-gradient(135deg, rgba(124, 124, 255, 0.16) 0%, rgba(59, 130, 246, 0.1) 100%)',
+                                            border: '1px solid rgba(129, 140, 248, 0.18)',
+                                            color: 'rgba(255,255,255,0.9)'
+                                        }}
+                                    >
+                                        <ActionSpinner size={18} tone="primary" />
+                                        <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                                            Locking your slot and checking for conflicts...
+                                        </span>
+                                    </div>
+                                )}
+
                                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                                     <button
                                         onClick={() => setShowConfirmModal(false)}
+                                        disabled={submitting}
                                         className="glass-button"
-                                        style={{ padding: '12px 24px', borderRadius: '12px' }}
+                                        style={{ padding: '12px 24px', borderRadius: '12px', opacity: submitting ? 0.7 : 1, cursor: submitting ? 'not-allowed' : 'pointer' }}
                                     >
                                         Cancel
                                     </button>
@@ -869,7 +891,12 @@ export default function BookingFlow() {
                                             cursor: submitting ? 'not-allowed' : 'pointer'
                                         }}
                                     >
-                                        {submitting ? 'Processing...' : 'Confirm'}
+                                        {submitting ? (
+                                            <>
+                                                <ActionSpinner size={16} tone="inverted" />
+                                                Processing...
+                                            </>
+                                        ) : 'Confirm'}
                                     </button>
                                 </div>
                             </div>

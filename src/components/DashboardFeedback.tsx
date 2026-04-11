@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import {
     MessageSquare,
     Reply,
@@ -9,6 +8,7 @@ import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
 import { residentFirestoreService } from '../services/residentFirestoreService';
 import type { Feedback, FeedbackType } from '../types';
+import { formatBelarusCompactTimestamp } from '../utils/time';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -279,7 +279,7 @@ export default function DashboardFeedback() {
                                             border: '1px solid rgba(196, 181, 253, 0.14)'
                                         }}
                                     >
-                                        {format(feedback.adminReply!.repliedAt, 'MMM d, HH:mm')}
+                                        {formatBelarusCompactTimestamp(new Date(feedback.adminReply!.repliedAt))}
                                     </div>
                                 </div>
 

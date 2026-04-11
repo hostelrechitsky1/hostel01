@@ -5,11 +5,10 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, WashingMachine as Washer } from 'lucide-react';
-import { format, parse, isAfter, isBefore, addMinutes } from 'date-fns';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
-import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
+import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
 import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { warmResidentAppData } from '../utils/warmResidentApp';
@@ -426,13 +425,13 @@ export default function Dashboard() {
 
         const today = formatBelarusDate(getBelarusDate());
         const bookingsToday = weekBookings.filter(b => b.date === today);
+        const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
         const currentBooking = bookingsToday.find(b => {
             if (b.machineId !== machine.id) return false;
-
-            const start = parse(b.startTime, 'HH:mm', now);
-            const end = addMinutes(start, 90); // 90 min slots
-            return isAfter(now, start) && isBefore(now, end);
+            const startMinutes = getTimeStringMinutes(b.startTime);
+            const endMinutes = startMinutes + 90;
+            return nowMinutes > startMinutes && nowMinutes < endMinutes;
         });
 
         if (currentBooking) {
@@ -952,7 +951,7 @@ export default function Dashboard() {
                             borderRadius: '12px',
                             color: 'var(--text-muted)'
                         }}>
-                            {format(new Date(), 'h:mm a')}
+                            {formatBelarusClockLabel(new Date())}
                         </span>
                     </h3>
                 </div>

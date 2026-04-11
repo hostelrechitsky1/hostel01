@@ -41,6 +41,37 @@ const getOpeningForBelarusWeek = (belarusWeekStart: Date, config: ReturnType<typ
     return openingBelarusTime;
 };
 
+const formatBelarusWithOptions = (date: Date, options: Intl.DateTimeFormatOptions) => {
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone: BELARUS_TIME_ZONE,
+        ...options
+    }).format(date);
+};
+
+export const parseBelarusDateTime = (dateString: string, timeString = '00:00') => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    const [hours, minutes] = timeString.split(':').map(Number);
+
+    return new Date(Date.UTC(
+        year,
+        Math.max((month || 1) - 1, 0),
+        day || 1,
+        hours || 0,
+        minutes || 0,
+        0,
+        0
+    ));
+};
+
+export const addBelarusMinutes = (date: Date, minutes: number) => {
+    return new Date(date.getTime() + minutes * 60 * 1000);
+};
+
+export const getTimeStringMinutes = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return (hours || 0) * 60 + (minutes || 0);
+};
+
 export const getBelarusNow = (now: Date = new Date()) => {
     return new Date(now.getTime() + BELARUS_UTC_OFFSET_HOURS * 60 * 60 * 1000);
 };
@@ -77,15 +108,35 @@ export const getBelarusWeekEnd = (date: Date) => {
 };
 
 export const formatBelarusWeekdayLabel = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', { timeZone: BELARUS_TIME_ZONE, weekday: 'long' }).format(date);
+    return formatBelarusWithOptions(date, { weekday: 'long' });
 };
 
 export const formatBelarusMonthDayLabel = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', { timeZone: BELARUS_TIME_ZONE, month: 'short', day: 'numeric' }).format(date);
+    return formatBelarusWithOptions(date, { month: 'short', day: 'numeric' });
 };
 
 export const formatBelarusMonthDayYearLabel = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', { timeZone: BELARUS_TIME_ZONE, month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+    return formatBelarusWithOptions(date, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+export const formatBelarusShortDateLabel = (date: Date) => {
+    return formatBelarusWithOptions(date, { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+export const formatBelarusLongDateLabel = (date: Date) => {
+    return formatBelarusWithOptions(date, { weekday: 'long', month: 'long', day: 'numeric' });
+};
+
+export const formatBelarusLongDateYearLabel = (date: Date) => {
+    return formatBelarusWithOptions(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+};
+
+export const formatBelarusCompactTimestamp = (date: Date) => {
+    return formatBelarusWithOptions(date, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+export const formatBelarusClockLabel = (date: Date) => {
+    return formatBelarusWithOptions(date, { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
 export const getBelarusWeekId = (date: Date) => {
