@@ -11,7 +11,7 @@ type NavigatorWithConnection = Navigator & {
     webkitConnection?: NetworkInformation;
 };
 
-const BANNER_WIDTH_STEPS = [180, 240, 360, 480, 640, 720, 840, 960];
+const BANNER_WIDTH_STEPS = [160, 240, 320, 480, 640, 768, 960];
 const PROXIED_BANNER_HOSTS = [
     'drive.google.com',
     'lh3.googleusercontent.com',
@@ -78,14 +78,14 @@ const getResponsiveBannerWidths = (priority: boolean) => {
     const saveData = connection?.saveData === true;
 
     if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
-        return priority ? [240, 360] : [180, 240];
+        return priority ? [240, 320] : [160, 240];
     }
 
     if (effectiveType === '3g') {
-        return priority ? [360, 480, 640] : [240, 360, 480];
+        return priority ? [320, 480, 640] : [240, 320, 480];
     }
 
-    return priority ? [360, 480, 640, 840, 960] : [240, 360, 480, 640, 720];
+    return priority ? [320, 480, 640, 768, 960] : [240, 320, 480, 640];
 };
 
 const isDriveThumbnailBanner = (source: string) => {
@@ -173,11 +173,11 @@ const getViewportScaledWidth = (priority: boolean) => {
     let requestedWidth = Math.ceil(viewportWidth * devicePixelRatio * (priority ? 0.95 : 0.7));
 
     if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
-        requestedWidth = Math.min(requestedWidth, priority ? 360 : 240);
+        requestedWidth = Math.min(requestedWidth, priority ? 320 : 240);
     } else if (effectiveType === '3g') {
         requestedWidth = Math.min(requestedWidth, priority ? 640 : 480);
     } else {
-        requestedWidth = Math.min(requestedWidth, priority ? 960 : 720);
+        requestedWidth = Math.min(requestedWidth, priority ? 960 : 640);
     }
 
     return roundBannerWidth(requestedWidth);
@@ -255,9 +255,9 @@ const createDerivedDriveBannerAssets = (source: string) => {
     }
 
     const previewImageUrl = replaceDriveThumbnailWidth(normalizedSource, 240);
-    const mobileImageUrl = replaceDriveThumbnailWidth(normalizedSource, 640);
-    const optimizedImageUrl = replaceDriveThumbnailWidth(normalizedSource, 960);
-    const desktopImageUrl = replaceDriveThumbnailWidth(normalizedSource, 1280);
+    const mobileImageUrl = replaceDriveThumbnailWidth(normalizedSource, 480);
+    const optimizedImageUrl = replaceDriveThumbnailWidth(normalizedSource, 768);
+    const desktopImageUrl = replaceDriveThumbnailWidth(normalizedSource, 960);
 
     return {
         previewImageUrl,
@@ -266,10 +266,10 @@ const createDerivedDriveBannerAssets = (source: string) => {
         desktopImageUrl,
         responsiveSrcSet: [
             `${mobileImageUrl} 480w`,
-            `${optimizedImageUrl} 960w`,
-            `${desktopImageUrl} 1280w`,
+            `${optimizedImageUrl} 768w`,
+            `${desktopImageUrl} 960w`,
         ].join(', '),
-        responsiveSizes: '(max-width: 640px) calc(100vw - 32px), (max-width: 960px) 92vw, 720px',
+        responsiveSizes: '(max-width: 640px) calc(100vw - 40px), (max-width: 960px) min(92vw, 640px), 640px',
     };
 };
 
@@ -345,7 +345,7 @@ export const getBannerResponsiveSizes = (source?: BannerImageSource) => {
         return source.responsiveSizes.trim();
     }
 
-    return '(max-width: 640px) calc(100vw - 32px), (max-width: 960px) 92vw, 720px';
+    return '(max-width: 640px) calc(100vw - 40px), (max-width: 960px) min(92vw, 640px), 640px';
 };
 
 export const getRememberedBannerDisplaySource = (source: BannerImageSource) => {

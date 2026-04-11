@@ -560,7 +560,7 @@ export default function Dashboard() {
                     setBanners(snapshot.banners ?? []);
                 });
 
-                warmBannerImages(snapshot.banners ?? [], 2);
+                warmBannerImages(snapshot.banners ?? [], 1);
                 finishLoadingIfReady();
             })
             .catch((error) => {

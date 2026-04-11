@@ -26,10 +26,10 @@ export const warmResidentAppData = (studentId?: string, options: WarmResidentApp
 
     const warmup = Promise.allSettled([
         import('../services/residentSnapshotService')
-            .then(({ residentSnapshotService }) => {
-                return residentSnapshotService.getWarmSnapshot(relevantWeekIds, studentId, includeRecentBookings)
-                    .then((snapshot) => {
-                        return warmBannerImages((snapshot.banners ?? []) as Banner[], 2);
+                    .then(({ residentSnapshotService }) => {
+                        return residentSnapshotService.getWarmSnapshot(relevantWeekIds, studentId, includeRecentBookings)
+                            .then((snapshot) => {
+                        return warmBannerImages((snapshot.banners ?? []) as Banner[], 1);
                     });
             }),
         roomNumber
