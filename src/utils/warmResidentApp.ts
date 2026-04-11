@@ -4,13 +4,18 @@ import { warmBannerImages } from './bannerImages';
 
 const inFlightWarmups = new Map<string, Promise<void>>();
 
-export const warmResidentAppData = (studentId?: string) => {
+interface WarmResidentAppOptions {
+    includeRecentBookings?: boolean;
+}
+
+export const warmResidentAppData = (studentId?: string, options: WarmResidentAppOptions = {}) => {
+    const { includeRecentBookings = false } = options;
     const currentWeekStart = getBelarusWeekStart(getBelarusDate());
     const relevantWeekIds = [
         getBelarusWeekId(currentWeekStart),
         getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
     ];
-    const warmupKey = `${studentId ?? 'anon'}:${relevantWeekIds.join('|')}`;
+    const warmupKey = `${studentId ?? 'anon'}:${includeRecentBookings ? 'history' : 'core'}:${relevantWeekIds.join('|')}`;
 
     const existingWarmup = inFlightWarmups.get(warmupKey);
     if (existingWarmup) {
@@ -26,7 +31,7 @@ export const warmResidentAppData = (studentId?: string) => {
                 residentFirestoreService.getBookingsForWeekIds(relevantWeekIds),
             ];
 
-            if (studentId) {
+            if (studentId && includeRecentBookings) {
                 tasks.push(residentFirestoreService.getRecentBookingsForStudent(studentId, 12));
             }
 

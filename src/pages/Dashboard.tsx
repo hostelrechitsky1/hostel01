@@ -11,6 +11,7 @@ import { warmBannerImages } from '../utils/bannerImages';
 import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
 import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
+import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
 import { finishResidentPerfSpan } from '../utils/performance';
@@ -43,17 +44,37 @@ const getResidentShortName = (name: string) => {
     return `${parts[0]} ${parts[parts.length - 1]}`;
 };
 
+const getInitialRoommates = (currentUser: Student | null) => {
+    if (!currentUser?.roomNumber) return [];
+
+    const cachedRoommates = bookingService
+        .getCurrentRoommates()
+        .filter((student) => student.roomNumber === currentUser.roomNumber);
+
+    if (cachedRoommates.length > 0) {
+        return cachedRoommates;
+    }
+
+    return [currentUser];
+};
+
 export default function Dashboard() {
     const navigate = useNavigate();
     const [user, setUser] = useState<Student | null>(() => bookingService.getCurrentUser());
     const userId = user?.id ?? '';
-    const [roommates, setRoommates] = useState<Student[]>(() => {
-        const currentUser = bookingService.getCurrentUser();
-        if (!currentUser?.roomNumber) return [];
-        return bookingService
-            .getCurrentRoommates()
-            .filter((student) => student.roomNumber === currentUser.roomNumber);
+    const {
+        ref: bookingSummarySectionRef,
+        isActive: isBookingSummaryActive,
+    } = useViewportActivation<HTMLDivElement>({
+        rootMargin: '320px 0px',
     });
+    const {
+        ref: feedbackSectionRef,
+        isActive: isFeedbackActive,
+    } = useViewportActivation<HTMLDivElement>({
+        rootMargin: '240px 0px',
+    });
+    const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
     const [roommatesLoading, setRoommatesLoading] = useState(false);
     const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
     const roommateMenuRef = useRef<HTMLDivElement>(null);
@@ -84,11 +105,13 @@ export default function Dashboard() {
     const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
     const [bannersLoading, setBannersLoading] = useState(() => cachedBanners === undefined);
     const [loading, setLoading] = useState(() => Boolean(userId) && !hasCachedMachines && !hasCachedWeekBookings);
-    const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && !hasCachedRecentBookings);
+    const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && isBookingSummaryActive && !hasCachedRecentBookings);
+    const [recentBookingsHydrated, setRecentBookingsHydrated] = useState(() => hasCachedRecentBookings);
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
     const [reloadKey, setReloadKey] = useState(0);
     const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
     const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+    const canOpenRoommateMenu = Boolean(user?.roomNumber);
     const hasResidentSnapshot = hasCachedMachines
         || hasCachedWeekBookings
         || hasCachedRecentBookings
@@ -145,31 +168,14 @@ export default function Dashboard() {
     }, [banners.length, bannersLoading]);
 
     useEffect(() => {
-        if (!user?.roomNumber) return;
+        setRoommates(getInitialRoommates(user));
+    }, [user?.id, user?.roomNumber]);
 
-        let isMounted = true;
-        setRoommatesLoading(true);
-
-        void residentFirestoreService.getStudentsByRoom(user.roomNumber)
-            .then((fetchedRoommates) => {
-                if (!isMounted) return;
-                const sameRoomResidents = fetchedRoommates.filter((student) => student.roomNumber === user.roomNumber);
-                setRoommates(sameRoomResidents);
-                bookingService.setCurrentRoommates(sameRoomResidents);
-            })
-            .catch((error) => {
-                console.error('Failed to load roommates for current room', error);
-            })
-            .finally(() => {
-                if (isMounted) {
-                    setRoommatesLoading(false);
-                }
-            });
-
-        return () => {
-            isMounted = false;
-        };
-    }, [user?.roomNumber]);
+    useEffect(() => {
+        setRecentBookings(cachedRecentBookings ?? []);
+        setRecentBookingsHydrated(hasCachedRecentBookings);
+        setRecentBookingsLoading(Boolean(userId) && isBookingSummaryActive && !hasCachedRecentBookings);
+    }, [cachedRecentBookings, hasCachedRecentBookings, isBookingSummaryActive, userId]);
 
     useEffect(() => {
         if (!isRoommateMenuOpen) return;
@@ -219,10 +225,8 @@ export default function Dashboard() {
         let isMounted = true;
         let machinesReady = hasCachedMachines;
         let weekBookingsReady = hasCachedWeekBookings;
-        let recentBookingsReady = hasCachedRecentBookings;
         let unsubscribeMachines = () => { /* noop */ };
         let unsubscribeWeekBookings = () => { /* noop */ };
-        let unsubscribeRecentBookings = () => { /* noop */ };
         let liveAttachTimeoutId: number | null = null;
         let idleHandle: number | null = null;
 
@@ -272,26 +276,6 @@ export default function Dashboard() {
                 .catch((error) => {
                     handleResidentDataError('Dashboard week bookings fetch error:', error);
                 });
-        }
-
-        if (!hasCachedRecentBookings) {
-            void residentFirestoreService.getRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
-                .then((nextBookings) => {
-                    if (!isMounted) return;
-                    recentBookingsReady = true;
-                    setRecentBookingsLoading(false);
-                    startTransition(() => {
-                        setRecentBookings(nextBookings);
-                    });
-                })
-                .catch((error) => {
-                    console.error('Dashboard student bookings fetch error:', error);
-                    if (!isMounted) return;
-                    recentBookingsReady = true;
-                    setRecentBookingsLoading(false);
-                });
-        } else if (recentBookingsReady) {
-            setRecentBookingsLoading(false);
         }
 
         void residentFirestoreService.getSettings()
@@ -348,20 +332,6 @@ export default function Dashboard() {
                     }, (error) => {
                         handleResidentDataError('Dashboard week bookings subscription error:', error);
                     });
-
-                    unsubscribeRecentBookings = residentLiveService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
-                        if (!isMounted) return;
-                        recentBookingsReady = true;
-                        setRecentBookingsLoading(false);
-                        startTransition(() => {
-                            setRecentBookings(nextBookings);
-                        });
-                    }, (error) => {
-                        console.error('Dashboard student bookings subscription error:', error);
-                        if (!isMounted) return;
-                        recentBookingsReady = true;
-                        setRecentBookingsLoading(false);
-                    });
                 })
                 .catch((error) => {
                     console.error('Failed to attach resident live dashboard streams', error);
@@ -405,9 +375,98 @@ export default function Dashboard() {
             }
             unsubscribeMachines();
             unsubscribeWeekBookings();
+        };
+    }, [dashboardWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
+
+    useEffect(() => {
+        if (!userId || !isBookingSummaryActive) {
+            return;
+        }
+
+        let isMounted = true;
+        let unsubscribeRecentBookings = () => { /* noop */ };
+        let liveAttachTimeoutId: number | null = null;
+        let idleHandle: number | null = null;
+
+        if (hasCachedRecentBookings) {
+            setRecentBookingsHydrated(true);
+            setRecentBookingsLoading(false);
+        } else {
+            setRecentBookingsLoading(true);
+
+            void residentFirestoreService.getRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+                .then((nextBookings) => {
+                    if (!isMounted) return;
+                    setRecentBookingsHydrated(true);
+                    setRecentBookingsLoading(false);
+                    startTransition(() => {
+                        setRecentBookings(nextBookings);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Dashboard student bookings fetch error:', error);
+                    if (!isMounted) return;
+                    setRecentBookingsHydrated(true);
+                    setRecentBookingsLoading(false);
+                });
+        }
+
+        const attachRecentBookingsStream = () => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    unsubscribeRecentBookings = residentLiveService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
+                        if (!isMounted) return;
+                        setRecentBookingsHydrated(true);
+                        setRecentBookingsLoading(false);
+                        startTransition(() => {
+                            setRecentBookings(nextBookings);
+                        });
+                    }, (error) => {
+                        console.error('Dashboard student bookings subscription error:', error);
+                        if (!isMounted) return;
+                        setRecentBookingsHydrated(true);
+                        setRecentBookingsLoading(false);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident recent bookings stream', error);
+                });
+        };
+
+        if (typeof window === 'undefined') {
+            attachRecentBookingsStream();
+        } else {
+            const idleWindow = window as Window & typeof globalThis & {
+                requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (typeof idleWindow.requestIdleCallback === 'function') {
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    attachRecentBookingsStream();
+                }, { timeout: 1200 });
+            } else {
+                liveAttachTimeoutId = window.setTimeout(attachRecentBookingsStream, 280);
+            }
+        }
+
+        return () => {
+            isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
+            }
+            if (idleHandle !== null) {
+                const idleWindow = window as Window & typeof globalThis & {
+                    cancelIdleCallback?: (handle: number) => void;
+                };
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
             unsubscribeRecentBookings();
         };
-    }, [dashboardWeekIds, hasCachedMachines, hasCachedRecentBookings, hasCachedWeekBookings, navigate, reloadKey, userId]);
+    }, [hasCachedRecentBookings, isBookingSummaryActive, reloadKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 
@@ -468,6 +527,33 @@ export default function Dashboard() {
         navigate('/login');
     };
 
+    const ensureRoommatesLoaded = (forceRefresh = false) => {
+        if (!user?.roomNumber || roommatesLoading) {
+            return;
+        }
+
+        const alreadyLoadedRoommates = roommates.filter((student) => student.roomNumber === user.roomNumber);
+        if (!forceRefresh && alreadyLoadedRoommates.length > 1) {
+            return;
+        }
+
+        setRoommatesLoading(true);
+
+        void residentFirestoreService.getStudentsByRoom(user.roomNumber)
+            .then((fetchedRoommates) => {
+                const sameRoomResidents = fetchedRoommates.filter((student) => student.roomNumber === user.roomNumber);
+                const nextRoommates = sameRoomResidents.length > 0 ? sameRoomResidents : [user];
+                setRoommates(nextRoommates);
+                bookingService.setCurrentRoommates(nextRoommates);
+            })
+            .catch((error) => {
+                console.error('Failed to load roommates for current room', error);
+            })
+            .finally(() => {
+                setRoommatesLoading(false);
+            });
+    };
+
     const clearRoommateHold = () => {
         if (roommateHoldTimerRef.current) {
             window.clearTimeout(roommateHoldTimerRef.current);
@@ -476,8 +562,9 @@ export default function Dashboard() {
     };
 
     const startRoommateHold = () => {
-        if (roommates.length <= 1) return;
+        if (!canOpenRoommateMenu) return;
 
+        ensureRoommatesLoaded(true);
         clearRoommateHold();
         roommateHoldTimerRef.current = window.setTimeout(() => {
             suppressRoommateClickRef.current = true;
@@ -487,11 +574,15 @@ export default function Dashboard() {
     };
 
     const handleRoommateButtonClick = () => {
-        if (roommates.length <= 1) return;
+        if (!canOpenRoommateMenu) return;
 
         if (suppressRoommateClickRef.current) {
             suppressRoommateClickRef.current = false;
             return;
+        }
+
+        if (!isRoommateMenuOpen) {
+            ensureRoommatesLoaded(true);
         }
 
         setIsRoommateMenuOpen((current) => !current);
@@ -512,7 +603,8 @@ export default function Dashboard() {
             setRecentBookings(cachedBookings ?? []);
         });
         setLoading(false);
-        setRecentBookingsLoading(cachedBookings === undefined);
+        setRecentBookingsHydrated(cachedBookings !== undefined);
+        setRecentBookingsLoading(isBookingSummaryActive && cachedBookings === undefined);
         setLoadIssue(null);
         setLoadErrorMessage(null);
         setIsRoommateMenuOpen(false);
@@ -531,7 +623,8 @@ export default function Dashboard() {
             setLoadErrorMessage(null);
             setLoading(true);
         }
-        setRecentBookingsLoading(true);
+        setRecentBookingsHydrated(hasCachedRecentBookings);
+        setRecentBookingsLoading(isBookingSummaryActive && !hasCachedRecentBookings);
         if (!hasResidentSnapshot) {
             setBannersLoading(banners.length === 0);
         }
@@ -595,6 +688,7 @@ export default function Dashboard() {
             <div style={{ height: '156px', width: '100%', borderRadius: '20px', background: 'var(--glass-border)', marginBottom: '24px' }} className="skeleton-pulse"></div>
         </div>
     );
+    const shouldShowRecentBookingsLoading = isBookingSummaryActive && (!recentBookingsHydrated || recentBookingsLoading);
     const statusOverviewSkeleton = (
         <div
             className="glass-panel"
@@ -720,14 +814,14 @@ export default function Dashboard() {
                                 background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.28) 0%, rgba(59, 130, 246, 0.18) 100%)',
                                 border: '1px solid rgba(196, 181, 253, 0.2)',
                                 boxShadow: '0 10px 24px rgba(37, 99, 235, 0.16)',
-                                cursor: roommates.length > 1 ? 'pointer' : 'default'
+                                cursor: canOpenRoommateMenu ? 'pointer' : 'default'
                             }}
-                            aria-label={roommates.length > 1 ? 'Switch roommate profile' : 'Current resident profile'}
+                            aria-label={canOpenRoommateMenu ? 'Switch roommate profile' : 'Current resident profile'}
                         >
                             <span style={{ fontSize: '15px', fontWeight: 700, color: 'white', letterSpacing: '0.04em' }}>
                                 {getResidentInitials(user.name)}
                             </span>
-                            {roommates.length > 1 && (
+                            {canOpenRoommateMenu && (
                                 <span
                                     style={{
                                         position: 'absolute',
@@ -851,6 +945,12 @@ export default function Dashboard() {
                                                 Refreshing roommate list...
                                             </div>
                                         )}
+
+                                        {!roommatesLoading && roommates.length <= 1 && (
+                                            <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                No other roommates are available for switching right now.
+                                            </div>
+                                        )}
                                     </div>
                             </div>
                         )}
@@ -861,7 +961,7 @@ export default function Dashboard() {
                             Hello, {user.name.split(' ')[0]} 👋
                         </h2>
                         <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                            Room {user.roomNumber}{roommates.length > 1 ? ' • Tap avatar to switch resident' : ''}
+                            Room {user.roomNumber}{canOpenRoommateMenu ? ' • Tap avatar to switch resident' : ''}
                         </p>
                     </div>
                 </div>
@@ -1074,25 +1174,31 @@ export default function Dashboard() {
                 )}
             </section>
 
-            <Suspense fallback={bookingsFallback}>
-                <LazyDashboardBookingSummary
-                    key={userId}
-                    user={user}
-                    machines={machines}
-                    recentBookings={recentBookings}
-                    recentBookingsLoading={recentBookingsLoading}
-                    weekBookings={weekBookings}
-                    settings={settings}
-                    isNextWeekOpen={isNextWeekOpen}
-                    onBookingCreated={handleResidentBookingCreated}
-                />
-            </Suspense>
+            <div ref={bookingSummarySectionRef} style={{ minHeight: '220px' }}>
+                {isBookingSummaryActive ? (
+                    <Suspense fallback={bookingsFallback}>
+                        <LazyDashboardBookingSummary
+                            key={userId}
+                            user={user}
+                            machines={machines}
+                            recentBookings={recentBookings}
+                            recentBookingsLoading={shouldShowRecentBookingsLoading}
+                            weekBookings={weekBookings}
+                            settings={settings}
+                            isNextWeekOpen={isNextWeekOpen}
+                            onBookingCreated={handleResidentBookingCreated}
+                        />
+                    </Suspense>
+                ) : bookingsFallback}
+            </div>
 
             {/* Inline Feedback Section */}
-            <div className="animate-fade-in">
-                <Suspense fallback={feedbackFallback}>
-                    <LazyDashboardFeedback />
-                </Suspense>
+            <div ref={feedbackSectionRef} className="animate-fade-in" style={{ minHeight: '132px' }}>
+                {isFeedbackActive ? (
+                    <Suspense fallback={feedbackFallback}>
+                        <LazyDashboardFeedback />
+                    </Suspense>
+                ) : feedbackFallback}
             </div>
         </div>
     );

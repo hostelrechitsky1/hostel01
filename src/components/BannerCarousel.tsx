@@ -153,14 +153,14 @@ const SmartImage = ({
         <>
             {/* Skeleton Loader - Visible while image is loading */}
             {!loaded && (
-                <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 1.5s infinite',
-                    zIndex: 0
-                }} />
+                <div
+                    className="banner-shimmer-surface"
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        zIndex: 0
+                    }}
+                />
             )}
             <img
                 ref={imgRef}
@@ -185,12 +185,6 @@ const SmartImage = ({
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
             />
-            <style>{`
-                @keyframes shimmer {
-                    0% { background-position: 200% 0; }
-                    100% { background-position: -200% 0; }
-                }
-            `}</style>
         </>
     );
 };
@@ -419,19 +413,13 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
                     background: '#1f2937'
                 }}
             >
-                <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 1.5s infinite'
-                }} />
-                <style>{`
-                    @keyframes shimmer {
-                        0% { background-position: 200% 0; }
-                        100% { background-position: -200% 0; }
-                    }
-                `}</style>
+                <div
+                    className="banner-shimmer-surface"
+                    style={{
+                        position: 'absolute',
+                        inset: 0
+                    }}
+                />
             </div>
         );
     }
