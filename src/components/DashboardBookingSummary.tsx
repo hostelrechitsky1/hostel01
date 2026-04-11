@@ -372,8 +372,8 @@ export default function DashboardBookingSummary({
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 color: '#fff',
-                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                boxShadow: '0 8px 18px rgba(34, 197, 94, 0.26)',
+                background: 'var(--resident-ready-green)',
+                boxShadow: '0 8px 18px var(--resident-ready-green-glow)',
                 flexShrink: 0,
                 position: 'absolute',
                 top: '-10px',
@@ -442,8 +442,8 @@ export default function DashboardBookingSummary({
                                         </p>
                                     </div>
                                     <div style={{
-                                        background: 'rgba(16, 185, 129, 0.1)',
-                                        color: 'var(--success)',
+                                        background: 'var(--resident-ready-green-soft)',
+                                        color: 'var(--resident-ready-green)',
                                         padding: '4px 10px',
                                         borderRadius: '12px',
                                         fontSize: '12px',

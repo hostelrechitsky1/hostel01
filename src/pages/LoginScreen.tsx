@@ -12,6 +12,7 @@ import { getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPort
 import { getResidentNameForLanguage } from '../utils/residentNames';
 
 let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
+const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
 
 const loadResidentLookup = () => {
     residentLookupPromise ??= import('../services/residentRoomLookupService');
@@ -214,6 +215,7 @@ export default function LoginScreen() {
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
         bookingService.setCurrentRoommates(roommates);
+        window.sessionStorage.setItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY, '1');
         preloadResidentRoutes();
         const warmupPromise = warmResidentAppData(student.id, {
             includeRecentBookings: true,

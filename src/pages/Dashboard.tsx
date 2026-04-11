@@ -22,6 +22,7 @@ import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPort
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
+const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
 const LazyDashboardBookingSummary = lazy(() => import('../components/DashboardBookingSummary'));
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -252,6 +253,48 @@ export default function Dashboard() {
     const dashboardDataMetricRef = useRef(false);
     const bannerReadyMetricRef = useRef(false);
     const cancelToastSeenRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (window.sessionStorage.getItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY) !== '1') return;
+
+        const forceScrollToTop = () => {
+            const scrollingElement = document.scrollingElement ?? document.documentElement;
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            scrollingElement.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        };
+
+        forceScrollToTop();
+
+        const rafIds = [
+            requestAnimationFrame(forceScrollToTop),
+            requestAnimationFrame(() => requestAnimationFrame(forceScrollToTop)),
+        ];
+        const timeoutIds = [80, 180, 320, 520, 760, 1040].map((delay) => (
+            window.setTimeout(forceScrollToTop, delay)
+        ));
+        const viewport = window.visualViewport;
+        const handleViewportShift = () => forceScrollToTop();
+        const finish = window.setTimeout(() => {
+            forceScrollToTop();
+            window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
+        }, 1280);
+
+        viewport?.addEventListener('resize', handleViewportShift);
+        window.addEventListener('pageshow', forceScrollToTop);
+        window.addEventListener('focus', forceScrollToTop);
+
+        return () => {
+            rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
+            timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+            window.clearTimeout(finish);
+            viewport?.removeEventListener('resize', handleViewportShift);
+            window.removeEventListener('pageshow', forceScrollToTop);
+            window.removeEventListener('focus', forceScrollToTop);
+        };
+    }, [user?.id]);
 
     useEffect(() => {
         coreResidentSnapshotRef.current = hasCoreResidentSnapshot;
@@ -1250,11 +1293,11 @@ export default function Dashboard() {
                     style={{
                         padding: '10px 24px',
                         borderRadius: '10px',
-                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--success)' : 'var(--primary)',
+                        background: isSystemClosed ? 'var(--error)' : hasBookedForNextWeek ? 'var(--resident-ready-green)' : 'var(--primary)',
                         boxShadow: isSystemClosed
                             ? '0 0 15px rgba(239, 68, 68, 0.3)'
                             : hasBookedForNextWeek
-                                ? '0 0 15px rgba(16, 185, 129, 0.3)'
+                                ? '0 0 15px var(--resident-ready-green-glow)'
                                 : '0 0 15px var(--primary-glow)',
                         fontSize: '14px',
                         fontWeight: 600,
