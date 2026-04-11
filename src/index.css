@@ -105,6 +105,39 @@ button {
   animation: fadeIn 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.scroll-loading-shell {
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll-loading-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, transparent 48%),
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.12) 48%, transparent 100%);
+  background-size: 100% 100%, 220% 100%;
+  background-position: 0 0, 200% 0;
+  animation: scroll-loading-glide 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.scroll-loading-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes scroll-loading-glide {
+  0% {
+    background-position: 0 0, 200% 0;
+  }
+
+  100% {
+    background-position: 0 0, -120% 0;
+  }
+}
+
 @keyframes pulse {
 
   0%,

@@ -907,7 +907,7 @@ export default function Dashboard() {
     if (!user) return null;
 
     const feedbackFallback = (
-        <div className="glass-panel" style={{ marginTop: '40px', padding: '18px', borderRadius: '18px', opacity: 0.78 }}>
+        <div className="glass-panel scroll-loading-shell" style={{ marginTop: '40px', padding: '18px', borderRadius: '18px', opacity: 0.92 }}>
             <div style={{ height: '18px', width: '120px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '14px' }} className="skeleton-pulse"></div>
             <div style={{ height: '48px', width: '100%', borderRadius: '14px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
         </div>
@@ -915,7 +915,9 @@ export default function Dashboard() {
     const bookingsFallback = (
         <div className="animate-fade-in" style={{ marginTop: '32px' }}>
             <div style={{ height: '18px', width: '180px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '16px' }} className="skeleton-pulse"></div>
-            <div style={{ height: '156px', width: '100%', borderRadius: '20px', background: 'var(--glass-border)', marginBottom: '24px' }} className="skeleton-pulse"></div>
+            <div className="glass-panel scroll-loading-shell" style={{ height: '156px', width: '100%', borderRadius: '20px', marginBottom: '24px' }}>
+                <div style={{ width: '100%', height: '100%', borderRadius: '20px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+            </div>
         </div>
     );
     const shouldShowRecentBookingsLoading = isBookingSummaryActive && (!recentBookingsHydrated || recentBookingsLoading);
@@ -1472,11 +1474,10 @@ export default function Dashboard() {
 
             <div
                 ref={bookingSummarySectionRef}
-                className={`scroll-reveal${isBookingSummaryActive ? ' scroll-reveal--visible' : ''}`}
                 style={{ minHeight: '220px' }}
             >
                 {isBookingSummaryActive ? (
-                    <div className="scroll-reveal-content">
+                    <div className="scroll-reveal scroll-reveal--visible scroll-reveal-content">
                         <Suspense fallback={bookingsFallback}>
                             <LazyDashboardBookingSummary
                                 key={userId}
@@ -1499,11 +1500,10 @@ export default function Dashboard() {
             {/* Inline Feedback Section */}
             <div
                 ref={feedbackSectionRef}
-                className={`scroll-reveal${isFeedbackActive ? ' scroll-reveal--visible' : ''}`}
                 style={{ minHeight: '132px' }}
             >
                 {isFeedbackActive ? (
-                    <div className="scroll-reveal-content">
+                    <div className="scroll-reveal scroll-reveal--visible scroll-reveal-content">
                         <Suspense fallback={feedbackFallback}>
                             <LazyDashboardFeedback isRussian={isRussian} />
                         </Suspense>
