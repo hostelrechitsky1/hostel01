@@ -17,7 +17,7 @@ import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
 import { notifySuccess } from '../utils/notify';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
-import { getResidentInitials, getResidentShortName } from '../utils/residentNames';
+import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getResidentShortNameForLanguage } from '../utils/residentNames';
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 
 const RECENT_BOOKINGS_LIMIT = 12;
@@ -1011,7 +1011,7 @@ export default function Dashboard() {
                             aria-label={canOpenRoommateMenu ? t.switchRoommateProfile : t.currentResidentProfile}
                         >
                             <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.04em' }}>
-                                {getResidentInitials(user.name)}
+                                {getResidentInitialsForLanguage(user.name, isRussian)}
                             </span>
                             {canOpenRoommateMenu && (
                                 <span
@@ -1100,11 +1100,11 @@ export default function Dashboard() {
                                                                 flexShrink: 0
                                                             }}
                                                         >
-                                                            {getResidentInitials(resident.name)}
+                                                            {getResidentInitialsForLanguage(resident.name, isRussian)}
                                                         </div>
                                                         <div style={{ minWidth: 0 }}>
                                                             <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {getResidentShortName(resident.name)}
+                                                                {getResidentShortNameForLanguage(resident.name, isRussian)}
                                                             </div>
                                                             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                                                                 {t.roomLabel(resident.roomNumber)}
@@ -1151,7 +1151,7 @@ export default function Dashboard() {
 
                     <div style={{ minWidth: 0 }}>
                         <h2 style={{ margin: 0, fontSize: '24px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {t.hello}, {user.name.split(' ')[0]} 👋
+                            {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)} 👋
                         </h2>
                         <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
                             {t.roomLabel(user.roomNumber)}{canOpenRoommateMenu ? t.tapAvatarToSwitch : ''}

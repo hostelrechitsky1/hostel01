@@ -9,6 +9,7 @@ import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performa
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { notifyError } from '../utils/notify';
 import { getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
+import { getResidentNameForLanguage } from '../utils/residentNames';
 
 let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
 
@@ -399,7 +400,7 @@ export default function LoginScreen() {
                                                     <User size={20} />
                                                 </div>
                                                 <span style={{ fontSize: '16px', fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {student.name}
+                                                    {getResidentNameForLanguage(student.name, isRussian)}
                                                 </span>
                                             </div>
                                             {selectingStudentId === student.id ? <ActionSpinner size={18} tone="neutral" /> : null}

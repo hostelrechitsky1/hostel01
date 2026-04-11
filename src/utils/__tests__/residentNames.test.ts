@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getResidentInitials, getResidentShortName } from '../residentNames';
+import {
+    getResidentFirstNameForLanguage,
+    getResidentInitials,
+    getResidentInitialsForLanguage,
+    getResidentNameForLanguage,
+    getResidentShortName,
+    getResidentShortNameForLanguage,
+} from '../residentNames';
 
 describe('residentNames', () => {
     it('uses the last distinct token when the surname repeats at the end', () => {
@@ -15,5 +22,16 @@ describe('residentNames', () => {
     it('collapses identical repeated names to a single token', () => {
         expect(getResidentShortName('Yasarathna Yasarathna')).toBe('Yasarathna');
         expect(getResidentInitials('Yasarathna Yasarathna')).toBe('YA');
+    });
+
+    it('transliterates Cyrillic names for English mode', () => {
+        expect(getResidentNameForLanguage('Силва Константирире Айон Шанилка', false)).toBe('Silva Konstantirire Ayon Shanilka');
+        expect(getResidentShortNameForLanguage('Силва Константирире Айон Шанилка', false)).toBe('Silva Shanilka');
+        expect(getResidentInitialsForLanguage('Силва Константирире Айон Шанилка', false)).toBe('SS');
+        expect(getResidentFirstNameForLanguage('Силва Константирире Айон Шанилка', false)).toBe('Silva');
+    });
+
+    it('keeps original resident names in Russian mode', () => {
+        expect(getResidentNameForLanguage('Силва Константирире Айон Шанилка', true)).toBe('Силва Константирире Айон Шанилка');
     });
 });

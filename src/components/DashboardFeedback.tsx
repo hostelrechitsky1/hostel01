@@ -10,6 +10,7 @@ import type { Feedback, FeedbackType } from '../types';
 import { formatBelarusCompactTimestamp } from '../utils/time';
 import { notifyError, notifySuccess } from '../utils/notify';
 import { getResidentPortalDateLocale } from '../utils/residentPortalLanguage';
+import { getResidentNameForLanguage } from '../utils/residentNames';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -249,7 +250,7 @@ export default function DashboardFeedback({ isRussian = false }: { isRussian?: b
                 </div>
 
                 <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {t.roomLabel(user.roomNumber)} • {user.name}
+                    {t.roomLabel(user.roomNumber)} • {getResidentNameForLanguage(user.name, isRussian)}
                 </div>
             </div>
 
