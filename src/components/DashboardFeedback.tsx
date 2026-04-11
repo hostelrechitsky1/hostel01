@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import {
     MessageSquare,
@@ -41,6 +41,8 @@ export default function DashboardFeedback() {
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
     const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
+    const bottomFlourishRef = useRef<HTMLDivElement | null>(null);
+    const [bottomFlourishVisible, setBottomFlourishVisible] = useState(false);
     const repliedFeedbacks = useMemo(() => {
         return [...feedbacks]
             .filter((feedback) => Boolean(feedback.adminReply?.text?.trim()))
@@ -65,6 +67,29 @@ export default function DashboardFeedback() {
             }
         );
     }, [user?.id, user?.name, user?.roomNumber]);
+
+    useEffect(() => {
+        const node = bottomFlourishRef.current;
+        if (!node) return;
+
+        if (typeof IntersectionObserver === 'undefined') {
+            setBottomFlourishVisible(true);
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setBottomFlourishVisible(entry.isIntersecting);
+            },
+            {
+                threshold: 0.7,
+                rootMargin: '0px 0px -4% 0px'
+            }
+        );
+
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, []);
 
     const handleSubmit = async () => {
         const trimmedText = text.trim();
@@ -180,61 +205,42 @@ export default function DashboardFeedback() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gap: '14px' }}>
-                {repliedFeedbacks.length === 0 ? (
-                    <div
-                        className="glass-panel"
-                        style={{
-                            padding: '20px',
-                            borderRadius: '18px',
-                            textAlign: 'center',
-                            color: 'var(--text-muted)',
-                            background: 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(20, 24, 58, 0.72) 100%)',
-                            border: '1px solid rgba(255,255,255,0.06)'
-                        }}
-                    >
-                        <Sparkles size={18} style={{ marginBottom: '10px' }} />
-                        <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
-                            Admin replies will appear here
-                        </div>
-                        <div style={{ fontSize: '14px' }}>
-                            Once the hostel team answers, you’ll see the reply in this section.
-                        </div>
-                    </div>
-                ) : (
-                    repliedFeedbacks.map((feedback) => {
+            {repliedFeedbacks.length > 0 && (
+                <div style={{ display: 'grid', gap: '14px' }}>
+                    {repliedFeedbacks.map((feedback) => {
                         return (
                             <div
                                 key={feedback.id}
                                 className="glass-panel"
                                 style={{
                                     padding: '18px',
-                                    borderRadius: '18px',
+                                    borderRadius: '20px',
                                     border: '1px solid rgba(129, 140, 248, 0.18)',
-                                    background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.12) 0%, rgba(20, 24, 58, 0.9) 100%)',
-                                    boxShadow: '0 18px 30px rgba(12, 18, 42, 0.22)'
+                                    background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(20, 24, 58, 0.92) 52%, rgba(88, 28, 135, 0.24) 100%)',
+                                    boxShadow: '0 20px 36px rgba(8, 12, 32, 0.3)'
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                         <div
                                             style={{
-                                                width: '42px',
-                                                height: '42px',
-                                                borderRadius: '14px',
+                                                width: '46px',
+                                                height: '46px',
+                                                borderRadius: '16px',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.22) 0%, rgba(168, 85, 247, 0.18) 100%)',
-                                                border: '1px solid rgba(129, 140, 248, 0.2)'
+                                                background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.24) 0%, rgba(217, 70, 239, 0.2) 100%)',
+                                                border: '1px solid rgba(196, 181, 253, 0.2)',
+                                                boxShadow: '0 10px 24px rgba(124, 58, 237, 0.2)'
                                             }}
                                         >
-                                            <Reply size={18} color="#c4b5fd" />
+                                            <Reply size={18} color="#ddd6fe" />
                                         </div>
                                         <div>
-                                            <div style={{ fontWeight: 700, color: 'white' }}>Admin Reply</div>
-                                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.68)' }}>
-                                                Hostel team response
+                                            <div style={{ fontWeight: 700, color: 'white' }}>Hostel Team</div>
+                                            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.62)' }}>
+                                                Replied to your feedback
                                             </div>
                                         </div>
                                     </div>
@@ -244,9 +250,9 @@ export default function DashboardFeedback() {
                                             padding: '6px 10px',
                                             borderRadius: '999px',
                                             fontSize: '12px',
-                                            color: '#d6bcfa',
-                                            background: 'rgba(129, 140, 248, 0.12)',
-                                            border: '1px solid rgba(129, 140, 248, 0.16)'
+                                            color: '#e9d5ff',
+                                            background: 'rgba(139, 92, 246, 0.14)',
+                                            border: '1px solid rgba(196, 181, 253, 0.14)'
                                         }}
                                     >
                                         {format(feedback.adminReply!.repliedAt, 'MMM d, HH:mm')}
@@ -255,15 +261,28 @@ export default function DashboardFeedback() {
 
                                 <div
                                     style={{
-                                        padding: '16px',
-                                        borderRadius: '16px',
-                                        background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(109, 40, 217, 0.08) 100%)',
-                                        border: '1px solid rgba(129, 140, 248, 0.14)',
+                                        position: 'relative',
+                                        padding: '16px 16px 16px 18px',
+                                        borderRadius: '18px',
+                                        background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.18) 0%, rgba(76, 29, 149, 0.18) 100%)',
+                                        border: '1px solid rgba(196, 181, 253, 0.12)',
                                         color: 'white',
-                                        lineHeight: 1.6,
-                                        whiteSpace: 'pre-wrap'
+                                        lineHeight: 1.7,
+                                        whiteSpace: 'pre-wrap',
+                                        overflow: 'hidden'
                                     }}
                                 >
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            left: 0,
+                                            top: 12,
+                                            bottom: 12,
+                                            width: '4px',
+                                            borderRadius: '999px',
+                                            background: 'linear-gradient(180deg, rgba(196, 181, 253, 0.95) 0%, rgba(129, 140, 248, 0.35) 100%)'
+                                        }}
+                                    />
                                     {feedback.adminReply?.text}
                                 </div>
 
@@ -271,22 +290,39 @@ export default function DashboardFeedback() {
                                     style={{
                                         marginTop: '12px',
                                         padding: '12px 14px',
-                                        borderRadius: '14px',
-                                        background: 'rgba(10, 14, 38, 0.44)',
+                                        borderRadius: '16px',
+                                        background: 'rgba(8, 12, 32, 0.34)',
                                         border: '1px solid rgba(255,255,255,0.06)'
                                     }}
                                 >
                                     <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.48)', marginBottom: '6px' }}>
-                                        Your message
+                                        Your feedback
                                     </div>
-                                    <div style={{ color: 'rgba(255,255,255,0.78)', lineHeight: 1.55, whiteSpace: 'pre-wrap', fontSize: '14px' }}>
+                                    <div style={{ color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap', fontSize: '14px' }}>
                                         {feedback.text}
                                     </div>
                                 </div>
                             </div>
                         );
-                    })
-                )}
+                    })}
+                </div>
+            )}
+
+            <div
+                ref={bottomFlourishRef}
+                className={`feedback-bottom-delight${bottomFlourishVisible ? ' feedback-bottom-delight--visible' : ''}`}
+                aria-hidden="true"
+            >
+                <div className="feedback-bottom-delight__orb feedback-bottom-delight__orb--left" />
+                <div className="feedback-bottom-delight__orb feedback-bottom-delight__orb--right" />
+                <div className="feedback-bottom-delight__orb feedback-bottom-delight__orb--center" />
+                <div className="feedback-bottom-delight__line" />
+                <div className="feedback-bottom-delight__spark feedback-bottom-delight__spark--left" />
+                <div className="feedback-bottom-delight__spark feedback-bottom-delight__spark--right" />
+                <div className="feedback-bottom-delight__spark feedback-bottom-delight__spark--center" />
+                <div className="feedback-bottom-delight__core">
+                    <Sparkles size={16} />
+                </div>
             </div>
         </div>
     );

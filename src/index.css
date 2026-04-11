@@ -126,6 +126,58 @@ button {
   }
 }
 
+@keyframes feedbackDelightFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(0, -8px, 0) scale(1.04);
+  }
+}
+
+@keyframes feedbackDelightPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes feedbackDelightShimmer {
+  0% {
+    opacity: 0.15;
+    transform: translateX(-12%) scaleX(0.9);
+  }
+
+  50% {
+    opacity: 0.75;
+  }
+
+  100% {
+    opacity: 0.15;
+    transform: translateX(12%) scaleX(1.02);
+  }
+}
+
+@keyframes feedbackDelightReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -244,6 +296,177 @@ button {
 
 .primary-button:active {
   transform: translateY(1px);
+}
+
+.feedback-bottom-delight {
+  position: relative;
+  height: 86px;
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: 28px;
+  pointer-events: none;
+  opacity: 0.38;
+  transform: translateY(8px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.feedback-bottom-delight--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.feedback-bottom-delight__orb,
+.feedback-bottom-delight__spark,
+.feedback-bottom-delight__line,
+.feedback-bottom-delight__core {
+  position: absolute;
+}
+
+.feedback-bottom-delight__orb {
+  border-radius: 999px;
+  filter: blur(18px);
+  opacity: 0.55;
+}
+
+.feedback-bottom-delight__orb--left {
+  left: 8%;
+  bottom: 10px;
+  width: 86px;
+  height: 46px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.55) 0%, rgba(129, 140, 248, 0) 72%);
+}
+
+.feedback-bottom-delight__orb--center {
+  left: 50%;
+  bottom: 8px;
+  width: 120px;
+  height: 52px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(196, 181, 253, 0.42) 0%, rgba(196, 181, 253, 0) 72%);
+}
+
+.feedback-bottom-delight__orb--right {
+  right: 8%;
+  bottom: 12px;
+  width: 94px;
+  height: 42px;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.28) 0%, rgba(236, 72, 153, 0) 72%);
+}
+
+.feedback-bottom-delight__line {
+  left: 12%;
+  right: 12%;
+  bottom: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(129, 140, 248, 0) 0%, rgba(196, 181, 253, 0.76) 50%, rgba(129, 140, 248, 0) 100%);
+  box-shadow: 0 0 24px rgba(129, 140, 248, 0.32);
+}
+
+.feedback-bottom-delight__spark {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 16px rgba(196, 181, 253, 0.8);
+}
+
+.feedback-bottom-delight__spark--left {
+  left: 24%;
+  bottom: 28px;
+}
+
+.feedback-bottom-delight__spark--center {
+  left: 50%;
+  bottom: 38px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+}
+
+.feedback-bottom-delight__spark--right {
+  right: 26%;
+  bottom: 26px;
+}
+
+.feedback-bottom-delight__core {
+  left: 50%;
+  bottom: 8px;
+  width: 42px;
+  height: 42px;
+  margin-left: -21px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ede9fe;
+  background: linear-gradient(135deg, rgba(129, 140, 248, 0.22) 0%, rgba(168, 85, 247, 0.28) 100%);
+  border: 1px solid rgba(196, 181, 253, 0.18);
+  box-shadow: 0 10px 28px rgba(91, 33, 182, 0.26);
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__core {
+  animation: feedbackDelightReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards, feedbackDelightFloat 3.6s ease-in-out 0.7s infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__orb--left {
+  animation: feedbackDelightFloat 4.2s ease-in-out infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__orb--center {
+  animation: feedbackDelightPulse 3.2s ease-in-out infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__orb--right {
+  animation: feedbackDelightFloat 4.6s ease-in-out 0.45s infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__line {
+  animation: feedbackDelightShimmer 2.9s ease-in-out infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__spark--left {
+  animation: feedbackDelightPulse 2.4s ease-in-out 0.2s infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__spark--center {
+  animation: feedbackDelightPulse 2.8s ease-in-out infinite;
+}
+
+.feedback-bottom-delight--visible .feedback-bottom-delight__spark--right {
+  animation: feedbackDelightPulse 2.6s ease-in-out 0.4s infinite;
+}
+
+@media (max-width: 640px) {
+  .feedback-bottom-delight {
+    height: 96px;
+    margin-top: 22px;
+  }
+
+  .feedback-bottom-delight__orb--left {
+    left: 2%;
+    width: 92px;
+  }
+
+  .feedback-bottom-delight__orb--right {
+    right: 2%;
+    width: 96px;
+  }
+
+  .feedback-bottom-delight__line {
+    left: 8%;
+    right: 8%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-bottom-delight,
+  .feedback-bottom-delight__orb,
+  .feedback-bottom-delight__spark,
+  .feedback-bottom-delight__line,
+  .feedback-bottom-delight__core {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Layout Helpers */
