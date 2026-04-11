@@ -276,30 +276,30 @@ export default function DashboardBookingSummary({
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
     const primaryCancelButtonDisabled = !primaryUpcomingBooking || !canCancelBooking(primaryUpcomingBooking) || cancelBookingId === primaryUpcomingBooking.id;
     const getCancelActionStyle = (compact = false, disabled = false) => ({
-        padding: compact ? '10px 14px' : '12px 18px',
-        paddingRight: compact ? '14px' : '18px',
-        minHeight: compact ? '42px' : '48px',
+        padding: compact ? '9px 13px' : '10px 14px',
+        paddingRight: compact ? '13px' : '14px',
+        minHeight: compact ? '40px' : '44px',
         borderRadius: '14px',
         fontSize: compact ? '13px' : '14px',
         fontWeight: 700,
         display: 'inline-flex',
         alignItems: 'center',
-        gap: compact ? '8px' : '10px',
+        gap: compact ? '7px' : '8px',
         justifyContent: 'center',
         position: 'relative' as const,
         overflow: 'visible' as const,
-        border: '1px solid rgba(248, 113, 113, 0.4)',
-        color: disabled ? 'rgba(254, 202, 202, 0.85)' : '#ffe4e6',
+        border: '1px solid rgba(248, 113, 113, 0.28)',
+        color: disabled ? 'rgba(254, 202, 202, 0.72)' : '#fecaca',
         background: disabled
-            ? 'linear-gradient(135deg, rgba(127, 29, 29, 0.45) 0%, rgba(136, 19, 55, 0.28) 100%)'
-            : 'linear-gradient(135deg, rgba(127, 29, 29, 0.92) 0%, rgba(190, 24, 93, 0.88) 100%)',
+            ? 'rgba(127, 29, 29, 0.12)'
+            : 'rgba(239, 68, 68, 0.08)',
         boxShadow: disabled
             ? 'none'
-            : '0 12px 28px rgba(190, 24, 93, 0.24), inset 0 1px 0 rgba(255,255,255,0.14)',
+            : '0 10px 22px rgba(15, 23, 42, 0.12)',
         opacity: disabled ? 0.72 : 1,
         cursor: disabled ? 'not-allowed' as const : 'pointer' as const,
         flex: compact ? undefined : 1,
-        minWidth: compact ? undefined : '170px',
+        minWidth: compact ? undefined : '136px',
     });
     const renderCancelBadge = () => showCancelFeatureBadge ? (
         <span
@@ -315,8 +315,8 @@ export default function DashboardBookingSummary({
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 color: '#fff',
-                background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
-                boxShadow: '0 8px 18px rgba(249, 115, 22, 0.28)',
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                boxShadow: '0 8px 18px rgba(34, 197, 94, 0.26)',
                 flexShrink: 0,
                 position: 'absolute',
                 top: '-10px',
@@ -538,7 +538,7 @@ export default function DashboardBookingSummary({
                                     window.URL.revokeObjectURL(url);
                                 }}
                                 className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
+                                style={{ padding: '10px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '136px', minHeight: '44px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
                             >
                                 <Download size={18} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>Apple / Outlook</span>
@@ -567,15 +567,15 @@ export default function DashboardBookingSummary({
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                background: 'rgba(255,255,255,0.14)',
-                                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)'
+                                                background: 'rgba(239, 68, 68, 0.14)',
+                                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)'
                                             }}
                                         >
                                             <XCircle size={15} />
                                         </span>
                                         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.05 }}>
                                             <span>Cancel Booking</span>
-                                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255, 228, 230, 0.82)' }}>
+                                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(254, 202, 202, 0.78)' }}>
                                                 Free the slot instantly
                                             </span>
                                         </span>
