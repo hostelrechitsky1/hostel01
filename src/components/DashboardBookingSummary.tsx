@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
@@ -21,6 +21,7 @@ interface DashboardBookingSummaryProps {
 }
 
 let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
+const CANCEL_BOOKING_BADGE_STORAGE_KEY = 'hostel_cancel_booking_badge_seen_v1';
 
 const loadResidentMutationsService = () => {
     residentMutationsServicePromise ??= import('../services/residentMutationsService');
@@ -44,6 +45,12 @@ export default function DashboardBookingSummary({
     const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
     const [cancelModalMessage, setCancelModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
+    const [showCancelFeatureBadge, setShowCancelFeatureBadge] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setShowCancelFeatureBadge(window.localStorage.getItem(CANCEL_BOOKING_BADGE_STORAGE_KEY) !== '1');
+    }, []);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -88,6 +95,10 @@ export default function DashboardBookingSummary({
         if (!canCancelBooking(booking)) return;
         void loadResidentMutationsService();
         hapticSelection();
+        if (showCancelFeatureBadge && typeof window !== 'undefined') {
+            window.localStorage.setItem(CANCEL_BOOKING_BADGE_STORAGE_KEY, '1');
+            setShowCancelFeatureBadge(false);
+        }
         setCancelModalBooking(booking);
         setCancelModalMessage(null);
     };
@@ -262,6 +273,27 @@ export default function DashboardBookingSummary({
         : null;
     const cancelBookingMachineLabel = cancelBookingMachine?.name || `Machine ${cancelModalBooking?.machineId || ''}`;
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
+    const renderCancelBadge = () => showCancelFeatureBadge ? (
+        <span
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '3px 8px',
+                borderRadius: '999px',
+                fontSize: '10px',
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: '#fff',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+                boxShadow: '0 8px 18px rgba(249, 115, 22, 0.28)',
+                flexShrink: 0
+            }}
+        >
+            New
+        </span>
+    ) : null;
 
     return (
         <>
@@ -507,7 +539,10 @@ export default function DashboardBookingSummary({
                                 ) : (
                                     <>
                                         <XCircle size={18} />
-                                        <span style={{ fontSize: '14px', fontWeight: 600 }}>Cancel Booking</span>
+                                        <span style={{ fontSize: '14px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                            <span>Cancel Booking</span>
+                                            {renderCancelBadge()}
+                                        </span>
                                     </>
                                 )}
                             </button>
@@ -631,7 +666,10 @@ export default function DashboardBookingSummary({
                                                     ) : (
                                                         <>
                                                             <XCircle size={14} />
-                                                            Cancel
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span>Cancel</span>
+                                                                {renderCancelBadge()}
+                                                            </span>
                                                         </>
                                                     )}
                                                 </button>
