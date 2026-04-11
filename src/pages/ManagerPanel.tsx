@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
     Trash2,
     ShieldCheck,
@@ -18,11 +18,13 @@ import {
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
 import { studentsRawData } from '../data/studentsRaw';
-import type { Booking, Machine, Student, Feedback, Banner, AppSettings } from '../types';
+import type { Booking, Machine, Student, Feedback, Banner, AppSettings, VipRecurringRule } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
 import { toast } from 'sonner';
+import { TIME_SLOTS } from '../types';
+import { addBelarusDays, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
 
 const BOOKING_ITEMS_PER_PAGE = 12;
 const INITIAL_RECENT_BOOKINGS_LIMIT = 80;
@@ -54,6 +56,8 @@ const getFeedbackTypeIcon = (type: Feedback['type']) => {
     return Sparkles;
 };
 
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 export default function ManagerPanel() {
     const cachedMachines = useMemo(() => firestoreService.getCachedMachines(), []);
     const cachedStudents = useMemo(() => firestoreService.getCachedStudents(), []);
@@ -66,8 +70,24 @@ export default function ManagerPanel() {
     const [students, setStudents] = useState<Student[]>(() => cachedStudents ?? []);
     const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
     const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
+    const [vipRules, setVipRules] = useState<VipRecurringRule[]>([]);
     const [showBannerForm, setShowBannerForm] = useState(false);
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
+    const [vipForm, setVipForm] = useState({
+        studentId: '',
+        machineId: '',
+        weekday: 6,
+        startTime: '16:30'
+    });
+    const [vipStudentSearch, setVipStudentSearch] = useState('');
+    const [vipApplyStatus, setVipApplyStatus] = useState<{
+        weekId: string;
+        success: number;
+        skipped: number;
+        overridden: number;
+        mode: 'auto' | 'manual';
+        at: number;
+    } | null>(null);
     const [residentSearchTerm, setResidentSearchTerm] = useState('');
     const [bookingSearchTerm, setBookingSearchTerm] = useState('');
     const [bookingPage, setBookingPage] = useState(1);
@@ -88,6 +108,9 @@ export default function ManagerPanel() {
     const [recentFeedbackLimit, setRecentFeedbackLimit] = useState(INITIAL_RECENT_FEEDBACK_LIMIT);
     const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
     const [replyingFeedbackId, setReplyingFeedbackId] = useState<string | null>(null);
+    const [addingVipRule, setAddingVipRule] = useState(false);
+    const [applyingVipRules, setApplyingVipRules] = useState(false);
+    const autoVipInFlightRef = useRef(false);
     const navigate = useNavigate();
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
 
@@ -109,16 +132,18 @@ export default function ManagerPanel() {
     const refreshCoreData = async () => {
         setLoading(true);
         try {
-            const [fetchedMachines, fetchedStudents, fetchedSettings, fetchedBanners] = await Promise.all([
+            const [fetchedMachines, fetchedStudents, fetchedSettings, fetchedBanners, fetchedVipRules] = await Promise.all([
                 firestoreService.getMachines(),
                 firestoreService.getAllStudents(),
                 firestoreService.getSettings(),
-                firestoreService.getBanners()
+                firestoreService.getBanners(),
+                firestoreService.getVipRecurringRules()
             ]);
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
             setSettings(fetchedSettings);
             setBanners(fetchedBanners);
+            setVipRules(fetchedVipRules);
         } catch (error) {
             console.error("Failed to load admin data", error);
             await alertDialog('Load Failed', 'Failed to load data from database.');
@@ -186,6 +211,16 @@ export default function ManagerPanel() {
         const start = (bookingPage - 1) * BOOKING_ITEMS_PER_PAGE;
         return filteredBookings.slice(start, start + BOOKING_ITEMS_PER_PAGE);
     }, [filteredBookings, bookingPage]);
+
+    const filteredVipStudents = useMemo(() => {
+        const search = vipStudentSearch.trim().toLowerCase();
+        if (!search) return students;
+
+        return students.filter((student) =>
+            student.name.toLowerCase().includes(search)
+            || student.roomNumber.toLowerCase().includes(search)
+        );
+    }, [students, vipStudentSearch]);
 
     useEffect(() => {
         setBookingPage(1);
@@ -288,6 +323,187 @@ export default function ManagerPanel() {
     const toggleBanner = async (banner: Banner) => {
         await firestoreService.toggleBannerStatus(banner.id, !banner.isActive);
         refreshCoreData();
+    };
+
+    const handleAddVipRule = async () => {
+        setAddingVipRule(true);
+
+        try {
+            if (!vipForm.studentId || !vipForm.machineId || !vipForm.startTime) {
+                await alertDialog('Missing Fields', 'Please select student, machine, day, and time.');
+                return;
+            }
+
+            const existingRule = vipRules.find((rule) =>
+                rule.studentId === vipForm.studentId
+                && rule.machineId === vipForm.machineId
+                && rule.weekday === vipForm.weekday
+                && rule.startTime === vipForm.startTime
+            );
+
+            if (existingRule) {
+                await alertDialog('Rule Exists', 'This VIP recurring rule already exists.');
+                return;
+            }
+
+            const nextRule: VipRecurringRule = {
+                id: `vip-${Date.now()}`,
+                studentId: vipForm.studentId,
+                machineId: vipForm.machineId,
+                weekday: vipForm.weekday,
+                startTime: vipForm.startTime,
+                isActive: true,
+                createdAt: Date.now()
+            };
+
+            await firestoreService.addVipRecurringRule(nextRule);
+            await refreshCoreData();
+            setVipForm({
+                studentId: '',
+                machineId: '',
+                weekday: 6,
+                startTime: '16:30'
+            });
+            toast.success('VIP recurring rule added.');
+        } catch (error) {
+            console.error('Failed to add VIP rule', error);
+            toast.error('Failed to add VIP rule.');
+        } finally {
+            setAddingVipRule(false);
+        }
+    };
+
+    const toggleVipRule = async (rule: VipRecurringRule) => {
+        await firestoreService.toggleVipRecurringRule(rule.id, !rule.isActive);
+        await refreshCoreData();
+    };
+
+    const handleDeleteVipRule = async (rule: VipRecurringRule) => {
+        const confirmed = await confirmDialog('Delete VIP Rule?', 'Delete this recurring VIP booking rule?', {
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            isDanger: true
+        });
+
+        if (!confirmed) return;
+
+        await firestoreService.deleteVipRecurringRule(rule.id);
+        await refreshCoreData();
+    };
+
+    const applyVipForWeek = async (mode: 'auto' | 'manual') => {
+        const activeRules = vipRules.filter((rule) => rule.isActive);
+        if (activeRules.length === 0) {
+            if (mode === 'manual') {
+                await alertDialog('No Active Rules', 'Enable or add at least one VIP rule first.');
+            }
+            return;
+        }
+
+        try {
+            const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+            const nextWeekId = getBelarusWeekId(nextWeekStart);
+            const maintenanceDay = settings.maintenanceDay ?? 3;
+            let workingBookings = await firestoreService.getBookingsForWeekIds([nextWeekId]);
+
+            let success = 0;
+            let skipped = 0;
+            let overridden = 0;
+
+            for (const rule of activeRules) {
+                const student = studentById.get(rule.studentId);
+                const machine = machineById.get(rule.machineId);
+
+                if (!student || !machine || machine.status === 'maintenance') {
+                    skipped += 1;
+                    continue;
+                }
+
+                if (rule.weekday === maintenanceDay) {
+                    skipped += 1;
+                    continue;
+                }
+
+                const dayOffset = rule.weekday === 0 ? 6 : rule.weekday - 1;
+                const targetDate = addBelarusDays(nextWeekStart, dayOffset);
+                const targetDateStr = formatBelarusDate(targetDate);
+
+                const [hour, minute] = rule.startTime.split(':').map(Number);
+                const endMinutes = (hour * 60) + minute + 90;
+                const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+                const targetSlotId = `${targetDateStr}_${rule.machineId}_${rule.startTime.replace(':', '-')}`;
+
+                const existingAtSlot = workingBookings.find((booking) => booking.id === targetSlotId);
+                if (existingAtSlot) {
+                    if (existingAtSlot.studentId === student.id) {
+                        success += 1;
+                        continue;
+                    }
+
+                    await firestoreService.cancelBooking(existingAtSlot.id);
+                    workingBookings = workingBookings.filter((booking) => booking.id !== existingAtSlot.id);
+                    overridden += 1;
+                }
+
+                const existingStudentBooking = workingBookings.find((booking) => booking.studentId === student.id && booking.weekId === nextWeekId);
+                if (existingStudentBooking) {
+                    await firestoreService.cancelBooking(existingStudentBooking.id);
+                    workingBookings = workingBookings.filter((booking) => booking.id !== existingStudentBooking.id);
+                    overridden += 1;
+                }
+
+                const bookingPayload: Booking = {
+                    id: targetSlotId,
+                    machineId: rule.machineId,
+                    studentId: student.id,
+                    studentName: student.name,
+                    roomNumber: student.roomNumber,
+                    date: targetDateStr,
+                    startTime: rule.startTime,
+                    endTime,
+                    weekId: nextWeekId,
+                    createdAt: Date.now()
+                };
+
+                const result = await firestoreService.createBooking(bookingPayload);
+                if (result.success) {
+                    success += 1;
+                    workingBookings.push({ ...bookingPayload, id: targetSlotId });
+                } else {
+                    skipped += 1;
+                }
+            }
+
+            setVipApplyStatus({ weekId: nextWeekId, success, skipped, overridden, mode, at: Date.now() });
+
+            if (mode === 'manual') {
+                await alertDialog(
+                    'VIP Apply Complete',
+                    `Applied for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}`
+                );
+            }
+
+            if (settings.vipLastAppliedWeekId !== nextWeekId) {
+                await firestoreService.updateSettings({ vipLastAppliedWeekId: nextWeekId });
+                setSettings((current) => ({ ...current, vipLastAppliedWeekId: nextWeekId }));
+            }
+
+            await refreshActivityData();
+        } catch (error) {
+            console.error('VIP apply failed', error);
+            if (mode === 'manual') {
+                await alertDialog('VIP Apply Failed', 'Could not apply VIP recurring bookings.');
+            }
+        }
+    };
+
+    const handleApplyVipForNextWeek = async () => {
+        setApplyingVipRules(true);
+        try {
+            await applyVipForWeek('manual');
+        } finally {
+            setApplyingVipRules(false);
+        }
     };
 
     const handleReplyToFeedback = async (feedback: Feedback) => {
@@ -453,6 +669,28 @@ export default function ManagerPanel() {
         }
     };
 
+    const autoWindowDisplay = getAutoOpenWindowDisplay(settings);
+
+    useEffect(() => {
+        if (!settings.vipAutoEnabled) return;
+        if (loading) return;
+        if (autoVipInFlightRef.current) return;
+
+        const activeRules = vipRules.filter((rule) => rule.isActive);
+        if (activeRules.length === 0) return;
+
+        const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+        const nextWeekId = getBelarusWeekId(nextWeekStart);
+
+        if (settings.vipLastAppliedWeekId === nextWeekId) return;
+
+        autoVipInFlightRef.current = true;
+
+        void applyVipForWeek('auto').finally(() => {
+            autoVipInFlightRef.current = false;
+        });
+    }, [applyVipForWeek, loading, settings.vipAutoEnabled, settings.vipLastAppliedWeekId, vipRules, studentById, machineById]);
+
     if (loading && bookings.length === 0 && machines.length === 0 && students.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
     }
@@ -515,6 +753,71 @@ export default function ManagerPanel() {
                             </select>
                             <p style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280' }}>
                                 Students will see "Maintenance Day" on this day of the week.
+                            </p>
+                        </div>
+
+                        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px' }}>
+                            <label style={{ display: 'block', marginBottom: '12px', fontWeight: '500', color: '#9ca3af' }}>Auto Booking Opening</label>
+                            <div style={{ display: 'grid', gap: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Day</label>
+                                    <select
+                                        value={settings.autoOpenWeekday ?? 6}
+                                        onChange={(e) => updateSettings({ autoOpenWeekday: parseInt(e.target.value, 10) })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            color: 'white',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {WEEKDAY_LABELS.map((day, index) => (
+                                            <option key={day} value={index}>{day}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Time (Belarus)</label>
+                                    <input
+                                        type="time"
+                                        value={settings.autoOpenTime || '16:00'}
+                                        onChange={(e) => updateSettings({ autoOpenTime: e.target.value })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            color: 'white'
+                                        }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Window (hours)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={168}
+                                        value={settings.autoOpenDurationHours ?? 28}
+                                        onChange={(e) => updateSettings({ autoOpenDurationHours: parseInt(e.target.value, 10) || 28 })}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            background: '#374151',
+                                            border: '1px solid #4b5563',
+                                            color: 'white'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <p style={{ marginTop: '10px', fontSize: '13px', color: '#6b7280' }}>
+                                Schedule window: {autoWindowDisplay.openDay} {autoWindowDisplay.openTime} - {autoWindowDisplay.closeDay} {autoWindowDisplay.closeTime} (Belarus).
                             </p>
                         </div>
 
@@ -607,7 +910,7 @@ export default function ManagerPanel() {
                                 ? <span style={{ color: 'var(--error)' }}>CLOSED (Forced)</span>
                                 : settings.forceShowNextWeek
                                     ? <span style={{ color: 'var(--success)' }}>OPEN (Forced)</span>
-                                    : <span>Auto: Sat 4PM - Mon 9AM</span>}
+                                    : <span>Auto: {autoWindowDisplay.openDay} {autoWindowDisplay.openTime} - {autoWindowDisplay.closeDay} {autoWindowDisplay.closeTime}</span>}
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
@@ -676,6 +979,137 @@ export default function ManagerPanel() {
                     </div>
                 </div>
             </div>
+
+            <section>
+                <div className="glass-panel" style={{ padding: '20px', borderRadius: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+                        <h3 style={{ margin: 0 }}>VIP Recurring Bookings ({vipRules.length})</h3>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.vipAutoEnabled !== false}
+                                    onChange={async (event) => {
+                                        const enabled = event.target.checked;
+                                        await updateSettings({ vipAutoEnabled: enabled });
+                                    }}
+                                />
+                                Auto-apply every week
+                            </label>
+                            <button
+                                onClick={handleApplyVipForNextWeek}
+                                className="primary-button"
+                                disabled={applyingVipRules}
+                                style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                            >
+                                {applyingVipRules ? 'Applying...' : 'Apply VIP for Next Week'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                        Status: {settings.vipAutoEnabled !== false ? 'Auto mode ON' : 'Auto mode OFF'} · Last applied week: {settings.vipLastAppliedWeekId || 'Not yet'}
+                    </div>
+
+                    {vipApplyStatus && (
+                        <div className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', marginBottom: '12px', border: '1px solid rgba(16,185,129,0.35)' }}>
+                            {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply complete for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Overridden: {vipApplyStatus.overridden}, Skipped: {vipApplyStatus.skipped}.
+                        </div>
+                    )}
+
+                    <div style={{ marginBottom: '10px' }}>
+                        <input
+                            type="text"
+                            placeholder="Search student by name or room"
+                            value={vipStudentSearch}
+                            onChange={(event) => setVipStudentSearch(event.target.value)}
+                            className="glass-button"
+                            style={{ width: '100%', padding: '10px', borderRadius: '8px' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: '14px' }}>
+                        <select
+                            value={vipForm.studentId}
+                            onChange={(event) => setVipForm((current) => ({ ...current, studentId: event.target.value }))}
+                            className="glass-button"
+                            style={{ padding: '10px', borderRadius: '8px' }}
+                        >
+                            <option value="">Select Student</option>
+                            {filteredVipStudents.map((student) => (
+                                <option key={student.id} value={student.id}>{student.name} (Room {student.roomNumber})</option>
+                            ))}
+                        </select>
+
+                        <select
+                            value={vipForm.machineId}
+                            onChange={(event) => setVipForm((current) => ({ ...current, machineId: event.target.value }))}
+                            className="glass-button"
+                            style={{ padding: '10px', borderRadius: '8px' }}
+                        >
+                            <option value="">Select Machine</option>
+                            {machines.map((machine) => (
+                                <option key={machine.id} value={machine.id}>{machine.name}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            value={vipForm.weekday}
+                            onChange={(event) => setVipForm((current) => ({ ...current, weekday: Number(event.target.value) }))}
+                            className="glass-button"
+                            style={{ padding: '10px', borderRadius: '8px' }}
+                        >
+                            {WEEKDAY_LABELS.map((day, index) => (
+                                <option key={day} value={index}>{day}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            value={vipForm.startTime}
+                            onChange={(event) => setVipForm((current) => ({ ...current, startTime: event.target.value }))}
+                            className="glass-button"
+                            style={{ padding: '10px', borderRadius: '8px' }}
+                        >
+                            {TIME_SLOTS.map((slot) => (
+                                <option key={slot} value={slot}>{slot}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <button onClick={handleAddVipRule} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px' }}>
+                        {addingVipRule ? 'Adding VIP...' : 'Add VIP Rule'}
+                    </button>
+
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                        {vipRules.map((rule) => {
+                            const student = students.find((resident) => resident.id === rule.studentId);
+                            const machine = machines.find((washer) => washer.id === rule.machineId);
+
+                            return (
+                                <div key={rule.id} className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <div style={{ fontSize: '14px' }}>
+                                        <strong>{student?.name || 'Unknown student'}</strong> · {machine?.name || 'Unknown machine'} · {WEEKDAY_LABELS[rule.weekday]} {rule.startTime}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button onClick={() => toggleVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px' }}>
+                                            {rule.isActive ? 'Active' : 'Paused'}
+                                        </button>
+                                        <button onClick={() => handleDeleteVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}>
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {vipRules.length === 0 && (
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                                No VIP rules yet. Add a rule and click "Apply VIP for Next Week".
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
 
 
             {/* Machine Management */}
