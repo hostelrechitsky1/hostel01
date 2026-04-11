@@ -50,42 +50,25 @@ function ScrollToTopOnRouteChange() {
 
   useEffect(() => {
     forceScrollToTop();
-    let userStartedScrolling = false;
+    let cancelled = false;
+    const markUserScroll = () => {
+      cancelled = true;
+    };
 
-    const rafIds = [
-      requestAnimationFrame(() => {
-        if (!userStartedScrolling) {
-          forceScrollToTop();
-        }
-      }),
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!userStartedScrolling) {
-            forceScrollToTop();
-          }
-        });
-      })
-    ];
-
-    const timeoutIds = [60, 180, 320, 520].map((delay) => {
-      return window.setTimeout(() => {
-        if (!userStartedScrolling) {
-          forceScrollToTop();
-        }
-      }, delay);
-    });
-
-    const visualViewport = window.visualViewport;
-    const handleViewportShift = () => {
-      if (!userStartedScrolling) {
+    const safeForceScrollToTop = () => {
+      if (!cancelled) {
         forceScrollToTop();
       }
     };
-    const markUserScroll = () => {
-      userStartedScrolling = true;
-    };
 
-    visualViewport?.addEventListener('resize', handleViewportShift);
+    const rafIds = [
+      requestAnimationFrame(safeForceScrollToTop),
+      requestAnimationFrame(() => requestAnimationFrame(safeForceScrollToTop)),
+    ];
+    const timeoutIds = [120, 240].map((delay) => (
+      window.setTimeout(safeForceScrollToTop, delay)
+    ));
+
     window.addEventListener('scroll', markUserScroll, { passive: true });
     window.addEventListener('touchstart', markUserScroll, { passive: true });
     window.addEventListener('wheel', markUserScroll, { passive: true });
@@ -93,7 +76,6 @@ function ScrollToTopOnRouteChange() {
     return () => {
       rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
       timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
-      visualViewport?.removeEventListener('resize', handleViewportShift);
       window.removeEventListener('scroll', markUserScroll);
       window.removeEventListener('touchstart', markUserScroll);
       window.removeEventListener('wheel', markUserScroll);

@@ -273,9 +273,9 @@ export default function Dashboard() {
         if (typeof window === 'undefined') return;
         if (window.sessionStorage.getItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY) !== '1') return;
 
-        let userStartedScrolling = false;
+        let cancelled = false;
         const forceScrollToTop = () => {
-            if (userStartedScrolling) return;
+            if (cancelled) return;
             const scrollingElement = document.scrollingElement ?? document.documentElement;
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
             scrollingElement.scrollTop = 0;
@@ -283,7 +283,7 @@ export default function Dashboard() {
             document.body.scrollTop = 0;
         };
         const markUserScroll = () => {
-            userStartedScrolling = true;
+            cancelled = true;
             window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
         };
 
@@ -293,17 +293,14 @@ export default function Dashboard() {
             requestAnimationFrame(forceScrollToTop),
             requestAnimationFrame(() => requestAnimationFrame(forceScrollToTop)),
         ];
-        const timeoutIds = [80, 180, 320, 520, 760].map((delay) => (
+        const timeoutIds = [120, 240].map((delay) => (
             window.setTimeout(forceScrollToTop, delay)
         ));
-        const viewport = window.visualViewport;
-        const handleViewportShift = () => forceScrollToTop();
         const finish = window.setTimeout(() => {
             forceScrollToTop();
             window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
-        }, 900);
+        }, 320);
 
-        viewport?.addEventListener('resize', handleViewportShift);
         window.addEventListener('scroll', markUserScroll, { passive: true });
         window.addEventListener('touchstart', markUserScroll, { passive: true });
         window.addEventListener('wheel', markUserScroll, { passive: true });
@@ -312,7 +309,6 @@ export default function Dashboard() {
             rafIds.forEach((rafId) => cancelAnimationFrame(rafId));
             timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
             window.clearTimeout(finish);
-            viewport?.removeEventListener('resize', handleViewportShift);
             window.removeEventListener('scroll', markUserScroll);
             window.removeEventListener('touchstart', markUserScroll);
             window.removeEventListener('wheel', markUserScroll);

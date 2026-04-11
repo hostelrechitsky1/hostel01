@@ -33,6 +33,12 @@ html {
   min-height: 100%;
 }
 
+html.resident-login-route,
+body.resident-login-route {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: var(--font-family);
@@ -673,8 +679,12 @@ html[data-theme="light"] #root {
 /* Login Split Layout */
 .login-split {
   display: flex;
+  height: var(--resident-login-vh, 100dvh);
   min-height: 100vh;
+  min-height: var(--resident-login-vh, 100dvh);
   flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .login-left {
@@ -684,6 +694,10 @@ html[data-theme="light"] #root {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .login-right {
@@ -693,6 +707,7 @@ html[data-theme="light"] #root {
   align-items: center;
   justify-content: center;
   padding: 24px;
+  min-height: 0;
 }
 
 @media (min-width: 768px) {
