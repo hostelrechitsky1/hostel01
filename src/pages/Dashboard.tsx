@@ -1343,24 +1343,24 @@ export default function Dashboard() {
                         background: isSystemClosed
                             ? 'var(--error)'
                             : hasBookedForNextWeek
-                                ? 'var(--resident-ready-green-soft)'
+                                ? 'var(--resident-ready-green)'
                                 : 'var(--primary)',
                         boxShadow: isSystemClosed
                             ? '0 0 15px rgba(239, 68, 68, 0.3)'
                             : hasBookedForNextWeek
-                                ? 'none'
+                                ? '0 10px 24px rgba(16, 185, 129, 0.26)'
                                 : '0 0 15px var(--primary-glow)',
                         fontSize: '14px',
                         fontWeight: 600,
                         border: isSystemClosed
                             ? 'none'
                             : hasBookedForNextWeek
-                                ? '1px solid var(--resident-ready-green-border)'
+                                ? '1px solid var(--resident-ready-green)'
                                 : 'none',
                         color: isSystemClosed
                             ? 'white'
                             : hasBookedForNextWeek
-                                ? 'var(--resident-ready-green)'
+                                ? '#ffffff'
                                 : 'white',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
