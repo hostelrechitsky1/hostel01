@@ -92,7 +92,7 @@ export default function Dashboard() {
             switchLanguage: 'English',
             hello: 'Здравствуйте',
             roomLabel: (roomNumber: string) => `Комната ${roomNumber}`,
-            tapAvatarToSwitch: ' • Нажмите на аватар, чтобы сменить жильца',
+            tapAvatarToSwitch: 'Нажмите на аватар, чтобы сменить жильца',
             switchRoommateProfile: 'Сменить профиль жильца',
             currentResidentProfile: 'Текущий профиль жильца',
             bookForRoommate: 'Бронировать для соседа',
@@ -133,7 +133,7 @@ export default function Dashboard() {
             switchLanguage: 'Русский',
             hello: 'Hello',
             roomLabel: (roomNumber: string) => `Room ${roomNumber}`,
-            tapAvatarToSwitch: ' • Tap avatar to switch resident',
+            tapAvatarToSwitch: 'Tap avatar to switch resident',
             switchRoommateProfile: 'Switch roommate profile',
             currentResidentProfile: 'Current resident profile',
             bookForRoommate: 'Book For Roommate',
@@ -973,16 +973,15 @@ export default function Dashboard() {
             )}
 
             {/* Header */}
-            <header style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '32px',
-                marginTop: settings.topAlert?.isActive ? '48px' : '16px', // Push down if alert is visible
-                transition: 'margin-top 0.3s ease',
-                gap: '14px'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+            <header
+                className="resident-header"
+                style={{
+                    marginBottom: '32px',
+                    marginTop: settings.topAlert?.isActive ? '48px' : '16px',
+                    transition: 'margin-top 0.3s ease'
+                }}
+            >
+                <div className="resident-header-main">
                     <div ref={roommateMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
                         <button
                             type="button"
@@ -1149,16 +1148,23 @@ export default function Dashboard() {
                         )}
                     </div>
 
-                    <div style={{ minWidth: 0 }}>
-                        <h2 style={{ margin: 0, fontSize: '24px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="resident-header-copy">
+                        <h2 className="resident-header-title">
                             {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)} 👋
                         </h2>
-                        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)' }}>
-                            {t.roomLabel(user.roomNumber)}{canOpenRoommateMenu ? t.tapAvatarToSwitch : ''}
-                        </p>
+                        <div className="resident-header-meta">
+                            <p className="resident-header-room">
+                                {t.roomLabel(user.roomNumber)}
+                            </p>
+                            {canOpenRoommateMenu && (
+                                <p className="resident-header-switch-hint">
+                                    {t.tapAvatarToSwitch}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <div className="resident-header-actions">
                     <button
                         type="button"
                         onClick={() => {
@@ -1167,7 +1173,15 @@ export default function Dashboard() {
                             setResidentPortalLanguage(nextLanguage);
                         }}
                         className="glass-button"
-                        style={{ padding: '8px 14px', borderRadius: '999px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        style={{
+                            padding: '8px 14px',
+                            borderRadius: '999px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            whiteSpace: 'nowrap'
+                        }}
                     >
                         <Languages size={16} />
                         <span style={{ fontSize: '13px', fontWeight: 600 }}>{t.switchLanguage}</span>
