@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
-import { residentMutationsService } from '../services/residentMutationsService';
 import type { AppSettings, Booking, Machine } from '../types';
 import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
@@ -32,6 +31,18 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 
 const LazyConfetti = lazy(() => import('react-confetti'));
+let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
+let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
+
+const loadResidentLiveService = () => {
+    residentLiveServicePromise ??= import('../services/residentLiveService');
+    return residentLiveServicePromise;
+};
+
+const loadResidentMutationsService = () => {
+    residentMutationsServicePromise ??= import('../services/residentMutationsService');
+    return residentMutationsServicePromise;
+};
 
 const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
@@ -102,6 +113,10 @@ export default function BookingFlow() {
         let isMounted = true;
         let machinesReady = hasCachedMachines;
         let bookingsReady = hasCachedWeekBookings;
+        let unsubscribeMachines = () => { /* noop */ };
+        let unsubscribeBookings = () => { /* noop */ };
+        let liveAttachTimeoutId: number | null = null;
+        let idleHandle: number | null = null;
 
         const finishLoadingIfReady = () => {
             if (isMounted && machinesReady && bookingsReady) {
@@ -121,27 +136,35 @@ export default function BookingFlow() {
 
         finishLoadingIfReady();
 
-        const unsubscribeMachines = residentFirestoreService.subscribeToMachines((nextMachines) => {
-            if (!isMounted) return;
-            machinesReady = true;
-            startTransition(() => {
-                setMachines(nextMachines);
-            });
-            finishLoadingIfReady();
-        }, (error) => {
-            handleBookingLoadError('Machine fetching error:', error);
-        });
+        if (!hasCachedMachines) {
+            void residentFirestoreService.getMachines()
+                .then((nextMachines) => {
+                    if (!isMounted) return;
+                    machinesReady = true;
+                    startTransition(() => {
+                        setMachines(nextMachines);
+                    });
+                    finishLoadingIfReady();
+                })
+                .catch((error) => {
+                    handleBookingLoadError('Machine fetching error:', error);
+                });
+        }
 
-        const unsubscribeBookings = residentFirestoreService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
-            if (!isMounted) return;
-            bookingsReady = true;
-            startTransition(() => {
-                setBookings(nextBookings);
-            });
-            finishLoadingIfReady();
-        }, (error) => {
-            handleBookingLoadError('Booking streaming error:', error);
-        });
+        if (!hasCachedWeekBookings) {
+            void residentFirestoreService.getBookingsForWeekIds(bookingWeekIds)
+                .then((nextBookings) => {
+                    if (!isMounted) return;
+                    bookingsReady = true;
+                    startTransition(() => {
+                        setBookings(nextBookings);
+                    });
+                    finishLoadingIfReady();
+                })
+                .catch((error) => {
+                    handleBookingLoadError('Booking fetch error:', error);
+                });
+        }
 
         void residentFirestoreService.getSettings()
             .then((nextSettings) => {
@@ -155,8 +178,67 @@ export default function BookingFlow() {
                 toast.error('Failed to load booking settings. Using saved defaults.');
             });
 
+        const attachLiveStreams = () => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    unsubscribeMachines = residentLiveService.subscribeToMachines((nextMachines) => {
+                        if (!isMounted) return;
+                        machinesReady = true;
+                        startTransition(() => {
+                            setMachines(nextMachines);
+                        });
+                        finishLoadingIfReady();
+                    }, (error) => {
+                        handleBookingLoadError('Machine streaming error:', error);
+                    });
+
+                    unsubscribeBookings = residentLiveService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
+                        if (!isMounted) return;
+                        bookingsReady = true;
+                        startTransition(() => {
+                            setBookings(nextBookings);
+                        });
+                        finishLoadingIfReady();
+                    }, (error) => {
+                        handleBookingLoadError('Booking streaming error:', error);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident live booking streams', error);
+                });
+        };
+
+        if (typeof window !== 'undefined') {
+            const idleWindow = window as Window & typeof globalThis & {
+                requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (typeof idleWindow.requestIdleCallback === 'function') {
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    attachLiveStreams();
+                }, { timeout: 1200 });
+            } else {
+                liveAttachTimeoutId = window.setTimeout(attachLiveStreams, 280);
+            }
+        } else {
+            attachLiveStreams();
+        }
+
         return () => {
             isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
+            }
+            if (idleHandle !== null) {
+                const idleWindow = window as Window & typeof globalThis & {
+                    cancelIdleCallback?: (handle: number) => void;
+                };
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
             unsubscribeBookings();
             unsubscribeMachines();
         };
@@ -290,6 +372,7 @@ export default function BookingFlow() {
         };
 
         try {
+            const { residentMutationsService } = await loadResidentMutationsService();
             const result = await residentMutationsService.createBooking(bookingData);
             if (result.success) {
                 const createdSlotId = `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`;
@@ -719,6 +802,7 @@ export default function BookingFlow() {
                                                     disabled={isBooked}
                                                     onClick={() => {
                                                         if (!isBooked) {
+                                                            void loadResidentMutationsService();
                                                             hapticSoftPulse();
                                                             setSelectedMachine(m);
                                                             setShowConfirmModal(true);

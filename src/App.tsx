@@ -1,10 +1,11 @@
-import { Suspense, useEffect, useLayoutEffect } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { PrivateRoute } from './components/PrivateRoute';
 import { RouteFallback } from './components/RouteFallback';
 import { bookingService } from './services/bookingService';
 import { lazyRoute } from './utils/lazyRoute';
+import { shouldShowResidentPerfDebug } from './utils/performance';
 import { preloadManagerRoutes, preloadResidentRoutes } from './utils/preloadRoutes';
 
 const LoginScreen = lazyRoute(() => import('./pages/LoginScreen'));
@@ -16,6 +17,9 @@ const PrintSchedule = lazyRoute(() => import('./pages/PrintSchedule'));
 const PrintCredentials = lazyRoute(() => import('./pages/PrintCredentials'));
 const HostelAdminLogin = lazyRoute(() => import('./pages/HostelAdminLogin'));
 const HostelAdminDashboard = lazyRoute(() => import('./pages/HostelAdminDashboard'));
+const LazyResidentPerfDebug = lazy(() =>
+  import('./components/ResidentPerfDebug').then((module) => ({ default: module.ResidentPerfDebug }))
+);
 
 function ScrollToTopOnRouteChange() {
   const { pathname, key } = useLocation();
@@ -167,12 +171,28 @@ function AnimatedRoutes() {
   );
 }
 
+function PerfDebugGate() {
+  const location = useLocation();
+  const shouldRender = useMemo(() => shouldShowResidentPerfDebug(), [location.search]);
+
+  if (!shouldRender) {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <LazyResidentPerfDebug />
+    </Suspense>
+  );
+}
+
 function App() {
   return (
     <Router>
       <ScrollToTopOnRouteChange />
       <RouteWarmup />
       <AnimatedRoutes />
+      <PerfDebugGate />
       <Toaster
         position="top-center"
         richColors

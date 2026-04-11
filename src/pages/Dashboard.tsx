@@ -19,6 +19,12 @@ import { finishResidentPerfSpan } from '../utils/performance';
 const RECENT_BOOKINGS_LIMIT = 12;
 const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
 const LazyDashboardBookingSummary = lazy(() => import('../components/DashboardBookingSummary'));
+let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
+
+const loadResidentLiveService = () => {
+    residentLiveServicePromise ??= import('../services/residentLiveService');
+    return residentLiveServicePromise;
+};
 
 const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
@@ -214,6 +220,12 @@ export default function Dashboard() {
         let isMounted = true;
         let machinesReady = hasCachedMachines;
         let weekBookingsReady = hasCachedWeekBookings;
+        let recentBookingsReady = hasCachedRecentBookings;
+        let unsubscribeMachines = () => { /* noop */ };
+        let unsubscribeWeekBookings = () => { /* noop */ };
+        let unsubscribeRecentBookings = () => { /* noop */ };
+        let liveAttachTimeoutId: number | null = null;
+        let idleHandle: number | null = null;
 
         const finishLoadingIfReady = () => {
             if (isMounted && machinesReady && weekBookingsReady) {
@@ -233,39 +245,55 @@ export default function Dashboard() {
 
         finishLoadingIfReady();
 
-        const unsubscribeMachines = residentFirestoreService.subscribeToMachines((nextMachines) => {
-            if (!isMounted) return;
-            machinesReady = true;
-            startTransition(() => {
-                setMachines(nextMachines);
-            });
-            finishLoadingIfReady();
-        }, (error) => {
-            handleResidentDataError('Dashboard machines subscription error:', error);
-        });
+        if (!hasCachedMachines) {
+            void residentFirestoreService.getMachines()
+                .then((nextMachines) => {
+                    if (!isMounted) return;
+                    machinesReady = true;
+                    startTransition(() => {
+                        setMachines(nextMachines);
+                    });
+                    finishLoadingIfReady();
+                })
+                .catch((error) => {
+                    handleResidentDataError('Dashboard machines fetch error:', error);
+                });
+        }
 
-        const unsubscribeWeekBookings = residentFirestoreService.subscribeToBookingsForWeekIds(dashboardWeekIds, (nextBookings) => {
-            if (!isMounted) return;
-            weekBookingsReady = true;
-            startTransition(() => {
-                setWeekBookings(nextBookings);
-            });
-            finishLoadingIfReady();
-        }, (error) => {
-            handleResidentDataError('Dashboard week bookings subscription error:', error);
-        });
+        if (!hasCachedWeekBookings) {
+            void residentFirestoreService.getBookingsForWeekIds(dashboardWeekIds)
+                .then((nextBookings) => {
+                    if (!isMounted) return;
+                    weekBookingsReady = true;
+                    startTransition(() => {
+                        setWeekBookings(nextBookings);
+                    });
+                    finishLoadingIfReady();
+                })
+                .catch((error) => {
+                    handleResidentDataError('Dashboard week bookings fetch error:', error);
+                });
+        }
 
-        const unsubscribeRecentBookings = residentFirestoreService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
-            if (!isMounted) return;
+        if (!hasCachedRecentBookings) {
+            void residentFirestoreService.getRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT)
+                .then((nextBookings) => {
+                    if (!isMounted) return;
+                    recentBookingsReady = true;
+                    setRecentBookingsLoading(false);
+                    startTransition(() => {
+                        setRecentBookings(nextBookings);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Dashboard student bookings fetch error:', error);
+                    if (!isMounted) return;
+                    recentBookingsReady = true;
+                    setRecentBookingsLoading(false);
+                });
+        } else if (recentBookingsReady) {
             setRecentBookingsLoading(false);
-            startTransition(() => {
-                setRecentBookings(nextBookings);
-            });
-        }, (error) => {
-            console.error('Dashboard student bookings subscription error:', error);
-            if (!isMounted) return;
-            setRecentBookingsLoading(false);
-        });
+        }
 
         void residentFirestoreService.getSettings()
             .then((fetchedSettings) => {
@@ -295,13 +323,92 @@ export default function Dashboard() {
                 }
             });
 
+        const attachLiveStreams = () => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    unsubscribeMachines = residentLiveService.subscribeToMachines((nextMachines) => {
+                        if (!isMounted) return;
+                        machinesReady = true;
+                        startTransition(() => {
+                            setMachines(nextMachines);
+                        });
+                        finishLoadingIfReady();
+                    }, (error) => {
+                        handleResidentDataError('Dashboard machines subscription error:', error);
+                    });
+
+                    unsubscribeWeekBookings = residentLiveService.subscribeToBookingsForWeekIds(dashboardWeekIds, (nextBookings) => {
+                        if (!isMounted) return;
+                        weekBookingsReady = true;
+                        startTransition(() => {
+                            setWeekBookings(nextBookings);
+                        });
+                        finishLoadingIfReady();
+                    }, (error) => {
+                        handleResidentDataError('Dashboard week bookings subscription error:', error);
+                    });
+
+                    unsubscribeRecentBookings = residentLiveService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
+                        if (!isMounted) return;
+                        recentBookingsReady = true;
+                        setRecentBookingsLoading(false);
+                        startTransition(() => {
+                            setRecentBookings(nextBookings);
+                        });
+                    }, (error) => {
+                        console.error('Dashboard student bookings subscription error:', error);
+                        if (!isMounted) return;
+                        recentBookingsReady = true;
+                        setRecentBookingsLoading(false);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident live dashboard streams', error);
+                });
+        };
+
+        const scheduleLiveStreams = () => {
+            if (typeof window === 'undefined') {
+                attachLiveStreams();
+                return;
+            }
+
+            const idleWindow = window as Window & typeof globalThis & {
+                requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (typeof idleWindow.requestIdleCallback === 'function') {
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    attachLiveStreams();
+                }, { timeout: 1200 });
+                return;
+            }
+
+            liveAttachTimeoutId = window.setTimeout(attachLiveStreams, 280);
+        };
+
+        scheduleLiveStreams();
+
         return () => {
             isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
+            }
+            if (idleHandle !== null) {
+                const idleWindow = window as Window & typeof globalThis & {
+                    cancelIdleCallback?: (handle: number) => void;
+                };
+                idleWindow.cancelIdleCallback?.(idleHandle);
+            }
             unsubscribeMachines();
             unsubscribeWeekBookings();
             unsubscribeRecentBookings();
         };
-    }, [dashboardWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
+    }, [dashboardWeekIds, hasCachedMachines, hasCachedRecentBookings, hasCachedWeekBookings, navigate, reloadKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 

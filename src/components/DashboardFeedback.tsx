@@ -8,10 +8,21 @@ import {
 import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
 import { residentFirestoreService } from '../services/residentFirestoreService';
-import { residentMutationsService } from '../services/residentMutationsService';
 import type { Feedback, FeedbackType } from '../types';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
+let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
+let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
+
+const loadResidentLiveService = () => {
+    residentLiveServicePromise ??= import('../services/residentLiveService');
+    return residentLiveServicePromise;
+};
+
+const loadResidentMutationsService = () => {
+    residentMutationsServicePromise ??= import('../services/residentMutationsService');
+    return residentMutationsServicePromise;
+};
 
 const inferFeedbackType = (text: string): FeedbackType => {
     const normalized = text.trim().toLowerCase();
@@ -54,16 +65,52 @@ export default function DashboardFeedback() {
     useEffect(() => {
         if (!user) return;
 
-        return residentFirestoreService.subscribeToFeedbacksForResident(
-            user.id ?? '',
-            user.name,
-            user.roomNumber,
-            FEEDBACK_HISTORY_LIMIT,
-            setFeedbacks,
-            (error) => {
-                console.error('Failed to subscribe to resident feedback', error);
+        let isMounted = true;
+        let unsubscribeFeedbacks = () => { /* noop */ };
+        let liveAttachTimeoutId: number | null = null;
+
+        if (!cachedFeedbacks) {
+            void residentFirestoreService.getFeedbacksForResident(
+                user.id ?? '',
+                user.name,
+                user.roomNumber,
+                FEEDBACK_HISTORY_LIMIT
+            ).then((nextFeedbacks) => {
+                if (!isMounted) return;
+                setFeedbacks(nextFeedbacks);
+            }).catch((error) => {
+                console.error('Failed to fetch resident feedback', error);
+            });
+        }
+
+        liveAttachTimeoutId = window.setTimeout(() => {
+            void loadResidentLiveService()
+                .then(({ residentLiveService }) => {
+                    if (!isMounted) return;
+
+                    unsubscribeFeedbacks = residentLiveService.subscribeToFeedbacksForResident(
+                        user.id ?? '',
+                        user.name,
+                        user.roomNumber,
+                        FEEDBACK_HISTORY_LIMIT,
+                        setFeedbacks,
+                        (error) => {
+                            console.error('Failed to subscribe to resident feedback', error);
+                        }
+                    );
+                })
+                .catch((error) => {
+                    console.error('Failed to attach resident feedback live stream', error);
+                });
+        }, 260);
+
+        return () => {
+            isMounted = false;
+            if (liveAttachTimeoutId !== null) {
+                window.clearTimeout(liveAttachTimeoutId);
             }
-        );
+            unsubscribeFeedbacks();
+        };
     }, [user?.id, user?.name, user?.roomNumber]);
 
     const handleSubmit = async () => {
@@ -73,6 +120,7 @@ export default function DashboardFeedback() {
         setLoading(true);
 
         try {
+            const { residentMutationsService } = await loadResidentMutationsService();
             await residentMutationsService.addFeedback({
                 id: Date.now().toString(),
                 studentId: user.id,

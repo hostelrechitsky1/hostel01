@@ -20,6 +20,8 @@ vi.mock('../../services/residentFirestoreService', () => ({
         getCachedMachines: vi.fn(() => undefined),
         getCachedBookingsForWeekIds: vi.fn(() => undefined),
         getCachedSettings: vi.fn(() => undefined),
+        getMachines: vi.fn(() => Promise.resolve([])),
+        getBookingsForWeekIds: vi.fn(() => Promise.resolve([])),
         getSettings: vi.fn(() => Promise.resolve({
             forceShowNextWeek: false,
             forceCloseBookings: false,
@@ -31,6 +33,11 @@ vi.mock('../../services/residentFirestoreService', () => ({
             vipLastAppliedWeekId: '',
             topAlert: { message: '', isActive: false, type: 'info' }
         })),
+    }
+}));
+
+vi.mock('../../services/residentLiveService', () => ({
+    residentLiveService: {
         subscribeToMachines: vi.fn(() => () => {}),
         subscribeToBookingsForWeekIds: vi.fn(() => () => {}),
     }

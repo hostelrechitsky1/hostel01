@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { format, addMinutes, parseISO } from 'date-fns';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer } from 'lucide-react';
-import { residentMutationsService } from '../services/residentMutationsService';
 import type { AppSettings, Booking, Machine, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { addBelarusDays, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday } from '../utils/time';
@@ -18,6 +17,13 @@ interface DashboardBookingSummaryProps {
     isNextWeekOpen: boolean;
     onBookingCreated: (booking: Booking) => void;
 }
+
+let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
+
+const loadResidentMutationsService = () => {
+    residentMutationsServicePromise ??= import('../services/residentMutationsService');
+    return residentMutationsServicePromise;
+};
 
 export default function DashboardBookingSummary({
     user,
@@ -63,6 +69,7 @@ export default function DashboardBookingSummary({
     };
 
     const handleQuickBookFromHistory = (booking: Booking) => {
+        void loadResidentMutationsService();
         setQuickBookModalBooking(booking);
         setQuickBookModalMessage(null);
     };
@@ -131,6 +138,7 @@ export default function DashboardBookingSummary({
         };
 
         try {
+            const { residentMutationsService } = await loadResidentMutationsService();
             const result = await residentMutationsService.createBooking(bookingData);
             if (!result.success) {
                 const detailedError = result.error?.includes('Slot already booked by another student')

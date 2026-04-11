@@ -82,6 +82,40 @@ export const recordResidentPerfMetric = (name: string, duration: number, meta?: 
     return metric;
 };
 
+export const getResidentPerfMetrics = () => {
+    return readJson<ResidentPerfMetric[]>(METRICS_KEY, []);
+};
+
+export const shouldShowResidentPerfDebug = () => {
+    if (typeof window === 'undefined') return false;
+
+    try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('perf') === '1') {
+            window.localStorage.setItem('hostel_perf_debug', '1');
+            return true;
+        }
+
+        return window.localStorage.getItem('hostel_perf_debug') === '1';
+    } catch {
+        return false;
+    }
+};
+
+export const setResidentPerfDebug = (enabled: boolean) => {
+    if (typeof window === 'undefined') return;
+
+    try {
+        if (enabled) {
+            window.localStorage.setItem('hostel_perf_debug', '1');
+        } else {
+            window.localStorage.removeItem('hostel_perf_debug');
+        }
+    } catch {
+        // Ignore debug preference persistence issues.
+    }
+};
+
 export const startResidentPerfSpan = (name: string) => {
     if (!canUseBrowserPerf()) return;
 

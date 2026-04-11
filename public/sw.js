@@ -1,4 +1,4 @@
-const VERSION = 'v4'
+const VERSION = 'v5'
 const STATIC_CACHE = `app-static-${VERSION}`
 const DOCUMENT_CACHE = `app-documents-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
@@ -62,6 +62,32 @@ const staleWhileRevalidate = async (request, cacheName) => {
   return cached || networkFetch
 }
 
+const cacheFirstWithRefresh = async (request, cacheName) => {
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
+
+  const refreshRequest = fetch(request)
+    .then((response) => {
+      if (response.ok || response.type === 'opaque') {
+        void cache.put(request, response.clone())
+      }
+      return response
+    })
+    .catch(() => undefined)
+
+  if (cached) {
+    void refreshRequest
+    return cached
+  }
+
+  const networkResponse = await refreshRequest
+  if (networkResponse) {
+    return networkResponse
+  }
+
+  throw new Error('offline')
+}
+
 const networkFirstDocument = async (request) => {
   const cache = await caches.open(DOCUMENT_CACHE)
 
@@ -94,7 +120,7 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(request.url)
 
   if (isBannerImageRequest(requestUrl, request.destination)) {
-    event.respondWith(staleWhileRevalidate(request, BANNER_CACHE))
+    event.respondWith(cacheFirstWithRefresh(request, BANNER_CACHE))
     return
   }
 

@@ -1,7 +1,7 @@
 import { db } from '../firebase';
 import { doc, runTransaction, setDoc } from 'firebase/firestore';
 import type { Booking, Feedback } from '../types';
-import { clearResidentCacheByPrefix } from './residentFirestoreService';
+import { clearResidentCacheByPrefix } from './residentCache';
 
 const BOOKINGS_COL = 'bookings';
 const BOOKING_LIMITS_COL = 'bookingLimits';

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { bookingService } from '../services/bookingService';
-import { residentMutationsService } from '../services/residentMutationsService';
 import { X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -8,6 +7,13 @@ interface FeedbackModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
+
+let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
+
+const loadResidentMutationsService = () => {
+    residentMutationsServicePromise ??= import('../services/residentMutationsService');
+    return residentMutationsServicePromise;
+};
 
 export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     const [type, setType] = useState<'bug' | 'feature' | 'other'>('feature');
@@ -21,6 +27,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         const user = bookingService.getCurrentUser();
 
         try {
+            const { residentMutationsService } = await loadResidentMutationsService();
             await residentMutationsService.addFeedback({
                 id: Date.now().toString(),
                 studentId: user?.id,
