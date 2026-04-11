@@ -172,6 +172,7 @@ const normalizeWeekIds = (weekIds: string[]) => Array.from(new Set(weekIds.filte
 
 export const getStudentsRoomCacheKey = (roomNumber: string) => `students:room:${roomNumber.trim().toLowerCase()}`;
 export const getBookingsByWeeksCacheKey = (weekIds: string[]) => `bookings:weeks:${normalizeWeekIds(weekIds).join('|')}`;
+export const getBookingsByDateCacheKey = (date: string) => `bookings:date:${date.trim()}`;
 export const getStudentBookingsCacheKey = (studentId: string, limitCount: number) => `bookings:student:${studentId}:recent:${limitCount}`;
 export const getResidentFeedbacksCacheKey = (studentId: string, studentName: string, roomNumber: string, limitCount: number) => {
     const identity = normalizeFeedbackIdentity(studentId, studentName, roomNumber);

@@ -50,6 +50,11 @@ const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     return [...withoutExisting, nextBooking];
 };
 
+const replaceBookingsForDate = (bookings: Booking[], date: string, nextDateBookings: Booking[]) => {
+    const bookingsForOtherDates = bookings.filter((booking) => booking.date !== date);
+    return [...bookingsForOtherDates, ...nextDateBookings];
+};
+
 export default function BookingFlow() {
     const navigate = useNavigate();
     const user = bookingService.getCurrentUser();
@@ -240,6 +245,7 @@ export default function BookingFlow() {
         let idleHandle: number | null = null;
         let liveAttachTimeoutId: number | null = null;
         const liveSyncReason = liveSyncReasonRef.current;
+        const selectedDateKey = formatBelarusDate(selectedDate);
 
         const attachLiveStreams = () => {
             void loadResidentLiveService()
@@ -257,10 +263,10 @@ export default function BookingFlow() {
                         console.error('Machine streaming error:', error);
                     });
 
-                    unsubscribeBookings = residentLiveService.subscribeToBookingsForWeekIds(bookingWeekIds, (nextBookings) => {
+                    unsubscribeBookings = residentLiveService.subscribeToBookingsForDate(selectedDateKey, (nextBookings) => {
                         if (!isMounted) return;
                         startTransition(() => {
-                            setBookings(nextBookings);
+                            setBookings((currentBookings) => replaceBookingsForDate(currentBookings, selectedDateKey, nextBookings));
                         });
                     }, (error) => {
                         console.error('Booking streaming error:', error);
@@ -305,7 +311,7 @@ export default function BookingFlow() {
             unsubscribeBookings();
             unsubscribeMachines();
         };
-    }, [bookingWeekIds, liveSyncRequested, reloadKey, userId]);
+    }, [liveSyncRequested, reloadKey, selectedDate, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
 

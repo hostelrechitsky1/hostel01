@@ -4,6 +4,7 @@ import type { Booking, Feedback, Machine } from '../types';
 import {
     CACHE_MAX_AGE_MS,
     filterFeedbacksForResident,
+    getBookingsByDateCacheKey,
     getBookingsByWeeksCacheKey,
     getResidentFeedbacksCacheKey,
     getStudentBookingsCacheKey,
@@ -55,6 +56,31 @@ export const residentLiveService = {
             callback(bookings);
         }, (error) => {
             console.error('Error subscribing to week bookings:', error);
+            onError?.(error);
+        });
+    },
+
+    subscribeToBookingsForDate(
+        date: string,
+        callback: (bookings: Booking[]) => void,
+        onError?: (error: unknown) => void
+    ): () => void {
+        const normalizedDate = date.trim();
+        if (!normalizedDate) {
+            callback([]);
+            return () => { /* noop */ };
+        }
+
+        const cacheKey = getBookingsByDateCacheKey(normalizedDate);
+        hydrateResidentCache(cacheKey, CACHE_MAX_AGE_MS.bookingsByWeek, callback);
+
+        const bookingsQuery = query(collection(db, BOOKINGS_COL), where('date', '==', normalizedDate));
+        return onSnapshot(bookingsQuery, (snapshot) => {
+            const bookings = sortBookingsChronologically(snapshot.docs.map((bookingDoc) => bookingDoc.data() as Booking));
+            writeResidentCache(cacheKey, bookings);
+            callback(bookings);
+        }, (error) => {
+            console.error('Error subscribing to date bookings:', error);
             onError?.(error);
         });
     },

@@ -236,16 +236,46 @@ const createExplicitResponsiveSrcSet = (source: BannerImageSource) => {
         .join(', ');
 };
 
-export const normalizeBannerRecord = (banner: Banner): Banner => ({
-    ...banner,
-    imageUrl: normalizeBannerSource(banner.imageUrl),
-    previewImageUrl: normalizeOptionalBannerSource(banner.previewImageUrl),
-    optimizedImageUrl: normalizeOptionalBannerSource(banner.optimizedImageUrl),
-    mobileImageUrl: normalizeOptionalBannerSource(banner.mobileImageUrl),
-    desktopImageUrl: normalizeOptionalBannerSource(banner.desktopImageUrl),
-    responsiveSrcSet: banner.responsiveSrcSet?.trim() || undefined,
-    responsiveSizes: banner.responsiveSizes?.trim() || undefined,
-});
+const createDerivedDriveBannerAssets = (source: string) => {
+    const normalizedSource = normalizeBannerSource(source);
+    if (!isDriveThumbnailBanner(normalizedSource)) {
+        return {};
+    }
+
+    const previewImageUrl = replaceDriveThumbnailWidth(normalizedSource, 240);
+    const mobileImageUrl = replaceDriveThumbnailWidth(normalizedSource, 640);
+    const optimizedImageUrl = replaceDriveThumbnailWidth(normalizedSource, 960);
+    const desktopImageUrl = replaceDriveThumbnailWidth(normalizedSource, 1280);
+
+    return {
+        previewImageUrl,
+        mobileImageUrl,
+        optimizedImageUrl,
+        desktopImageUrl,
+        responsiveSrcSet: [
+            `${mobileImageUrl} 480w`,
+            `${optimizedImageUrl} 960w`,
+            `${desktopImageUrl} 1280w`,
+        ].join(', '),
+        responsiveSizes: '(max-width: 640px) calc(100vw - 32px), (max-width: 960px) 92vw, 720px',
+    };
+};
+
+export const normalizeBannerRecord = (banner: Banner): Banner => {
+    const derivedAssets = createDerivedDriveBannerAssets(banner.imageUrl);
+
+    return {
+        ...banner,
+        ...derivedAssets,
+        imageUrl: normalizeBannerSource(banner.imageUrl),
+        previewImageUrl: normalizeOptionalBannerSource(banner.previewImageUrl) ?? derivedAssets.previewImageUrl,
+        optimizedImageUrl: normalizeOptionalBannerSource(banner.optimizedImageUrl) ?? derivedAssets.optimizedImageUrl,
+        mobileImageUrl: normalizeOptionalBannerSource(banner.mobileImageUrl) ?? derivedAssets.mobileImageUrl,
+        desktopImageUrl: normalizeOptionalBannerSource(banner.desktopImageUrl) ?? derivedAssets.desktopImageUrl,
+        responsiveSrcSet: banner.responsiveSrcSet?.trim() || derivedAssets.responsiveSrcSet || undefined,
+        responsiveSizes: banner.responsiveSizes?.trim() || derivedAssets.responsiveSizes || undefined,
+    };
+};
 
 export const getAdaptiveBannerSrc = (source: string, options?: { priority?: boolean }) => {
     const normalizedSource = normalizeBannerSource(source);

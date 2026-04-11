@@ -1,6 +1,7 @@
 import type { AppSettings, Banner, Booking, Machine } from '../types';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from './residentFirestoreService';
 import {
+    getBookingsByDateCacheKey,
     CACHE_MAX_AGE_MS,
     getBookingsByWeeksCacheKey,
     getStudentBookingsCacheKey,
@@ -179,6 +180,18 @@ const persistResidentSnapshot = ({
     writeResidentCache(residentCacheKeys.settings, snapshot.settings);
     writeResidentCache(residentCacheKeys.machines, snapshot.machines);
     writeResidentCache(getBookingsByWeeksCacheKey(normalizedWeekIds), snapshot.weekBookings);
+    const bookingsByDate = snapshot.weekBookings.reduce<Record<string, Booking[]>>((accumulator, booking) => {
+        if (!accumulator[booking.date]) {
+            accumulator[booking.date] = [];
+        }
+
+        accumulator[booking.date].push(booking);
+        return accumulator;
+    }, {});
+
+    Object.entries(bookingsByDate).forEach(([date, dateBookings]) => {
+        writeResidentCache(getBookingsByDateCacheKey(date), dateBookings);
+    });
 
     if (includeBanners && snapshot.banners) {
         writeResidentCache(residentCacheKeys.banners, snapshot.banners);
