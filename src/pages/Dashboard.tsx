@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
@@ -6,9 +6,7 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
 import { Calendar, LogOut, WashingMachine as Washer, History, Download, AlertCircle, AlertTriangle, Info, Activity, CheckCircle, ArrowRight, ChevronDown, Check } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { format, addMinutes, parse, isAfter, isBefore, parseISO } from 'date-fns';
-import DashboardFeedback from '../components/DashboardFeedback';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
@@ -19,17 +17,7 @@ import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
 
 const RECENT_BOOKINGS_LIMIT = 12;
-const scrollRevealViewport = { once: true, amount: 0.18 };
-const sectionReveal = {
-    initial: { opacity: 0, y: 28, scale: 0.985 },
-    whileInView: { opacity: 1, y: 0, scale: 1 },
-    transition: { duration: 0.56, ease: [0.16, 1, 0.3, 1] }
-} as const;
-const cardReveal = {
-    initial: { opacity: 0, y: 24, scale: 0.97 },
-    whileInView: { opacity: 1, y: 0, scale: 1 },
-    transition: { duration: 0.48, ease: [0.16, 1, 0.3, 1] }
-} as const;
+const LazyDashboardFeedback = lazy(() => import('../components/DashboardFeedback'));
 
 const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
     const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
@@ -89,11 +77,8 @@ export default function Dashboard() {
     const [recentBookings, setRecentBookings] = useState<Booking[]>(() => cachedRecentBookings ?? []);
     const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
     const [bannersLoading, setBannersLoading] = useState(() => cachedBanners === undefined);
-    const [loading, setLoading] = useState(() => Boolean(userId) && (
-        !hasCachedMachines ||
-        !hasCachedWeekBookings ||
-        !hasCachedRecentBookings
-    ));
+    const [loading, setLoading] = useState(() => Boolean(userId) && !hasCachedMachines && !hasCachedWeekBookings);
+    const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && !hasCachedRecentBookings);
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
     const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
     const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -109,12 +94,16 @@ export default function Dashboard() {
         || weekBookings.length > 0
         || recentBookings.length > 0
         || banners.length > 0;
+    const hasCoreResidentSnapshot = hasCachedMachines
+        || hasCachedWeekBookings
+        || machines.length > 0
+        || weekBookings.length > 0;
     const residentLoadSlow = useSlowLoadFlag(loading, 4500);
-    const residentSnapshotRef = useRef(hasResidentSnapshot);
+    const coreResidentSnapshotRef = useRef(hasCoreResidentSnapshot);
 
     useEffect(() => {
-        residentSnapshotRef.current = hasResidentSnapshot;
-    }, [hasResidentSnapshot]);
+        coreResidentSnapshotRef.current = hasCoreResidentSnapshot;
+    }, [hasCoreResidentSnapshot]);
 
     useEffect(() => {
         if (!user?.roomNumber) return;
@@ -171,14 +160,14 @@ export default function Dashboard() {
     }, []);
 
     useEffect(() => {
-        if (!residentLoadSlow || !loading || !hasResidentSnapshot) {
+        if (!residentLoadSlow || !loading || !hasCoreResidentSnapshot) {
             return;
         }
 
         setLoadIssue('saved');
         setLoadErrorMessage('Showing saved dashboard data while live updates reconnect in the background.');
         setLoading(false);
-    }, [hasResidentSnapshot, loading, residentLoadSlow]);
+    }, [hasCoreResidentSnapshot, loading, residentLoadSlow]);
 
     useEffect(() => {
         if (!userId) {
@@ -191,10 +180,9 @@ export default function Dashboard() {
         let isMounted = true;
         let machinesReady = hasCachedMachines;
         let weekBookingsReady = hasCachedWeekBookings;
-        let recentBookingsReady = hasCachedRecentBookings;
 
         const finishLoadingIfReady = () => {
-            if (isMounted && machinesReady && weekBookingsReady && recentBookingsReady) {
+            if (isMounted && machinesReady && weekBookingsReady) {
                 setLoadIssue(null);
                 setLoadErrorMessage(null);
                 setLoading(false);
@@ -205,7 +193,7 @@ export default function Dashboard() {
             console.error(label, error);
             if (!isMounted) return;
             setLoadErrorMessage('We could not refresh the latest dashboard data. Retry to reconnect.');
-            setLoadIssue(residentSnapshotRef.current ? 'saved' : 'error');
+            setLoadIssue(coreResidentSnapshotRef.current ? 'saved' : 'error');
             setLoading(false);
         };
 
@@ -235,13 +223,14 @@ export default function Dashboard() {
 
         const unsubscribeRecentBookings = residentFirestoreService.subscribeToRecentBookingsForStudent(userId, RECENT_BOOKINGS_LIMIT, (nextBookings) => {
             if (!isMounted) return;
-            recentBookingsReady = true;
+            setRecentBookingsLoading(false);
             startTransition(() => {
                 setRecentBookings(nextBookings);
             });
-            finishLoadingIfReady();
         }, (error) => {
-            handleResidentDataError('Dashboard student bookings subscription error:', error);
+            console.error('Dashboard student bookings subscription error:', error);
+            if (!isMounted) return;
+            setRecentBookingsLoading(false);
         });
 
         void residentFirestoreService.getSettings()
@@ -278,7 +267,7 @@ export default function Dashboard() {
             unsubscribeWeekBookings();
             unsubscribeRecentBookings();
         };
-    }, [dashboardWeekIds, hasCachedMachines, hasCachedRecentBookings, hasCachedWeekBookings, navigate, reloadKey, userId]);
+    }, [dashboardWeekIds, hasCachedMachines, hasCachedWeekBookings, navigate, reloadKey, userId]);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -399,7 +388,8 @@ export default function Dashboard() {
             setUser(nextResident);
             setRecentBookings(cachedBookings ?? []);
         });
-        setLoading(cachedBookings === undefined);
+        setLoading(false);
+        setRecentBookingsLoading(cachedBookings === undefined);
         setLoadIssue(null);
         setLoadErrorMessage(null);
         setQuickBookModalBooking(null);
@@ -421,6 +411,7 @@ export default function Dashboard() {
             setLoadErrorMessage(null);
             setLoading(true);
         }
+        setRecentBookingsLoading(true);
         if (!hasResidentSnapshot) {
             setBannersLoading(banners.length === 0);
         }
@@ -559,8 +550,8 @@ export default function Dashboard() {
     };
 
 
-    const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasResidentSnapshot)
-        || (!loading && loadIssue === 'error' && !hasResidentSnapshot);
+    const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasCoreResidentSnapshot)
+        || (!loading && loadIssue === 'error' && !hasCoreResidentSnapshot);
 
     if (loading && !showBlockingDashboardNotice) {
         return (
@@ -603,6 +594,44 @@ export default function Dashboard() {
         : null;
     const quickBookMachineLabel = quickBookMachine?.name || `Machine ${quickBookModalBooking?.machineId || ''}`;
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
+    const feedbackFallback = (
+        <div className="glass-panel" style={{ marginTop: '40px', padding: '18px', borderRadius: '18px', opacity: 0.78 }}>
+            <div style={{ height: '18px', width: '120px', borderRadius: '999px', background: 'var(--glass-border)', marginBottom: '14px' }} className="skeleton-pulse"></div>
+            <div style={{ height: '48px', width: '100%', borderRadius: '14px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+        </div>
+    );
+    const bookingSectionSkeleton = (
+        <div
+            className="glass-panel"
+            style={{
+                padding: '20px',
+                borderRadius: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px'
+            }}
+        >
+            <div style={{ height: '18px', width: '44%', borderRadius: '999px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+            <div style={{ height: '52px', width: '100%', borderRadius: '16px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ height: '44px', flex: 1, minWidth: '140px', borderRadius: '14px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+                <div style={{ height: '44px', flex: 1, minWidth: '140px', borderRadius: '14px', background: 'var(--glass-border)' }} className="skeleton-pulse"></div>
+            </div>
+        </div>
+    );
+    const historySectionSkeleton = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[1, 2].map((item) => (
+                <div
+                    key={item}
+                    className="glass-panel"
+                    style={{ height: '98px', borderRadius: '16px', background: 'var(--glass-border)' }}
+                >
+                    <div className="skeleton-pulse" style={{ width: '100%', height: '100%', borderRadius: '16px' }}></div>
+                </div>
+            ))}
+        </div>
+    );
 
     return (
         <div className="container animate-fade-in">
@@ -715,27 +744,22 @@ export default function Dashboard() {
                             )}
                         </button>
 
-                        <AnimatePresence>
-                            {isRoommateMenuOpen && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.96 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                                    className="glass-panel"
-                                    style={{
-                                        position: 'absolute',
-                                        top: 'calc(100% + 12px)',
-                                        left: 0,
-                                        width: 'min(320px, calc(100vw - 40px))',
-                                        borderRadius: '20px',
-                                        padding: '14px',
-                                        zIndex: 120,
-                                        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.92) 100%)',
-                                        border: '1px solid rgba(196, 181, 253, 0.14)',
-                                        boxShadow: '0 20px 40px rgba(2, 6, 23, 0.32)'
-                                    }}
-                                >
+                        {isRoommateMenuOpen && (
+                            <div
+                                className="glass-panel animate-fade-in"
+                                style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 12px)',
+                                    left: 0,
+                                    width: 'min(320px, calc(100vw - 40px))',
+                                    borderRadius: '20px',
+                                    padding: '14px',
+                                    zIndex: 120,
+                                    background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(30, 41, 59, 0.92) 100%)',
+                                    border: '1px solid rgba(196, 181, 253, 0.14)',
+                                    boxShadow: '0 20px 40px rgba(2, 6, 23, 0.32)'
+                                }}
+                            >
                                     <div style={{ marginBottom: '10px' }}>
                                         <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>Book For Roommate</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
@@ -823,9 +847,8 @@ export default function Dashboard() {
                                             </div>
                                         )}
                                     </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                            </div>
+                        )}
                     </div>
 
                     <div style={{ minWidth: 0 }}>
@@ -859,18 +882,13 @@ export default function Dashboard() {
             )}
 
             {/* Announcements Carousel */}
-            <motion.div
-                {...sectionReveal}
-                viewport={scrollRevealViewport}
-            >
+            <div className="animate-fade-in">
                 <BannerCarousel banners={banners} isLoading={bannersLoading} />
-            </motion.div>
+            </div>
 
             {/* Main Action */}
-            <motion.div
-                className="glass-panel main-action-layout"
-                {...sectionReveal}
-                viewport={scrollRevealViewport}
+            <div
+                className="glass-panel main-action-layout animate-fade-in"
                 style={{
                     padding: '20px 24px',
                     borderRadius: '16px',
@@ -907,14 +925,11 @@ export default function Dashboard() {
                 >
                     {mainActionLabel}
                 </button>
-            </motion.div>
+            </div>
 
 
             {/* Machine Status - Live View */}
-            <motion.section
-                {...sectionReveal}
-                viewport={scrollRevealViewport}
-            >
+            <section className="animate-fade-in">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Status
@@ -1001,19 +1016,16 @@ export default function Dashboard() {
                     {machines.map((machine, index) => {
                         const status = getMachineRealTimeStatus(machine);
                         return (
-                            <motion.div
+                            <div
                                 key={machine.id}
-                                className="glass-panel"
-                                initial={cardReveal.initial}
-                                whileInView={cardReveal.whileInView}
-                                viewport={scrollRevealViewport}
-                                transition={{ ...cardReveal.transition, delay: Math.min(index * 0.06, 0.18) }}
+                                className="glass-panel animate-fade-in"
                                 style={{
                                     padding: '16px',
                                     borderRadius: '16px',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    gap: '12px'
+                                    gap: '12px',
+                                    animationDelay: `${Math.min(index * 0.06, 0.18)}s`
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1040,22 +1052,20 @@ export default function Dashboard() {
                                         {status.state === 'available' ? 'Ready' : status.state === 'occupied' ? 'Finishes soon' : 'Closed'}
                                     </p>
                                 </div>
-                            </motion.div>
+                            </div>
                         );
                     })}
                 </div>
-            </motion.section>
+            </section>
 
             {/* Your Bookings */}
-            <motion.div
-                {...sectionReveal}
-                viewport={scrollRevealViewport}
-                style={{ marginTop: '32px' }}
-            >
+            <div className="animate-fade-in" style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={20} /> Your Upcoming Booking
                 </h3>
-                {primaryUpcomingBooking ? (
+                {recentBookingsLoading && recentBookings.length === 0 ? (
+                    bookingSectionSkeleton
+                ) : primaryUpcomingBooking ? (
                     <div
                         className="glass-panel"
                         style={{
@@ -1283,131 +1293,128 @@ export default function Dashboard() {
                     </div>
                 )
                 }
-            </motion.div>
+            </div>
 
             {/* History */}
             {
-                history.length > 0 && (
-                    <motion.div
-                        {...sectionReveal}
-                        viewport={scrollRevealViewport}
-                        style={{ marginTop: '32px' }}
-                    >
+                (recentBookingsLoading || history.length > 0) && (
+                    <div className="animate-fade-in" style={{ marginTop: '32px' }}>
                         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <History size={20} /> Past Bookings
                         </h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {history.slice(0, 3).map((booking, index) => {
-                                const machine = machines.find((m) => m.id === booking.machineId);
-                                const machineLabel = machine?.name || `Machine ${booking.machineId}`;
-                                return (
-                                    <motion.div
-                                        key={booking.id}
-                                        className="glass-panel hover-card"
-                                        initial={cardReveal.initial}
-                                        whileInView={cardReveal.whileInView}
-                                        viewport={scrollRevealViewport}
-                                        transition={{ ...cardReveal.transition, delay: Math.min(index * 0.07, 0.16) }}
-                                        style={{
-                                            padding: '20px',
-                                            borderRadius: '16px',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            flexWrap: 'wrap',
-                                            gap: '16px',
-                                            border: '1px solid rgba(168, 85, 247, 0.2)',
-                                            background: 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)',
-                                            transition: 'transform 0.2s, background 0.2s',
-                                            position: 'relative',
-                                            overflow: 'hidden'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)';
-                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.4)';
-                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)';
-                                            e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.2)';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                        }}
-                                    >
-                                        <div style={{
-                                            position: 'absolute', top: 0, left: 0, bottom: 0, width: '4px',
-                                            background: 'linear-gradient(to bottom, var(--success) 0%, #10b98188 100%)'
-                                        }} />
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
-                                            <div style={{
-                                                width: '48px',
-                                                height: '48px',
-                                                borderRadius: '12px',
-                                                background: 'rgba(168, 85, 247, 0.1)',
+                        {recentBookingsLoading && history.length === 0 ? (
+                            historySectionSkeleton
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {history.slice(0, 3).map((booking, index) => {
+                                    const machine = machines.find((m) => m.id === booking.machineId);
+                                    const machineLabel = machine?.name || `Machine ${booking.machineId}`;
+                                    return (
+                                        <div
+                                            key={booking.id}
+                                            className="glass-panel hover-card animate-fade-in"
+                                            style={{
+                                                padding: '20px',
+                                                borderRadius: '16px',
                                                 display: 'flex',
+                                                justifyContent: 'space-between',
                                                 alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#a855f7',
-                                                flexShrink: 0
-                                            }}>
-                                                <History size={24} />
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>
-                                                    {machineLabel} <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '4px' }}>• {booking.startTime}</span>
-                                                </div>
-                                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <CheckCircle size={14} color="var(--success)" />
-                                                    {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
-                                            <button
-                                                onClick={() => handleQuickBookFromHistory(booking)}
-                                                className="glass-button"
-                                                disabled={quickBookingId === booking.id}
-                                                style={{
-                                                    padding: '10px 16px',
+                                                flexWrap: 'wrap',
+                                                gap: '16px',
+                                                border: '1px solid rgba(168, 85, 247, 0.2)',
+                                                background: 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)',
+                                                transition: 'transform 0.2s, background 0.2s',
+                                                position: 'relative',
+                                                overflow: 'hidden',
+                                                animationDelay: `${Math.min(index * 0.07, 0.16)}s`
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)';
+                                                e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.4)';
+                                                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                e.currentTarget.style.background = 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)';
+                                                e.currentTarget.style.border = '1px solid rgba(168, 85, 247, 0.2)';
+                                                e.currentTarget.style.boxShadow = 'none';
+                                            }}
+                                        >
+                                            <div style={{
+                                                position: 'absolute', top: 0, left: 0, bottom: 0, width: '4px',
+                                                background: 'linear-gradient(to bottom, var(--success) 0%, #10b98188 100%)'
+                                            }} />
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
+                                                <div style={{
+                                                    width: '48px',
+                                                    height: '48px',
                                                     borderRadius: '12px',
-                                                    fontSize: '13px',
-                                                    fontWeight: 600,
+                                                    background: 'rgba(168, 85, 247, 0.1)',
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '6px',
-                                                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                                                    color: 'var(--primary)',
-                                                    background: 'rgba(168, 85, 247, 0.05)',
-                                                    opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                    cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
-                                                    transition: 'all 0.2s',
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (quickBookingId !== booking.id) {
-                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    if (quickBookingId !== booking.id) {
-                                                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
-                                                    }
-                                                }}
-                                            >
-                                                {quickBookingId === booking.id ? 'Booking...' : (
-                                                    <>
-                                                        Quick Book
-                                                        <ArrowRight size={14} />
-                                                    </>
-                                                )}
-                                            </button>
+                                                    justifyContent: 'center',
+                                                    color: '#a855f7',
+                                                    flexShrink: 0
+                                                }}>
+                                                    <History size={24} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>
+                                                        {machineLabel} <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '4px' }}>• {booking.startTime}</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <CheckCircle size={14} color="var(--success)" />
+                                                        {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginLeft: 'auto' }}>
+                                                <button
+                                                    onClick={() => handleQuickBookFromHistory(booking)}
+                                                    className="glass-button"
+                                                    disabled={quickBookingId === booking.id}
+                                                    style={{
+                                                        padding: '10px 16px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '13px',
+                                                        fontWeight: 600,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                                                        color: 'var(--primary)',
+                                                        background: 'rgba(168, 85, 247, 0.05)',
+                                                        opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
+                                                        cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
+                                                        transition: 'all 0.2s',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (quickBookingId !== booking.id) {
+                                                            e.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
+                                                        }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (quickBookingId !== booking.id) {
+                                                            e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
+                                                        }
+                                                    }}
+                                                >
+                                                    {quickBookingId === booking.id ? 'Booking...' : (
+                                                        <>
+                                                            Quick Book
+                                                            <ArrowRight size={14} />
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
-                                    </motion.div>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 )
             }
 
@@ -1417,17 +1424,15 @@ export default function Dashboard() {
 
                         {quickBookModalMessage?.type === 'success' ? (
                             <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', damping: 20, stiffness: 250 }}
+                                <div
+                                    className="animate-fade-in"
                                     style={{
                                         background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
                                     }}
                                 >
                                     <CheckCircle size={32} color="var(--success)" />
-                                </motion.div>
+                                </div>
                                 <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Booking Confirmed!</h3>
                                 <p style={{ margin: 0, color: 'var(--text-muted)' }}>{quickBookModalMessage.text}</p>
                             </div>
@@ -1491,12 +1496,11 @@ export default function Dashboard() {
             )}
 
             {/* Inline Feedback Section */}
-            <motion.div
-                {...sectionReveal}
-                viewport={scrollRevealViewport}
-            >
-                <DashboardFeedback />
-            </motion.div>
+            <div className="animate-fade-in">
+                <Suspense fallback={feedbackFallback}>
+                    <LazyDashboardFeedback />
+                </Suspense>
+            </div>
         </div>
     );
 }

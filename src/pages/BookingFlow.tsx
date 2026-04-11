@@ -8,7 +8,6 @@ import { TIME_SLOTS } from '../types';
 import { isAfter } from 'date-fns';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import clsx from 'clsx';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
@@ -409,10 +408,8 @@ export default function BookingFlow() {
                 color: 'var(--text-main)',
                 padding: '20px'
             }}>
-                <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.4, type: 'spring' }}
+                <div
+                    className="animate-fade-in"
                     style={{
                         background: 'rgba(239, 68, 68, 0.1)',
                         padding: '32px',
@@ -421,7 +418,7 @@ export default function BookingFlow() {
                         border: '1px solid rgba(239, 68, 68, 0.2)'
                     }}>
                     <AlertCircle size={48} color="#ef4444" />
-                </motion.div>
+                </div>
 
                 <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
                     {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
@@ -433,10 +430,8 @@ export default function BookingFlow() {
                 </p>
 
                 {!settings.forceCloseBookings && (
-                    <motion.div
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
+                    <div
+                        className="animate-fade-in"
                         style={{
                             display: 'flex',
                             flexWrap: 'wrap',
@@ -474,29 +469,19 @@ export default function BookingFlow() {
                                     justifyContent: 'center',
                                     alignItems: 'center'
                                 }}>
-                                    <AnimatePresence mode="popLayout">
-                                        <motion.span
-                                            key={item.value}
-                                            initial={{ y: 20, opacity: 0, filter: 'blur(4px)' }}
-                                            animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
-                                            exit={{ y: -20, opacity: 0, filter: 'blur(4px)' }}
-                                            transition={{
-                                                type: 'spring',
-                                                stiffness: 300,
-                                                damping: 25,
-                                                mass: 0.8
-                                            }}
-                                            style={{
-                                                fontSize: '32px',
-                                                fontWeight: 800,
-                                                color: 'var(--primary)',
-                                                lineHeight: 1,
-                                                fontVariantNumeric: 'tabular-nums',
-                                            }}
-                                        >
-                                            {String(item.value).padStart(2, '0')}
-                                        </motion.span>
-                                    </AnimatePresence>
+                                    <span
+                                        key={item.value}
+                                        className="animate-fade-in"
+                                        style={{
+                                            fontSize: '32px',
+                                            fontWeight: 800,
+                                            color: 'var(--primary)',
+                                            lineHeight: 1,
+                                            fontVariantNumeric: 'tabular-nums',
+                                        }}
+                                    >
+                                        {String(item.value).padStart(2, '0')}
+                                    </span>
                                 </div>
                                 <span style={{
                                     fontSize: '12px',
@@ -508,7 +493,7 @@ export default function BookingFlow() {
                                 </span>
                             </div>
                         ))}
-                    </motion.div>
+                    </div>
                 )}
 
                 <button
@@ -822,29 +807,24 @@ export default function BookingFlow() {
                                 </Suspense>
                             </div>
                             <div className="glass-panel modal-card modal-card--success" style={{ zIndex: 100 }}>
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: 'spring', delay: 0.1, damping: 20, stiffness: 250 }}
+                                <div
+                                    className="animate-fade-in"
                                     style={{
                                         background: 'rgba(16, 185, 129, 0.2)', width: '80px', height: '80px', borderRadius: '50%',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
                                     }}
                                 >
                                     <svg viewBox="0 0 50 50" width="40" height="40">
-                                        <motion.path
+                                        <path
                                             fill="none"
                                             stroke="#10b981"
                                             strokeWidth="5"
                                             d="M 14.1 27.2 l 7.1 7.2 16.7-16.8"
-                                            initial={{ pathLength: 0 }}
-                                            animate={{ pathLength: 1 }}
-                                            transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
                                         />
                                     </svg>
-                                </motion.div>
+                                </div>
                                 <h2 style={{ margin: 0 }}>Booking Confirmed!</h2>
                                 <p style={{ color: 'var(--text-muted)' }}>Slot booked. You can continue browsing other available slots.</p>
                             </div>

@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
-import { residentFirestoreService } from '../services/residentFirestoreService';
 import { Building, ArrowRight, User } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { Student } from '../types';
 import { preloadResidentRoutes } from '../utils/preloadRoutes';
 import { warmResidentAppData } from '../utils/warmResidentApp';
+
+let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
+
+const loadResidentLookup = () => {
+    residentLookupPromise ??= import('../services/residentRoomLookupService');
+    return residentLookupPromise;
+};
 
 export default function LoginScreen() {
     const [step, setStep] = useState<1 | 1.5 | 2>(1);
@@ -17,13 +22,17 @@ export default function LoginScreen() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
 
+    const handleRoomFieldFocus = () => {
+        void loadResidentLookup();
+    };
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const roomStudents = await residentFirestoreService.getStudentsByRoom(room);
+            const { residentRoomLookupService } = await loadResidentLookup();
+            const roomStudents = await residentRoomLookupService.getStudentsByRoom(room);
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
@@ -84,11 +93,8 @@ export default function LoginScreen() {
     return (
         <div className="login-split">
             <div className="login-left">
-                <motion.div
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="glass-panel"
+                <div
+                    className="glass-panel animate-fade-in"
                     style={{
                         padding: '48px',
                         width: '100%',
@@ -117,15 +123,8 @@ export default function LoginScreen() {
                         <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Hostel Residents Only</p>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                        {step === 1 ? (
-                            <motion.form
-                                key="step1"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                onSubmit={handleRoomSubmit}
-                            >
+                    {step === 1 ? (
+                        <form className="animate-fade-in" onSubmit={handleRoomSubmit}>
                                 <div style={{ marginBottom: '20px' }}>
                                     <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '8px', fontSize: '14px' }}>
                                         Room Number
@@ -134,6 +133,7 @@ export default function LoginScreen() {
                                         type="text"
                                         value={room}
                                         onChange={(e) => setRoom(e.target.value)}
+                                        onFocus={handleRoomFieldFocus}
                                         placeholder="e.g. 101, 52-2"
                                         autoComplete="off"
                                         autoFocus
@@ -169,15 +169,9 @@ export default function LoginScreen() {
                                 >
                                     {loading ? 'Checking...' : 'Find Room'} <ArrowRight size={18} />
                                 </button>
-                            </motion.form>
-                        ) : step === 1.5 ? (
-                            <motion.form
-                                key="step1.5"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                onSubmit={handlePinSubmit}
-                            >
+                        </form>
+                    ) : step === 1.5 ? (
+                        <form className="animate-fade-in" onSubmit={handlePinSubmit}>
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>Enter Room PIN</p>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
                                     <input
@@ -217,14 +211,9 @@ export default function LoginScreen() {
                                 >
                                     Back
                                 </button>
-                            </motion.form>
-                        ) : (
-                            <motion.div
-                                key="step2"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                            >
+                        </form>
+                    ) : (
+                        <div className="animate-fade-in">
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>Who are you?</p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {roommates.map(student => (
@@ -255,14 +244,13 @@ export default function LoginScreen() {
                                 >
                                     Back to Search
                                 </button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                        </div>
+                    )}
 
                     <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', marginTop: '24px' }}>
                         Strictly for Hostel Residents Only
                     </p>
-                </motion.div>
+                </div>
             </div>
 
         </div>

@@ -5,14 +5,12 @@ import {
     Reply,
     Send
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { bookingService } from '../services/bookingService';
 import { residentFirestoreService } from '../services/residentFirestoreService';
 import type { Feedback, FeedbackType } from '../types';
 
 const FEEDBACK_HISTORY_LIMIT = 8;
-const scrollRevealViewport = { once: true, amount: 0.24 };
 
 const inferFeedbackType = (text: string): FeedbackType => {
     const normalized = text.trim().toLowerCase();
@@ -104,12 +102,8 @@ export default function DashboardFeedback() {
                 Feedback
             </h3>
 
-            <motion.div
+            <div
                 className="glass-panel"
-                initial={{ opacity: 0, y: 26, scale: 0.985 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={scrollRevealViewport}
-                transition={{ duration: 0.52, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                     padding: '16px',
                     borderRadius: '18px',
@@ -183,29 +177,22 @@ export default function DashboardFeedback() {
                 <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
                     Room {user.roomNumber} • {user.name}
                 </div>
-            </motion.div>
+            </div>
 
             {repliedFeedbacks.length > 0 && (
                 <div style={{ display: 'grid', gap: '14px' }}>
                     {repliedFeedbacks.map((feedback, index) => {
                         return (
-                            <motion.div
+                            <div
                                 key={feedback.id}
                                 className="glass-panel"
-                                initial={{ opacity: 0, y: 28, scale: 0.97 }}
-                                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                                viewport={scrollRevealViewport}
-                                transition={{
-                                    duration: 0.56,
-                                    delay: Math.min(index * 0.08, 0.18),
-                                    ease: [0.16, 1, 0.3, 1]
-                                }}
                                 style={{
                                     padding: '18px',
                                     borderRadius: '20px',
                                     border: '1px solid rgba(129, 140, 248, 0.18)',
                                     background: 'linear-gradient(135deg, rgba(129, 140, 248, 0.14) 0%, rgba(20, 24, 58, 0.92) 52%, rgba(88, 28, 135, 0.24) 100%)',
-                                    boxShadow: '0 20px 36px rgba(8, 12, 32, 0.3)'
+                                    boxShadow: '0 20px 36px rgba(8, 12, 32, 0.3)',
+                                    animationDelay: `${Math.min(index * 0.08, 0.18)}s`
                                 }}
                             >
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
@@ -290,7 +277,7 @@ export default function DashboardFeedback() {
                                         {feedback.text}
                                     </div>
                                 </div>
-                            </motion.div>
+                            </div>
                         );
                     })}
                 </div>
