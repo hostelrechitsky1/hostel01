@@ -5,6 +5,7 @@ import {
   listFirestoreCollectionDocuments,
   runFirestoreQueryDocuments,
 } from './_resident-firestore.js'
+import { applyVipRecurringForNextWeek } from './_vip-auto-apply.js'
 
 const SETTINGS_COL = 'settings'
 const SETTINGS_DOC_ID = 'config'
@@ -132,6 +133,11 @@ export const handler = async (event) => {
     if (weekIds.length === 0) {
       return jsonResponse(400, { error: 'Missing week ids' })
     }
+
+    await applyVipRecurringForNextWeek({ source: 'resident-bootstrap' }).catch((error) => {
+      console.error('resident-bootstrap VIP auto-apply failed', error)
+      return null
+    })
 
     const [settingsDoc, machineDocs, bookingDocs, bannerDocs, recentBookingDocs] = await Promise.all([
       getFirestoreDocument(SETTINGS_COL, SETTINGS_DOC_ID, SETTINGS_FIELDS),
