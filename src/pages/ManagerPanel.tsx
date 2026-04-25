@@ -91,6 +91,9 @@ export default function ManagerPanel() {
         success: number;
         skipped: number;
         overridden: number;
+        failed: number;
+        blocked: number;
+        applied: boolean;
         mode: 'auto' | 'manual';
         at: number;
     } | null>(null);
@@ -409,12 +412,19 @@ export default function ManagerPanel() {
             let success = 0;
             let skipped = 0;
             let overridden = 0;
+            let failed = 0;
+            let blocked = 0;
 
             for (const rule of activeRules) {
                 const student = studentById.get(rule.studentId);
                 const machine = machineById.get(rule.machineId);
 
-                if (!student || !machine || machine.status === 'maintenance') {
+                if (!student || !machine) {
+                    blocked += 1;
+                    continue;
+                }
+
+                if (machine.status === 'maintenance') {
                     skipped += 1;
                     continue;
                 }
@@ -470,20 +480,22 @@ export default function ManagerPanel() {
                     success += 1;
                     workingBookings.push({ ...bookingPayload, id: targetSlotId });
                 } else {
-                    skipped += 1;
+                    failed += 1;
                 }
             }
 
-            setVipApplyStatus({ weekId: nextWeekId, success, skipped, overridden, mode, at: Date.now() });
+            const applied = failed === 0 && blocked === 0;
+
+            setVipApplyStatus({ weekId: nextWeekId, success, skipped, overridden, failed, blocked, applied, mode, at: Date.now() });
 
             if (mode === 'manual') {
                 await alertDialog(
-                    'VIP Apply Complete',
-                    `Applied for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}`
+                    applied ? 'VIP Apply Complete' : 'VIP Apply Needs Attention',
+                    `${applied ? 'Applied' : 'Processed'} for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}\nBlocked: ${blocked}\nFailed: ${failed}${applied ? '' : '\n\nThe week was NOT marked as applied, so the system can retry automatically.'}`
                 );
             }
 
-            if (settings.vipLastAppliedWeekId !== nextWeekId) {
+            if (applied && settings.vipLastAppliedWeekId !== nextWeekId) {
                 await firestoreService.updateSettings({ vipLastAppliedWeekId: nextWeekId });
                 setSettings((current) => ({ ...current, vipLastAppliedWeekId: nextWeekId }));
             }
@@ -1014,7 +1026,7 @@ export default function ManagerPanel() {
 
                     {vipApplyStatus && (
                         <div className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', marginBottom: '12px', border: '1px solid rgba(16,185,129,0.35)' }}>
-                            {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply complete for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Overridden: {vipApplyStatus.overridden}, Skipped: {vipApplyStatus.skipped}.
+                            {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply {vipApplyStatus.applied ? 'complete' : 'pending retry'} for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Overridden: {vipApplyStatus.overridden}, Skipped: {vipApplyStatus.skipped}, Blocked: {vipApplyStatus.blocked}, Failed: {vipApplyStatus.failed}.
                         </div>
                     )}
 
