@@ -5,11 +5,13 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, WashingMachine as Washer } from 'lucide-react';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, ScanLine, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
-import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
+import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getAutoOpenWindowDisplay, getTimeStringMinutes } from '../utils/time';
+import { getResidentBookingWeekContext } from '../utils/residentBookingContext';
+import { useLegacyBookingWindowCountdown } from '../utils/useLegacyBookingWindowCountdown';
 import { preloadBookingRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
@@ -122,9 +124,12 @@ export default function Dashboard() {
             retryDashboard: 'Повторить',
             needToWash: 'Нужно постирать?',
             bookNow: 'Забронировать',
-            bookSubtitle: 'Забронируйте слот на следующую неделю',
+            bookSubtitle: 'Забронируйте слот на текущую неделю (в реальном времени)',
             checkStatus: 'Проверить статус',
+            bookingsPaused: 'Бронирование приостановлено',
             bookingsClosed: 'Бронирование сейчас закрыто',
+            nextBookingWindow: 'Следующее окно',
+            scanQrAria: 'Открыть сканер QR для страницы слотов',
             booked: 'Забронировано',
             bookedSubtitle: 'У вас уже есть бронь. Вы всё ещё можете открыть страницу слотов и посмотреть свободные места.',
             openSlots: 'Открыть слоты',
@@ -163,9 +168,12 @@ export default function Dashboard() {
             retryDashboard: 'Retry Dashboard',
             needToWash: 'Need to wash?',
             bookNow: 'Book Now',
-            bookSubtitle: 'Book your slot for next week',
+            bookSubtitle: 'Book your slot this week (live availability)',
             checkStatus: 'Check Status',
+            bookingsPaused: 'Bookings paused',
             bookingsClosed: 'Bookings are currently closed',
+            nextBookingWindow: 'Next window',
+            scanQrAria: 'Open QR scan for booking page',
             booked: 'Booked',
             bookedSubtitle: 'You already booked. You can still open slots page to browse remaining slots.',
             openSlots: 'Open Slots',
@@ -246,6 +254,12 @@ export default function Dashboard() {
     const [recentBookingsLoading, setRecentBookingsLoading] = useState(() => Boolean(userId) && !hasCachedRecentBookings);
     const [recentBookingsHydrated, setRecentBookingsHydrated] = useState(() => hasCachedRecentBookings);
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
+    const legacyWindowCountdown = useLegacyBookingWindowCountdown(settings);
+    const autoOpenWindowDisplay = useMemo(() => getAutoOpenWindowDisplay(settings), [settings]);
+    const residentWeekContext = useMemo(
+        () => getResidentBookingWeekContext(new Date(), settings),
+        [settings],
+    );
     const [reloadKey, setReloadKey] = useState(0);
     const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
     const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
@@ -736,9 +750,9 @@ export default function Dashboard() {
     }, [hasCachedRecentBookings, reloadKey, userId]);
     /* eslint-enable react-hooks/set-state-in-effect */
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
-
-    const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
+    /** Booking paused by admin only — legacy Saturday window no longer blocks residents. */
+    const bookingKillSwitch = settings.forceCloseBookings;
+    const isSystemClosed = bookingKillSwitch;
 
     const getMachineRealTimeStatus = (machine: Machine) => {
         const now = getBelarusNow();
@@ -773,9 +787,8 @@ export default function Dashboard() {
         const activeMachines = machines.filter(m => m.status === 'available');
         const slotsPerDay = TIME_SLOTS.length * activeMachines.length;
 
-        const today = getBelarusDate();
-        const weekStart = isNextWeekOpen ? addBelarusDays(getBelarusWeekStart(today), 7) : getBelarusWeekStart(today);
-        const targetWeekId = getBelarusWeekId(weekStart);
+        const weekStart = residentWeekContext.weekStart;
+        const targetWeekId = residentWeekContext.targetWeekId;
 
         const maintenanceDay = settings.maintenanceDay ?? 3;
         const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
@@ -788,7 +801,7 @@ export default function Dashboard() {
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, settings.maintenanceDay, isNextWeekOpen, weekBookings]);
+    }, [machines, residentWeekContext.targetWeekId, residentWeekContext.weekStart, settings.maintenanceDay, weekBookings]);
 
     const handleLogout = () => {
         bookingService.logout();
@@ -801,6 +814,11 @@ export default function Dashboard() {
         startResidentPerfSpan('resident:booking-data-ready');
         startResidentPerfSpan('resident:booking-live-ready');
         navigate('/book');
+    };
+
+    const handleOpenQrScan = () => {
+        preloadBookingRoute();
+        navigate('/book?scan=1');
     };
 
     const ensureRoommatesLoaded = (forceRefresh = false) => {
@@ -910,20 +928,16 @@ export default function Dashboard() {
         setReloadKey((current) => current + 1);
     };
 
-    const today = getBelarusDate();
-    const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
-    const nextWeekId = getBelarusWeekId(nextWeekStart);
-
-    // Check if the user has a booking specifically for the *upcoming* week (next week slots)
-    const hasBookedForNextWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === nextWeekId);
+    const hasBookedForTargetWeek = weekBookings.some(
+        (booking) => booking.studentId === userId && booking.weekId === residentWeekContext.targetWeekId,
+    );
 
     let mainActionLabel = t.bookNow;
     let mainActionSubtitle = t.bookSubtitle;
 
-    if (isSystemClosed) {
-        mainActionLabel = t.checkStatus;
+    if (bookingKillSwitch) {
         mainActionSubtitle = t.bookingsClosed;
-    } else if (hasBookedForNextWeek) {
+    } else if (hasBookedForTargetWeek) {
         mainActionLabel = t.booked;
         mainActionSubtitle = t.bookedSubtitle;
     }
@@ -1271,7 +1285,26 @@ export default function Dashboard() {
                         </div>
                     </div>
                 </div>
-                <div className="resident-header-actions">
+                <div className="resident-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button
+                        type="button"
+                        onClick={handleOpenQrScan}
+                        onMouseEnter={preloadBookingRoute}
+                        onTouchStart={preloadBookingRoute}
+                        aria-label={t.scanQrAria}
+                        className="glass-button"
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '999px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        <ScanLine size={20} strokeWidth={2.25} />
+                    </button>
                     <button
                         type="button"
                         onClick={() => {
@@ -1326,48 +1359,95 @@ export default function Dashboard() {
                     marginBottom: '32px'
                 }}
             >
-                <div>
+                <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                     <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600 }}>{t.needToWash}</h3>
                     <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
                         {mainActionSubtitle}
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenBooking}
-                    onMouseEnter={preloadBookingRoute}
-                    onTouchStart={preloadBookingRoute}
-                    className={hasBookedForNextWeek && !isSystemClosed ? '' : 'primary-button'}
+                <div
                     style={{
-                        padding: '10px 24px',
-                        borderRadius: '10px',
-                        background: isSystemClosed
-                            ? 'var(--error)'
-                            : hasBookedForNextWeek
-                                ? 'var(--resident-ready-green)'
-                                : 'var(--primary)',
-                        boxShadow: isSystemClosed
-                            ? '0 0 15px rgba(239, 68, 68, 0.3)'
-                            : hasBookedForNextWeek
-                                ? '0 10px 24px rgba(16, 185, 129, 0.26)'
-                                : '0 0 15px var(--primary-glow)',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        border: isSystemClosed
-                            ? 'none'
-                            : hasBookedForNextWeek
-                                ? '1px solid var(--resident-ready-green)'
-                                : 'none',
-                        color: isSystemClosed
-                            ? 'white'
-                            : hasBookedForNextWeek
-                                ? '#ffffff'
-                                : 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                        alignItems: 'stretch',
+                        justifyContent: 'flex-end',
                     }}
                 >
-                    {mainActionLabel}
-                </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (!bookingKillSwitch) handleOpenBooking();
+                        }}
+                        onMouseEnter={preloadBookingRoute}
+                        onTouchStart={preloadBookingRoute}
+                        className={hasBookedForTargetWeek && !isSystemClosed ? '' : 'primary-button'}
+                        style={{
+                            padding: '10px 20px',
+                            borderRadius: '10px',
+                            background: bookingKillSwitch
+                                ? 'var(--error)'
+                                : hasBookedForTargetWeek
+                                    ? 'var(--resident-ready-green)'
+                                    : 'var(--primary)',
+                            boxShadow: bookingKillSwitch
+                                ? '0 0 15px rgba(239, 68, 68, 0.3)'
+                                : hasBookedForTargetWeek
+                                    ? '0 10px 24px rgba(16, 185, 129, 0.26)'
+                                    : '0 0 15px var(--primary-glow)',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            border: bookingKillSwitch
+                                ? 'none'
+                                : hasBookedForTargetWeek
+                                    ? '1px solid var(--resident-ready-green)'
+                                    : 'none',
+                            color: 'white',
+                            cursor: bookingKillSwitch ? 'not-allowed' : 'pointer',
+                            opacity: bookingKillSwitch ? 0.85 : 1,
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {bookingKillSwitch ? t.bookingsPaused : mainActionLabel}
+                    </button>
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="glass-button"
+                        style={{
+                            padding: '10px 16px',
+                            borderRadius: '10px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            alignItems: 'flex-start',
+                            minWidth: 'min(100%, 220px)',
+                            border: '1px solid var(--glass-border)',
+                            background: 'var(--glass-bg)',
+                        }}
+                    >
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {t.nextBookingWindow}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            {autoOpenWindowDisplay.openDay} {autoOpenWindowDisplay.openTime} → {autoOpenWindowDisplay.closeDay} {autoOpenWindowDisplay.closeTime}
+                        </div>
+                        {!settings.forceCloseBookings && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '2px' }}>
+                                {[
+                                    { label: 'D', value: legacyWindowCountdown.days },
+                                    { label: 'H', value: legacyWindowCountdown.hours },
+                                    { label: 'M', value: legacyWindowCountdown.minutes },
+                                    { label: 'S', value: legacyWindowCountdown.seconds },
+                                ].map((item) => (
+                                    <span key={item.label} style={{ fontVariantNumeric: 'tabular-nums', fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>
+                                        {String(item.value).padStart(2, '0')}{item.label}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
 
@@ -1526,7 +1606,6 @@ export default function Dashboard() {
                             recentBookingsLoading={shouldShowRecentBookingsLoading}
                             weekBookings={weekBookings}
                             settings={settings}
-                            isNextWeekOpen={isNextWeekOpen}
                             isRussian={isRussian}
                             onBookingCreated={handleResidentBookingCreated}
                             onBookingCancelled={handleResidentBookingCancelled}

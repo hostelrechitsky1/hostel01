@@ -16,7 +16,6 @@ interface DashboardBookingSummaryProps {
     recentBookingsLoading: boolean;
     weekBookings: Booking[];
     settings: AppSettings;
-    isNextWeekOpen: boolean;
     isRussian?: boolean;
     onBookingCreated: (booking: Booking) => void;
     onBookingCancelled: (bookingId: string) => void;
@@ -37,7 +36,6 @@ export default function DashboardBookingSummary({
     recentBookingsLoading,
     weekBookings,
     settings,
-    isNextWeekOpen,
     isRussian = false,
     onBookingCreated,
     onBookingCancelled
@@ -202,8 +200,8 @@ export default function DashboardBookingSummary({
         const targetDate = getUpcomingDateForWeekday(getBelarusWeekday(sourceDate));
         const targetDateLabel = formatBelarusShortDateLabel(targetDate);
 
-        if (settings.forceCloseBookings || !isNextWeekOpen) {
-            setQuickBookModalMessage({ type: 'error', text: 'Quick Book is closed right now. Booking window is not open yet.' });
+        if (settings.forceCloseBookings) {
+            setQuickBookModalMessage({ type: 'error', text: 'Quick Book is unavailable while bookings are paused by admin.' });
             return;
         }
 

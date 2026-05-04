@@ -724,6 +724,14 @@ export default function ManagerPanel() {
                     >
                         <Printer size={16} /> Print Schedule
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/manager/print-qr')}
+                        className="glass-button"
+                        style={{ padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <Printer size={16} /> Print QR
+                    </button>
                     <button onClick={() => navigate('/')} className="glass-button" style={{ padding: '8px 16px', borderRadius: '8px' }}>
                         Exit
                     </button>
