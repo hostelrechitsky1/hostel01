@@ -1,6 +1,6 @@
 import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
@@ -16,15 +16,14 @@ import {
     formatBelarusWeekdayLabel,
     getBelarusDate,
     getBelarusNow,
-    getBelarusWeekEnd,
     getBelarusWeekStart,
     getBelarusWeekday,
     getBelarusWeekId,
-    isAutoBookingWindowOpen,
+    formatBelarusClockLabel,
     isSameBelarusDay,
-    getNextAutoOpenDate,
-    getAutoOpenWindowDisplay
 } from '../utils/time';
+import { enumerateBookingStripDates, getResidentBookingWeekContext } from '../utils/residentBookingContext';
+import MachineQrOverview from '../components/MachineQrOverview';
 import { preloadDashboardRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { hapticSelection, hapticSoftPulse, hapticSuccess } from '../utils/haptics';
@@ -66,6 +65,9 @@ const replaceBookingsForDate = (bookings: Booking[], date: string, nextDateBooki
 
 export default function BookingFlow() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const qrFromUrl = searchParams.get('qr') === '1';
+    const machineFromUrl = searchParams.get('machine');
     const user = bookingService.getCurrentUser();
     const userId = user?.id ?? '';
     const bookingWeekIds = useMemo(() => {
@@ -371,31 +373,58 @@ export default function BookingFlow() {
         };
     }, [liveSyncRequested, reloadKey, selectedDateKey, userId]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+    useEffect(() => {
+        if (searchParams.get('scan') !== '1') return;
+        const next = new URLSearchParams(searchParams);
+        next.delete('scan');
+        if (!next.get('qr')) next.set('qr', '1');
+        setSearchParams(next, { replace: true });
+    }, [searchParams, setSearchParams]);
+
+    useEffect(() => {
+        if (!machineFromUrl || machines.length === 0) return;
+        const match = machines.find((m) => m.id === machineFromUrl);
+        if (match) setSelectedMachine(match);
+    }, [machineFromUrl, machines]);
+
+    useEffect(() => {
+        if (!userId || !liveSyncRequested || !qrFromUrl) return;
+        const todayKey = formatBelarusDate(getBelarusDate());
+        if (todayKey === selectedDateKey) return;
+
+        let cancelled = false;
+        let unsubscribe = () => { /* noop */ };
+
+        void loadResidentLiveService().then(({ residentLiveService }) => {
+            if (cancelled) return;
+            unsubscribe = residentLiveService.subscribeToBookingsForDate(todayKey, (nextBookings) => {
+                if (cancelled) return;
+                startTransition(() => {
+                    setBookings((currentBookings) => replaceBookingsForDate(currentBookings, todayKey, nextBookings));
+                });
+            });
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribe();
+        };
+    }, [userId, liveSyncRequested, qrFromUrl, selectedDateKey]);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
-    const dateOptions = useMemo(() => {
-        let start = getBelarusDate();
-        const currentWeekEnd = getBelarusWeekEnd(start);
-        let maxDate = currentWeekEnd;
+    const dateOptions = useMemo(
+        () => enumerateBookingStripDates(getResidentBookingWeekContext(new Date(), settings)),
+        [settings],
+    );
 
-        if (isNextWeekOpen) {
-            const nextMonday = addBelarusDays(currentWeekEnd, 1);
-            if (start.getTime() <= currentWeekEnd.getTime()) {
-                start = nextMonday;
-            }
-            maxDate = addBelarusDays(currentWeekEnd, 7);
-        }
-
-        const dates = [];
-        let current = start;
-        while (current.getTime() <= maxDate.getTime()) {
-            dates.push(current);
-            current = addBelarusDays(current, 1);
-        }
-        return dates;
-    }, [isNextWeekOpen]);
+    const todayKeyForQr = formatBelarusDate(getBelarusDate());
+    const bookingsToday = useMemo(
+        () => bookings.filter((b) => b.date === todayKeyForQr),
+        [bookings, todayKeyForQr],
+    );
+    const belarusNowForQr = getBelarusNow();
+    const qrNowMinutes = belarusNowForQr.getUTCHours() * 60 + belarusNowForQr.getUTCMinutes();
 
     useEffect(() => {
         if (dateOptions.length > 0) {
@@ -591,36 +620,6 @@ export default function BookingFlow() {
     };
 
     // --- RENDER ---
-    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-    useEffect(() => {
-        if (!settings) return;
-        if (settings.forceCloseBookings) return;
-
-        const targetTime = getNextAutoOpenDate(new Date(), settings).getTime();
-
-        const calculateTimeLeft = () => {
-            const now = new Date().getTime(); // use real local epoch time
-            const difference = targetTime - now;
-
-            if (difference > 0) {
-                setTimeLeft({
-                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-                    minutes: Math.floor((difference / 1000 / 60) % 60),
-                    seconds: Math.floor((difference / 1000) % 60)
-                });
-            } else {
-                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-            }
-        };
-
-        calculateTimeLeft();
-        const timer = setInterval(calculateTimeLeft, 1000);
-        return () => clearInterval(timer);
-    }, [settings]);
-
-    const windowDisplay = getAutoOpenWindowDisplay(settings);
 
     const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
         || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
@@ -663,7 +662,7 @@ export default function BookingFlow() {
         );
     }
 
-    if (settings.forceCloseBookings || !isNextWeekOpen) {
+    if (settings.forceCloseBookings) {
         return (
             <div className="container flex-center" style={{
                 minHeight: '80vh',
@@ -671,96 +670,17 @@ export default function BookingFlow() {
                 textAlign: 'center',
                 color: 'var(--text-main)',
                 padding: '20px'
-            }}>
-                <div
-                    className="animate-fade-in"
-                    style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        padding: '32px',
-                        borderRadius: '50%',
-                        marginBottom: '24px',
-                        border: '1px solid rgba(239, 68, 68, 0.2)'
-                    }}>
-                    <AlertCircle size={48} color="#ef4444" />
-                </div>
-
+            }}
+            >
                 <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
-                    {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
+                    Bookings Are Paused
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
-                    {settings.forceCloseBookings
-                        ? 'Temporarily disabled by admin.'
-                        : `Open ${windowDisplay.openDay} ${windowDisplay.openTime} - ${windowDisplay.closeDay} ${windowDisplay.closeTime}.`}
+                    Temporarily disabled by admin.
                 </p>
 
-                {!settings.forceCloseBookings && (
-                    <div
-                        className="animate-fade-in"
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: '12px',
-                            marginBottom: '48px',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        {[
-                            { label: 'Days', value: timeLeft.days },
-                            { label: 'Hours', value: timeLeft.hours },
-                            { label: 'Minutes', value: timeLeft.minutes },
-                            { label: 'Seconds', value: timeLeft.seconds }
-                        ].map((item, index) => (
-                            <div key={index} style={{
-                                background: 'var(--glass-bg)',
-                                border: '1px solid var(--glass-border)',
-                                borderRadius: '16px',
-                                padding: '12px 16px',
-                                minWidth: '70px',
-                                flex: '1 1 auto',
-                                maxWidth: '90px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-                            }}>
-                                <div style={{
-                                    height: '32px',
-                                    width: '100%',
-                                    overflow: 'hidden',
-                                    position: 'relative',
-                                    marginBottom: '8px',
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center'
-                                }}>
-                                    <span
-                                        key={item.value}
-                                        className="animate-fade-in"
-                                        style={{
-                                            fontSize: '32px',
-                                            fontWeight: 800,
-                                            color: 'var(--primary)',
-                                            lineHeight: 1,
-                                            fontVariantNumeric: 'tabular-nums',
-                                        }}
-                                    >
-                                        {String(item.value).padStart(2, '0')}
-                                    </span>
-                                </div>
-                                <span style={{
-                                    fontSize: '12px',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.1em',
-                                    color: 'var(--text-muted)'
-                                }}>
-                                    {item.label}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
                 <button
+                    type="button"
                     onClick={() => navigate('/')}
                     className="primary-button"
                     style={{
@@ -809,6 +729,16 @@ export default function BookingFlow() {
                         retryLabel="Refresh Slots"
                     />
                 </div>
+            )}
+
+            {qrFromUrl && machines.length > 0 && (
+                <MachineQrOverview
+                    machines={machines}
+                    bookingsForToday={bookingsToday}
+                    nowMinutes={qrNowMinutes}
+                    highlightMachineId={machineFromUrl}
+                    clockLabel={formatBelarusClockLabel(belarusNowForQr, 'en-US')}
+                />
             )}
 
             {/* Date Selector */}

@@ -26,6 +26,8 @@ describe('bookingMutations', () => {
         expect(getBookNowFailureMessage('slot_conflict')).toBe('That slot was just booked by another resident.');
         expect(getQuickBookFailureMessage('weekly_limit')).toBe('You already have a booking for this week, including bookings made from Book Now.');
         expect(getBookNowFailureMessage(undefined, 'Custom backend error')).toBe('Custom backend error');
+        expect(resolveBookingMutationErrorCode('bookings_paused')).toBe('bookings_paused');
+        expect(getBookNowFailureMessage('bookings_paused')).toBe('Bookings are paused by admin.');
     });
 
     it('resolves resident cancel errors and user-facing messages', () => {

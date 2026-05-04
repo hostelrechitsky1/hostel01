@@ -2,6 +2,7 @@ export type BookingMutationErrorCode =
     | 'slot_conflict'
     | 'weekly_limit'
     | 'unknown_conflict'
+    | 'bookings_paused'
     | 'system_error';
 
 export type CancelBookingMutationErrorCode =
@@ -14,6 +15,7 @@ const BOOKING_MUTATION_ERROR_CODES = new Set<BookingMutationErrorCode>([
     'slot_conflict',
     'weekly_limit',
     'unknown_conflict',
+    'bookings_paused',
     'system_error',
 ]);
 
@@ -46,6 +48,10 @@ export const resolveBookingMutationErrorCode = (
         return 'unknown_conflict';
     }
 
+    if (normalizedMessage.includes('paused')) {
+        return 'bookings_paused';
+    }
+
     return 'system_error';
 };
 
@@ -67,6 +73,10 @@ export const getBookNowFailureMessage = (errorCode?: string, errorMessage?: stri
 
     if (normalizedCode === 'unknown_conflict') {
         return 'This slot is no longer available right now.';
+    }
+
+    if (normalizedCode === 'bookings_paused') {
+        return 'Bookings are paused by admin.';
     }
 
     return errorMessage || 'Booking failed. Please try again.';

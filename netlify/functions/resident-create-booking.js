@@ -1,5 +1,6 @@
 import {
   commitFirestoreWrites,
+  decodeFirestoreDocument,
   encodeFirestoreDocument,
   getFirestoreDocument,
   jsonResponse,
@@ -7,6 +8,8 @@ import {
 
 const BOOKINGS_COL = 'bookings'
 const BOOKING_LIMITS_COL = 'bookingLimits'
+const SETTINGS_COL = 'settings'
+const SETTINGS_DOC_ID = 'config'
 
 const getBookingConflictDetails = async (slotId, limitId) => {
   try {
@@ -53,6 +56,18 @@ export const handler = async (event) => {
     const slotId = `${booking.date}_${booking.machineId}_${booking.startTime.replace(':', '-')}`
     const limitId = `${booking.studentId}_${booking.weekId}`
     const bookingRecord = { ...booking, id: slotId }
+
+    const settingsDoc = await getFirestoreDocument(SETTINGS_COL, SETTINGS_DOC_ID, ['forceCloseBookings'])
+    const rawSettings = settingsDoc ? decodeFirestoreDocument(settingsDoc, false) : {}
+    if (rawSettings.forceCloseBookings === true) {
+      return jsonResponse(403, {
+        success: false,
+        error: 'Bookings are paused by admin.',
+        errorCode: 'bookings_paused',
+      }, {
+        'Cache-Control': 'no-store',
+      })
+    }
 
     await commitFirestoreWrites([
       {

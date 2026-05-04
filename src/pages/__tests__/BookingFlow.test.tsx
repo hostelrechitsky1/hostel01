@@ -1,53 +1,75 @@
-import { render } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { vi, describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BookingFlow from '../BookingFlow';
 import * as timeUtils from '../../utils/time';
 
-vi.mock('../../services/residentFirestoreService', () => ({
-    DEFAULT_APP_SETTINGS: {
-        forceShowNextWeek: false,
-        forceCloseBookings: false,
-        maintenanceDay: 3,
-        autoOpenWeekday: 6,
-        autoOpenTime: '16:00',
-        autoOpenDurationHours: 28,
-        vipAutoEnabled: true,
-        vipLastAppliedWeekId: '',
-        topAlert: { message: '', isActive: false, type: 'info' }
+const defaultSettings = vi.hoisted(() => ({
+    forceShowNextWeek: false,
+    forceCloseBookings: false,
+    maintenanceDay: 3,
+    autoOpenWeekday: 6,
+    autoOpenTime: '16:00',
+    autoOpenDurationHours: 28,
+    vipAutoEnabled: true,
+    vipLastAppliedWeekId: '',
+    topAlert: { message: '', isActive: false, type: 'info' as const },
+}));
+
+vi.mock('../../services/bookingService', () => ({
+    bookingService: {
+        getCurrentUser: vi.fn(() => ({
+            id: 'u1',
+            name: 'Test Student',
+            roomNumber: '101',
+        })),
     },
+}));
+
+vi.mock('../../services/residentFirestoreService', () => ({
+    DEFAULT_APP_SETTINGS: defaultSettings,
     residentFirestoreService: {
         getCachedMachines: vi.fn(() => undefined),
         getCachedBookingsForWeekIds: vi.fn(() => undefined),
         getCachedSettings: vi.fn(() => undefined),
         getMachines: vi.fn(() => Promise.resolve([])),
         getBookingsForWeekIds: vi.fn(() => Promise.resolve([])),
-        getSettings: vi.fn(() => Promise.resolve({
-            forceShowNextWeek: false,
-            forceCloseBookings: false,
-            maintenanceDay: 3,
-            autoOpenWeekday: 6,
-            autoOpenTime: '16:00',
-            autoOpenDurationHours: 28,
-            vipAutoEnabled: true,
-            vipLastAppliedWeekId: '',
-            topAlert: { message: '', isActive: false, type: 'info' }
+        getBookingsForDate: vi.fn(() => Promise.resolve([])),
+        getSettings: vi.fn(() => Promise.resolve(defaultSettings)),
+    },
+}));
+
+vi.mock('../../services/residentSnapshotService', () => ({
+    residentSnapshotService: {
+        getCachedBookingSnapshot: vi.fn(() => undefined),
+        getCachedDashboardSnapshot: vi.fn(() => undefined),
+        getCachedWarmSnapshot: vi.fn(() => undefined),
+        getBookingSnapshot: vi.fn(() => Promise.resolve({
+            machines: [
+                { id: '1', name: 'Machine 1', status: 'available' as const },
+                { id: '2', name: 'Machine 2', status: 'available' as const },
+                { id: '3', name: 'Machine 3', status: 'available' as const },
+                { id: '4', name: 'Machine 4', status: 'available' as const },
+            ],
+            weekBookings: [],
+            settings: defaultSettings,
         })),
-    }
+    },
 }));
 
 vi.mock('../../services/residentLiveService', () => ({
     residentLiveService: {
         subscribeToMachines: vi.fn(() => () => {}),
         subscribeToBookingsForWeekIds: vi.fn(() => () => {}),
-    }
+        subscribeToBookingsForDate: vi.fn(() => () => {}),
+    },
 }));
 
 vi.mock('../../services/residentMutationsService', () => ({
     residentMutationsService: {
         createBooking: vi.fn(() => Promise.resolve({ success: true })),
         addFeedback: vi.fn(() => Promise.resolve()),
-    }
+    },
 }));
 
 vi.mock('react-confetti', () => ({
@@ -58,30 +80,32 @@ vi.mock('../../utils/time', async (importOriginal) => {
     const actual = await importOriginal<typeof timeUtils>();
     return {
         ...actual,
-        getBelarusNow: vi.fn(),
+        getBelarusNow: vi.fn(() => new Date('2026-05-05T14:30:00Z')),
     };
 });
 
 describe('BookingFlow Component', () => {
-    it('renders closed bookings state with countdown timer', () => {
-        // Mock app settings to simulate closed window but NOT force closed
-        vi.spyOn(timeUtils, 'getBelarusNow').mockReturnValue(new Date('2026-02-27T10:00:00Z'));
+    beforeEach(() => {
+        vi.mocked(timeUtils.getBelarusNow).mockReturnValue(new Date('2026-05-05T14:30:00Z'));
+    });
 
-        // We cannot fully test the complex internal React state easily without larger mocks,
-        // but we can at least assert the component renders without crashing.
+    it('renders without crashing', () => {
         const { container } = render(
-            <BrowserRouter>
+            <MemoryRouter initialEntries={['/book']}>
                 <BookingFlow />
-            </BrowserRouter>
+            </MemoryRouter>,
         );
-
         expect(container).toBeInTheDocument();
     });
 
-    it('renders Confetti component on successful booking', () => {
-        // Setting up a minimal test for just the confetti state would require complex mocking of the Firestore service responses.
-        // For now, we are verifying the component module can be imported and rendered without crashing the test runner, 
-        // which proves react-confetti is configured correctly in our Vite/Vitest environment.
-        expect(true).toBe(true);
+    it('shows QR machine overview when qr=1', async () => {
+        render(
+            <MemoryRouter initialEntries={['/book?qr=1']}>
+                <BookingFlow />
+            </MemoryRouter>,
+        );
+
+        expect(await screen.findByTestId('machine-qr-overview')).toBeInTheDocument();
+        expect(screen.getByText('Machine slots — today')).toBeInTheDocument();
     });
 });

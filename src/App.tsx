@@ -13,6 +13,7 @@ const BookingFlow = lazyRoute(() => import('./pages/BookingFlow'));
 const ManagerPanel = lazyRoute(() => import('./pages/ManagerPanel'));
 const ManagerLogin = lazyRoute(() => import('./pages/ManagerLogin'));
 const PrintSchedule = lazyRoute(() => import('./pages/PrintSchedule'));
+const PrintMachineQr = lazyRoute(() => import('./pages/PrintMachineQr'));
 const PrintCredentials = lazyRoute(() => import('./pages/PrintCredentials'));
 const HostelAdminLogin = lazyRoute(() => import('./pages/HostelAdminLogin'));
 const HostelAdminDashboard = lazyRoute(() => import('./pages/HostelAdminDashboard'));
@@ -156,6 +157,7 @@ function AnimatedRoutes() {
         <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
         <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
         <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
+        <Route path="/manager/print-qr" element={<PageWrapper><PrintMachineQr /></PageWrapper>} />
         <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
 
         <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
