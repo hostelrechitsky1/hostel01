@@ -97,7 +97,7 @@ describe('WeeklySlots', () => {
         expect(screen.getByText('Room 401')).toBeInTheDocument();
     });
 
-    it('switches page chrome to Russian while keeping booked names in English', async () => {
+    it('switches page chrome and booked names to Russian', async () => {
         render(
             <BrowserRouter>
                 <WeeklySlots />
@@ -107,6 +107,6 @@ describe('WeeklySlots', () => {
         await userEvent.click(screen.getByRole('button', { name: /русский/i }));
 
         expect(await screen.findByText('Бронирование открыто всю неделю')).toBeInTheDocument();
-        expect(screen.getByText('Ivanov Ivan')).toBeInTheDocument();
+        expect(screen.getByText('Иванов Иван')).toBeInTheDocument();
     });
 });

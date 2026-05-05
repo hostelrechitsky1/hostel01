@@ -534,7 +534,7 @@ export default function WeeklySlots() {
                                             className={`weekly-slots-cell weekly-slots-cell--booked${isBookedByUser ? ' weekly-slots-cell--mine' : ''}`}
                                         >
                                             <span>{isBookedByUser ? t.bookedByYou : t.booked}</span>
-                                            <strong>{getResidentShortNameForLanguage(booking.studentName || 'Resident', false)}</strong>
+                                            <strong>{getResidentShortNameForLanguage(booking.studentName || 'Resident', isRussian)}</strong>
                                             <small>{booking.roomNumber ? `Room ${booking.roomNumber}` : ''}</small>
                                         </div>
                                     );
