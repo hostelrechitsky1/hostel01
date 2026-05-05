@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
@@ -23,8 +23,6 @@ interface DashboardBookingSummaryProps {
 }
 
 let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
-const CANCEL_BOOKING_BADGE_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_badge_seen_v2:';
-
 const loadResidentMutationsService = () => {
     residentMutationsServicePromise ??= import('../services/residentMutationsService');
     return residentMutationsServicePromise;
@@ -51,7 +49,6 @@ export default function DashboardBookingSummary({
             googleCalendar: 'Google Календарь',
             appleOutlook: 'Apple / Outlook',
             cancelBooking: 'Отменить бронь',
-            cancelHint: 'Освободить слот сразу',
             noUpcomingBookings: 'Нет предстоящих бронирований.',
             pastBookings: 'Прошлые бронирования',
             quickBook: 'Быстро забронировать',
@@ -77,7 +74,6 @@ export default function DashboardBookingSummary({
             googleCalendar: 'Google Cal',
             appleOutlook: 'Apple / Outlook',
             cancelBooking: 'Cancel Booking',
-            cancelHint: 'Free the slot instantly',
             noUpcomingBookings: 'No upcoming bookings.',
             pastBookings: 'Past Bookings',
             quickBook: 'Quick Book',
@@ -102,13 +98,6 @@ export default function DashboardBookingSummary({
     const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
     const [cancelModalMessage, setCancelModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
-    const [showCancelFeatureBadge, setShowCancelFeatureBadge] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const storageKey = `${CANCEL_BOOKING_BADGE_STORAGE_KEY_PREFIX}${user.id}`;
-        setShowCancelFeatureBadge(window.localStorage.getItem(storageKey) !== '1');
-    }, [user.id]);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -153,10 +142,6 @@ export default function DashboardBookingSummary({
         if (!canCancelBooking(booking)) return;
         void loadResidentMutationsService();
         hapticSelection();
-        if (showCancelFeatureBadge && typeof window !== 'undefined') {
-            window.localStorage.setItem(`${CANCEL_BOOKING_BADGE_STORAGE_KEY_PREFIX}${user.id}`, '1');
-            setShowCancelFeatureBadge(false);
-        }
         setCancelModalBooking(booking);
         setCancelModalMessage(null);
     };
@@ -332,60 +317,6 @@ export default function DashboardBookingSummary({
     const cancelBookingMachineLabel = cancelBookingMachine?.name || `Machine ${cancelModalBooking?.machineId || ''}`;
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
     const primaryCancelButtonDisabled = !primaryUpcomingBooking || !canCancelBooking(primaryUpcomingBooking) || cancelBookingId === primaryUpcomingBooking.id;
-    const getCancelActionStyle = (compact = false, disabled = false) => ({
-        padding: compact ? '9px 13px' : '10px 14px',
-        paddingRight: compact ? '13px' : '14px',
-        minHeight: compact ? '40px' : '44px',
-        borderRadius: '14px',
-        fontSize: compact ? '13px' : '14px',
-        fontWeight: 700,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: compact ? '7px' : '8px',
-        justifyContent: 'center',
-        position: 'relative' as const,
-        overflow: 'visible' as const,
-        border: '1px solid rgba(248, 113, 113, 0.28)',
-        color: disabled ? 'rgba(254, 202, 202, 0.72)' : '#fecaca',
-        background: disabled
-            ? 'rgba(127, 29, 29, 0.12)'
-            : 'rgba(239, 68, 68, 0.08)',
-        boxShadow: disabled
-            ? 'none'
-            : '0 10px 22px rgba(15, 23, 42, 0.12)',
-        opacity: disabled ? 0.72 : 1,
-        cursor: disabled ? 'not-allowed' as const : 'pointer' as const,
-        flex: compact ? undefined : 1,
-        minWidth: compact ? undefined : '136px',
-    });
-    const renderCancelBadge = () => showCancelFeatureBadge ? (
-        <span
-            className="feature-badge feature-badge--cancel"
-            style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '4px 9px',
-                borderRadius: '999px',
-                fontSize: '10px',
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: '#ffffff',
-                background: 'var(--resident-ready-green)',
-                border: '1px solid var(--resident-ready-green)',
-                boxShadow: '0 10px 20px rgba(16, 185, 129, 0.22)',
-                flexShrink: 0,
-                position: 'absolute',
-                top: '-10px',
-                right: '10px',
-                zIndex: 2,
-                pointerEvents: 'none'
-            }}
-        >
-            New
-        </span>
-    ) : null;
 
     return (
         <>
@@ -510,7 +441,7 @@ export default function DashboardBookingSummary({
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
+                        <div className="booking-summary-actions">
                             <button
                                 onClick={() => {
                                     if (!primaryUpcomingBooking) return;
@@ -528,8 +459,7 @@ export default function DashboardBookingSummary({
 
                                     window.open(url, '_blank');
                                 }}
-                                className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
+                                className="glass-button booking-summary-action-button"
                             >
                                 <Calendar size={18} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>{t.googleCalendar}</span>
@@ -596,8 +526,7 @@ export default function DashboardBookingSummary({
                                     document.body.removeChild(link);
                                     window.URL.revokeObjectURL(url);
                                 }}
-                                className="glass-button"
-                                style={{ padding: '10px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '136px', minHeight: '44px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
+                                className="glass-button booking-summary-action-button"
                             >
                                 <Download size={18} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>{t.appleOutlook}</span>
@@ -606,39 +535,16 @@ export default function DashboardBookingSummary({
                             <button
                                 onClick={() => handleOpenCancelBooking(primaryUpcomingBooking)}
                                 disabled={primaryCancelButtonDisabled}
-                                className="glass-button"
-                                style={getCancelActionStyle(false, primaryCancelButtonDisabled)}
+                                className="glass-button cancel-booking-button"
                                 title={canCancelBooking(primaryUpcomingBooking) ? 'Cancel upcoming booking' : 'Started bookings can no longer be cancelled'}
                             >
-                                {renderCancelBadge()}
                                 {cancelBookingId === primaryUpcomingBooking.id ? (
                                     <>
                                         <ActionSpinner size={16} tone="neutral" />
                                         Cancelling...
                                     </>
                                 ) : (
-                                    <>
-                                        <span
-                                            style={{
-                                                width: '26px',
-                                                height: '26px',
-                                                borderRadius: '999px',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                background: 'rgba(239, 68, 68, 0.14)',
-                                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)'
-                                            }}
-                                        >
-                                            <XCircle size={15} />
-                                        </span>
-                                        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.05 }}>
-                                            <span>{t.cancelBooking}</span>
-                                            <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(254, 202, 202, 0.78)' }}>
-                                                {t.cancelHint}
-                                            </span>
-                                        </span>
-                                    </>
+                                    <span>{t.cancelBooking}</span>
                                 )}
                             </button>
                         </div>
@@ -736,11 +642,9 @@ export default function DashboardBookingSummary({
                                             {canCancelBooking(booking) && (
                                                 <button
                                                     onClick={() => handleOpenCancelBooking(booking)}
-                                                    className="glass-button"
+                                                    className="glass-button cancel-booking-button cancel-booking-button--compact"
                                                     disabled={cancelBookingId === booking.id}
-                                                    style={getCancelActionStyle(true, cancelBookingId === booking.id)}
                                                 >
-                                                    {renderCancelBadge()}
                                                     {cancelBookingId === booking.id ? (
                                                         <>
                                                             <ActionSpinner size={14} tone="neutral" />
@@ -748,17 +652,7 @@ export default function DashboardBookingSummary({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <span
-                                                                style={{
-                                                                    width: '22px',
-                                                                    height: '22px',
-                                                                    borderRadius: '999px',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    background: 'rgba(255,255,255,0.14)',
-                                                                }}
-                                                            >
+                                                            <span className="cancel-booking-button__icon">
                                                                 <XCircle size={13} />
                                                             </span>
                                                             <span>{t.cancelBooking}</span>
@@ -959,29 +853,15 @@ export default function DashboardBookingSummary({
                                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                                     <button
                                         onClick={() => setCancelModalBooking(null)}
-                                        className="glass-button"
+                                        className="glass-button cancel-keep-button"
                                         disabled={cancelBookingId === cancelModalBooking.id}
-                                        style={{ padding: '10px 18px', borderRadius: '10px' }}
                                     >
                                         {t.keepBooking}
                                     </button>
                                     <button
                                         onClick={handleConfirmCancelBooking}
                                         disabled={cancelBookingId === cancelModalBooking.id}
-                                        className="glass-button"
-                                        style={{
-                                            padding: '10px 18px',
-                                            borderRadius: '10px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '8px',
-                                            background: 'rgba(239, 68, 68, 0.12)',
-                                            border: '1px solid rgba(239, 68, 68, 0.28)',
-                                            color: 'var(--error)',
-                                            opacity: cancelBookingId === cancelModalBooking.id ? 0.7 : 1,
-                                            cursor: cancelBookingId === cancelModalBooking.id ? 'not-allowed' : 'pointer'
-                                        }}
+                                        className="glass-button cancel-booking-button cancel-booking-button--modal"
                                     >
                                         {cancelBookingId === cancelModalBooking.id ? (
                                             <>

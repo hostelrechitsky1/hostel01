@@ -68,7 +68,7 @@ const normalizeAppSettings = (settings: Partial<AppSettings> | null | undefined)
         ...data,
         maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : DEFAULT_APP_SETTINGS.maintenanceDay,
         autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : DEFAULT_APP_SETTINGS.autoOpenWeekday,
-        autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' ? Number(data.autoOpenDurationHours) : DEFAULT_APP_SETTINGS.autoOpenDurationHours,
+        autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' && Number.isFinite(Number(data.autoOpenDurationHours)) ? Math.max(Number(data.autoOpenDurationHours), DEFAULT_APP_SETTINGS.autoOpenDurationHours) : DEFAULT_APP_SETTINGS.autoOpenDurationHours,
         autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
             ? data.autoOpenTime
             : DEFAULT_APP_SETTINGS.autoOpenTime,

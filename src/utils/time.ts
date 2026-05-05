@@ -9,7 +9,8 @@ interface AutoOpenConfig {
 
 const DEFAULT_AUTO_OPEN_WEEKDAY = 6;
 const DEFAULT_AUTO_OPEN_TIME = '16:00';
-const DEFAULT_AUTO_OPEN_DURATION_HOURS = 28;
+const DEFAULT_AUTO_OPEN_DURATION_HOURS = 168;
+const MIN_AUTO_OPEN_DURATION_HOURS = 168;
 const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const normalizeAutoOpenConfig = (config: AutoOpenConfig = {}) => {
@@ -17,9 +18,10 @@ const normalizeAutoOpenConfig = (config: AutoOpenConfig = {}) => {
     const time = typeof config.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(config.autoOpenTime)
         ? config.autoOpenTime
         : DEFAULT_AUTO_OPEN_TIME;
-    const duration = typeof config.autoOpenDurationHours === 'number' && config.autoOpenDurationHours > 0
+    const configuredDuration = typeof config.autoOpenDurationHours === 'number' && config.autoOpenDurationHours > 0
         ? config.autoOpenDurationHours
         : DEFAULT_AUTO_OPEN_DURATION_HOURS;
+    const duration = Math.max(configuredDuration, MIN_AUTO_OPEN_DURATION_HOURS);
 
     const [hourRaw, minuteRaw] = time.split(':').map(Number);
     const hour = Number.isFinite(hourRaw) ? Math.min(Math.max(hourRaw, 0), 23) : 16;
@@ -172,6 +174,22 @@ export const isAutoBookingWindowOpen = (now: Date = new Date(), configInput: Aut
 
     return isInsideWindow(openingThisWeek) || isInsideWindow(openingLastWeek);
 };
+
+export const getActiveBookingWeekStart = (now: Date = new Date(), configInput: AutoOpenConfig = {}) => {
+    const config = normalizeAutoOpenConfig(configInput);
+    const belarusNow = getBelarusNow(now);
+    const thisWeekStart = getBelarusWeekStart(belarusNow);
+    const openingThisWeek = getOpeningForBelarusWeek(thisWeekStart, config);
+    const activeOpeningWeekStart = belarusNow >= openingThisWeek
+        ? thisWeekStart
+        : addBelarusDays(thisWeekStart, -7);
+
+    return addBelarusDays(activeOpeningWeekStart, 7);
+};
+
+export const getActiveBookingWeekId = (now: Date = new Date(), configInput: AutoOpenConfig = {}) => (
+    getBelarusWeekId(getActiveBookingWeekStart(now, configInput))
+);
 
 export const getNextAutoOpenDate = (now: Date = new Date(), configInput: AutoOpenConfig = {}) => {
     const config = normalizeAutoOpenConfig(configInput);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { addMinutesToTimeString, getNextSaturday1600 } from '../time';
+import { addMinutesToTimeString, formatBelarusDate, getActiveBookingWeekStart, getAutoOpenWindowDisplay, getNextSaturday1600, isAutoBookingWindowOpen } from '../time';
 
 describe('getNextSaturday1600 (Belarus Time UTC+3)', () => {
     beforeEach(() => {
@@ -52,5 +52,48 @@ describe('getNextSaturday1600 (Belarus Time UTC+3)', () => {
 
     it('adds minutes to a time string', () => {
         expect(addMinutesToTimeString('21:00', 90)).toBe('22:30');
+    });
+
+    it('keeps bookings open during the week even when old settings still say 28 hours', () => {
+        const mockNow = new Date('2026-03-03T09:00:00Z'); // Tuesday 12:00 in Belarus
+
+        expect(isAutoBookingWindowOpen(mockNow, {
+            autoOpenWeekday: 6,
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+        })).toBe(true);
+    });
+
+    it('targets the current week before the next Saturday opening', () => {
+        const mockNow = new Date('2026-03-03T09:00:00Z'); // Tuesday
+
+        expect(formatBelarusDate(getActiveBookingWeekStart(mockNow, {
+            autoOpenWeekday: 6,
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+        }))).toBe('2026-03-02');
+    });
+
+    it('targets the next week after Saturday 16:00 Belarus time', () => {
+        const mockNow = new Date('2026-03-07T14:00:00Z'); // Saturday 17:00 in Belarus
+
+        expect(formatBelarusDate(getActiveBookingWeekStart(mockNow, {
+            autoOpenWeekday: 6,
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+        }))).toBe('2026-03-09');
+    });
+
+    it('displays the weekly opening window as Saturday to Saturday', () => {
+        expect(getAutoOpenWindowDisplay({
+            autoOpenWeekday: 6,
+            autoOpenTime: '16:00',
+            autoOpenDurationHours: 28,
+        })).toMatchObject({
+            openDay: 'Saturday',
+            openTime: '16:00',
+            closeDay: 'Saturday',
+            closeTime: '16:00',
+        });
     });
 });

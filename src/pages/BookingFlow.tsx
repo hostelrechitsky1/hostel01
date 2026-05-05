@@ -1,6 +1,6 @@
 import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
@@ -20,6 +20,7 @@ import {
     getBelarusWeekStart,
     getBelarusWeekday,
     getBelarusWeekId,
+    getActiveBookingWeekStart,
     isAutoBookingWindowOpen,
     isSameBelarusDay,
     getNextAutoOpenDate,
@@ -66,6 +67,7 @@ const replaceBookingsForDate = (bookings: Booking[], date: string, nextDateBooki
 
 export default function BookingFlow() {
     const navigate = useNavigate();
+    const location = useLocation();
     const user = bookingService.getCurrentUser();
     const userId = user?.id ?? '';
     const bookingWeekIds = useMemo(() => {
@@ -112,6 +114,7 @@ export default function BookingFlow() {
     // Async State
     const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
     const [bookings, setBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const showStatusView = useMemo(() => new URLSearchParams(location.search).get('status') === '1', [location.search]);
     const selectedDateKey = useMemo(() => formatBelarusDate(selectedDate), [selectedDate]);
     const hasBookingSnapshot = hasCachedMachines
         || hasCachedWeekBookings
@@ -372,21 +375,21 @@ export default function BookingFlow() {
     }, [liveSyncRequested, reloadKey, selectedDateKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+    const activeBookingWeekStart = useMemo(() => {
+        if (settings.forceShowNextWeek) {
+            return addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+        }
+
+        return getActiveBookingWeekStart(new Date(), settings);
+    }, [settings]);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     const dateOptions = useMemo(() => {
-        let start = getBelarusDate();
-        const currentWeekEnd = getBelarusWeekEnd(start);
-        let maxDate = currentWeekEnd;
-
-        if (isNextWeekOpen) {
-            const nextMonday = addBelarusDays(currentWeekEnd, 1);
-            if (start.getTime() <= currentWeekEnd.getTime()) {
-                start = nextMonday;
-            }
-            maxDate = addBelarusDays(currentWeekEnd, 7);
-        }
+        const today = getBelarusDate();
+        const activeWeekEnd = getBelarusWeekEnd(activeBookingWeekStart);
+        const start = today.getTime() > activeBookingWeekStart.getTime() ? today : activeBookingWeekStart;
+        const maxDate = activeWeekEnd;
 
         const dates = [];
         let current = start;
@@ -395,7 +398,7 @@ export default function BookingFlow() {
             current = addBelarusDays(current, 1);
         }
         return dates;
-    }, [isNextWeekOpen]);
+    }, [activeBookingWeekStart]);
 
     useEffect(() => {
         if (dateOptions.length > 0) {
@@ -621,6 +624,17 @@ export default function BookingFlow() {
     }, [settings]);
 
     const windowDisplay = getAutoOpenWindowDisplay(settings);
+    const isOpenStatusView = showStatusView && !settings.forceCloseBookings && isNextWeekOpen;
+
+    useEffect(() => {
+        if (!isOpenStatusView) return;
+
+        const redirectTimer = window.setTimeout(() => {
+            navigate('/book', { replace: true });
+        }, 350);
+
+        return () => window.clearTimeout(redirectTimer);
+    }, [isOpenStatusView, navigate]);
 
     const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
         || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
@@ -663,7 +677,7 @@ export default function BookingFlow() {
         );
     }
 
-    if (settings.forceCloseBookings || !isNextWeekOpen) {
+    if (settings.forceCloseBookings || !isNextWeekOpen || showStatusView) {
         return (
             <div className="container flex-center" style={{
                 minHeight: '80vh',
@@ -675,22 +689,28 @@ export default function BookingFlow() {
                 <div
                     className="animate-fade-in"
                     style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
+                        background: isOpenStatusView ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.1)',
                         padding: '32px',
                         borderRadius: '50%',
                         marginBottom: '24px',
-                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                        border: isOpenStatusView ? '1px solid rgba(16, 185, 129, 0.24)' : '1px solid rgba(239, 68, 68, 0.2)'
                     }}>
-                    <AlertCircle size={48} color="#ef4444" />
+                    {isOpenStatusView ? <Activity size={48} color="var(--success)" /> : <AlertCircle size={48} color="#ef4444" />}
                 </div>
 
                 <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
-                    {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
+                    {settings.forceCloseBookings
+                        ? 'Bookings Are Paused'
+                        : isOpenStatusView
+                            ? 'Bookings Are Open All Week'
+                            : 'Bookings Are Currently Closed'}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
                     {settings.forceCloseBookings
                         ? 'Temporarily disabled by admin.'
-                        : `Open ${windowDisplay.openDay} ${windowDisplay.openTime} - ${windowDisplay.closeDay} ${windowDisplay.closeTime}.`}
+                        : isOpenStatusView
+                            ? `Next weekly slots open ${windowDisplay.openDay} ${windowDisplay.openTime}.`
+                            : `Open ${windowDisplay.openDay} ${windowDisplay.openTime} - ${windowDisplay.closeDay} ${windowDisplay.closeTime}.`}
                 </p>
 
                 {!settings.forceCloseBookings && (
@@ -760,21 +780,41 @@ export default function BookingFlow() {
                     </div>
                 )}
 
-                <button
-                    onClick={() => navigate('/')}
-                    className="primary-button"
-                    style={{
-                        padding: '16px 32px',
-                        borderRadius: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        fontSize: '16px',
-                        fontWeight: 600
-                    }}
-                >
-                    <ChevronLeft size={20} /> Back to Dashboard
-                </button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                        onClick={() => navigate('/')}
+                        className={isOpenStatusView ? 'glass-button' : 'primary-button'}
+                        style={{
+                            padding: '16px 28px',
+                            borderRadius: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '16px',
+                            fontWeight: 600
+                        }}
+                    >
+                        <ChevronLeft size={20} /> Back to Dashboard
+                    </button>
+
+                    {isOpenStatusView && (
+                        <button
+                            onClick={() => navigate('/book')}
+                            className="primary-button"
+                            style={{
+                                padding: '16px 32px',
+                                borderRadius: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                fontSize: '16px',
+                                fontWeight: 600
+                            }}
+                        >
+                            Open Slots
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }

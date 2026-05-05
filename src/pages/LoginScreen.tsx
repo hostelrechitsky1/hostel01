@@ -165,7 +165,6 @@ export default function LoginScreen() {
 
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
-                bookingService.setCurrentRoommates(roomStudents);
                 preloadResidentRoutes();
                 void warmResidentAppData(undefined, { roomNumber: roomStudents[0].roomNumber });
                 // Check if Room has PIN protection
@@ -222,7 +221,6 @@ export default function LoginScreen() {
 
         // Keep using bookingService for session management facade for now
         bookingService.setCurrentUser(student);
-        bookingService.setCurrentRoommates(roommates);
         window.sessionStorage.setItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY, '1');
         preloadResidentRoutes();
         const warmupPromise = warmResidentAppData(student.id, {

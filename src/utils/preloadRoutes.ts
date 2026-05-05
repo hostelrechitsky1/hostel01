@@ -6,9 +6,14 @@ export const preloadBookingRoute = () => {
     void import('../pages/BookingFlow');
 };
 
+export const preloadWeeklySlotsRoute = () => {
+    void import('../pages/WeeklySlots');
+};
+
 export const preloadResidentRoutes = () => {
     preloadDashboardRoute();
     preloadBookingRoute();
+    preloadWeeklySlotsRoute();
 };
 
 export const preloadManagerRoutes = () => {
