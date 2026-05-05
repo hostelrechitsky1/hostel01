@@ -32,4 +32,20 @@ describe('bookingService saved accounts', () => {
         expect(bookingService.getSavedAccounts()).toHaveLength(2);
         expect(bookingService.getSavedAccounts().map((student) => student.id)).toEqual(['student-1', 'student-2']);
     });
+
+    it('keeps the previous current student when switching from an old single-user session', () => {
+        window.localStorage.setItem('hostel_current_user', JSON.stringify({
+            id: 'student-1',
+            name: 'Silva Shanilka',
+            roomNumber: '52-2',
+        }));
+
+        bookingService.setCurrentUser({
+            id: 'student-2',
+            name: 'Alex Kumar',
+            roomNumber: '52-2',
+        });
+
+        expect(bookingService.getSavedAccounts().map((student) => student.id)).toEqual(['student-1', 'student-2']);
+    });
 });

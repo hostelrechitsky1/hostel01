@@ -102,6 +102,7 @@ export default function Dashboard() {
             accountWrongPin: 'Неверный PIN.',
             accountLookupFailed: 'Не удалось проверить аккаунт. Попробуйте снова.',
             savedAccountsHint: 'Здесь отображаются только аккаунты, добавленные с PIN.',
+            accountsAvailable: (count: number) => count === 1 ? 'Доступен 1 аккаунт' : `Доступно ${count} аккаунта`,
             refreshingRoommates: 'Проверяем аккаунт...',
             noOtherRoommates: 'Добавьте аккаунт с PIN, чтобы быстро переключаться.',
             showingSavedTitle: 'Показаны сохранённые данные панели',
@@ -160,6 +161,7 @@ export default function Dashboard() {
             accountWrongPin: 'Incorrect PIN.',
             accountLookupFailed: 'Could not verify account. Please try again.',
             savedAccountsHint: 'Only accounts added with a PIN are shown here.',
+            accountsAvailable: (count: number) => `${count} account${count === 1 ? '' : 's'} available`,
             refreshingRoommates: 'Verifying account...',
             noOtherRoommates: 'Add an account with PIN to switch quickly.',
             showingSavedTitle: 'Showing saved dashboard data',
@@ -893,6 +895,13 @@ export default function Dashboard() {
         setAccountLookupCandidates([]);
     };
 
+    const handleOpenAddAccount = () => {
+        setIsRoommateMenuOpen(true);
+        setIsAddAccountMode(true);
+        resetAddAccountForm();
+        hapticSelection();
+    };
+
     const handleAddAccountSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         const normalizedRoom = accountLookupRoom.trim();
@@ -957,13 +966,14 @@ export default function Dashboard() {
         const cachedBookings = residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, nextResident.id, true)?.recentBookings
             ?? residentFirestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
 
-        bookingService.addSavedAccount(nextResident);
+        const nextSavedAccounts = buildSavedAccountList(nextResident, [...savedAccounts, user, nextResident]);
+        bookingService.setSavedAccounts(nextSavedAccounts);
         bookingService.setCurrentUser(nextResident);
         startTransition(() => {
             setUser(nextResident);
             setRecentBookings(cachedBookings ?? []);
         });
-        setSavedAccounts(getInitialSavedAccounts(nextResident));
+        setSavedAccounts(buildSavedAccountList(nextResident, bookingService.getSavedAccounts()));
         setLoading(false);
         setRecentBookingsHydrated(cachedBookings !== undefined);
         setRecentBookingsLoading(cachedBookings === undefined);
@@ -1230,28 +1240,30 @@ export default function Dashboard() {
                                                 {t.savedAccountsHint}
                                             </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsAddAccountMode((current) => !current);
-                                                resetAddAccountForm();
-                                            }}
-                                            className="glass-button"
-                                            style={{
-                                                width: '34px',
-                                                height: '34px',
-                                                borderRadius: '999px',
-                                                padding: 0,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0
-                                            }}
-                                            aria-label={isAddAccountMode ? t.cancelAddAccount : t.addAccount}
-                                            title={isAddAccountMode ? t.cancelAddAccount : t.addAccount}
-                                        >
-                                            {isAddAccountMode ? <X size={16} /> : <UserPlus size={16} />}
-                                        </button>
+                                        {isAddAccountMode && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsAddAccountMode(false);
+                                                    resetAddAccountForm();
+                                                }}
+                                                className="glass-button"
+                                                style={{
+                                                    width: '34px',
+                                                    height: '34px',
+                                                    borderRadius: '999px',
+                                                    padding: 0,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}
+                                                aria-label={t.cancelAddAccount}
+                                                title={t.cancelAddAccount}
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        )}
                                     </div>
 
                                     <div style={{ display: 'grid', gap: '8px' }}>
@@ -1504,11 +1516,43 @@ export default function Dashboard() {
                             <p className="resident-header-room">
                                 {t.roomLabel(user.roomNumber)}
                             </p>
-                            {canOpenRoommateMenu && (
-                                <p className="resident-header-switch-hint">
-                                    {t.tapAvatarToSwitch}
-                                </p>
-                            )}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleOpenAddAccount}
+                                    className="glass-button"
+                                    style={{
+                                        padding: '8px 12px',
+                                        borderRadius: '999px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        fontSize: '13px',
+                                        fontWeight: 700,
+                                        color: 'var(--text-main)'
+                                    }}
+                                >
+                                    <UserPlus size={15} />
+                                    {t.addAccount}
+                                </button>
+                                {canOpenRoommateMenu && (
+                                    <button
+                                        type="button"
+                                        onClick={handleRoommateButtonClick}
+                                        className="resident-header-switch-hint"
+                                        style={{
+                                            border: 0,
+                                            padding: 0,
+                                            background: 'transparent',
+                                            cursor: 'pointer',
+                                            color: 'var(--text-muted)',
+                                            fontSize: '13px'
+                                        }}
+                                    >
+                                        {t.accountsAvailable(savedAccounts.length)}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -37,8 +37,9 @@ class BookingService {
 
     // --- Session / Auth ---
     setCurrentUser(student: Student) {
+        const previousUser = this.getCurrentUser();
         this.set(STORAGE_KEYS.CURRENT_USER, student);
-        this.addSavedAccount(student);
+        this.setSavedAccounts(previousUser ? [...this.getSavedAccounts(), previousUser, student] : [...this.getSavedAccounts(), student]);
     }
 
     setCurrentRoommates(students: Student[]) {
