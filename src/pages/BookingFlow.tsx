@@ -595,12 +595,17 @@ export default function BookingFlow() {
 
     // --- RENDER ---
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+    const [statusCountdownComplete, setStatusCountdownComplete] = useState(false);
 
     useEffect(() => {
         if (!settings) return;
-        if (settings.forceCloseBookings) return;
+        if (settings.forceCloseBookings) {
+            setStatusCountdownComplete(false);
+            return;
+        }
 
         const targetTime = getNextAutoOpenDate(new Date(), settings).getTime();
+        setStatusCountdownComplete(false);
 
         const calculateTimeLeft = () => {
             const now = new Date().getTime(); // use real local epoch time
@@ -615,6 +620,7 @@ export default function BookingFlow() {
                 });
             } else {
                 setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+                setStatusCountdownComplete(true);
             }
         };
 
@@ -627,14 +633,14 @@ export default function BookingFlow() {
     const isOpenStatusView = showStatusView && !settings.forceCloseBookings && isNextWeekOpen;
 
     useEffect(() => {
-        if (!isOpenStatusView) return;
+        if (!showStatusView || !statusCountdownComplete) return;
 
         const redirectTimer = window.setTimeout(() => {
             navigate('/book', { replace: true });
         }, 350);
 
         return () => window.clearTimeout(redirectTimer);
-    }, [isOpenStatusView, navigate]);
+    }, [navigate, showStatusView, statusCountdownComplete]);
 
     const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
         || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
