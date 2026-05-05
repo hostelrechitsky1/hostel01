@@ -502,7 +502,7 @@ export default function WeeklySlots() {
             <section className="weekly-slots-board-wrap">
                 <div
                     className="weekly-slots-board"
-                    style={{ gridTemplateColumns: `minmax(74px, 0.72fr) repeat(${Math.max(machines.length, 1)}, minmax(126px, 1fr))` }}
+                    style={{ gridTemplateColumns: `minmax(68px, 0.62fr) repeat(${Math.max(machines.length, 1)}, minmax(116px, 1fr))` }}
                 >
                     <div className="weekly-slots-board-head">
                         <Clock size={16} />

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-button-bg: rgba(255, 255, 255, 0.1);
@@ -186,6 +187,127 @@ button {
 
 .feature-badge--cancel {
   border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.cancel-booking-button {
+  --cancel-accent: #f87171;
+  --cancel-accent-strong: #ef4444;
+  --cancel-text: #fecaca;
+  --cancel-muted: rgba(254, 202, 202, 0.78);
+  min-width: 136px;
+  min-height: 46px;
+  flex: 1;
+  padding: 10px 15px;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  position: relative;
+  overflow: visible;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  color: var(--cancel-text);
+  background:
+    linear-gradient(135deg, rgba(239, 68, 68, 0.13), rgba(127, 29, 29, 0.1)),
+    rgba(15, 23, 42, 0.18);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 800;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.cancel-booking-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(248, 113, 113, 0.54);
+  background:
+    linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(127, 29, 29, 0.12)),
+    rgba(15, 23, 42, 0.18);
+  box-shadow:
+    0 16px 32px rgba(127, 29, 29, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.cancel-booking-button:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.cancel-booking-button--compact {
+  min-width: auto;
+  min-height: 40px;
+  flex: initial;
+  padding: 9px 13px;
+  gap: 7px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.cancel-booking-button--modal,
+.cancel-keep-button {
+  flex: initial;
+  min-width: 132px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 13px;
+}
+
+.cancel-booking-button__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fee2e2;
+  background: rgba(239, 68, 68, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 8px 16px rgba(127, 29, 29, 0.16);
+}
+
+.cancel-booking-button--compact .cancel-booking-button__icon {
+  width: 22px;
+  height: 22px;
+}
+
+.cancel-booking-button__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.06;
+}
+
+.cancel-booking-button__hint {
+  margin-top: 3px;
+  color: var(--cancel-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.cancel-keep-button {
+  color: var(--text-main);
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.12), rgba(255, 255, 255, 0.04)),
+    var(--glass-button-bg);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-weight: 800;
+}
+
+.cancel-keep-button:not(:disabled):hover {
+  border-color: rgba(148, 163, 184, 0.38);
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.16), rgba(255, 255, 255, 0.06)),
+    var(--glass-button-bg);
 }
 
 .banner-shimmer-surface {
@@ -1148,6 +1270,7 @@ button {
 
 @media (prefers-color-scheme: light) {
   :root {
+    color-scheme: light;
     --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     --bg-solid: #f8fafc;
     --glass-bg: rgba(255, 255, 255, 0.7);
@@ -1183,6 +1306,65 @@ button {
     background: rgba(255, 255, 255, 0.8);
   }
 
+  .cancel-booking-button {
+    --cancel-text: #991b1b;
+    --cancel-muted: rgba(153, 27, 27, 0.68);
+    color: var(--cancel-text);
+    background:
+      linear-gradient(135deg, rgba(254, 226, 226, 0.92), rgba(255, 241, 242, 0.72)),
+      rgba(255, 255, 255, 0.86);
+    border-color: rgba(220, 38, 38, 0.22);
+    box-shadow:
+      0 12px 24px rgba(185, 28, 28, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  }
+
+  .cancel-booking-button:not(:disabled):hover {
+    background:
+      linear-gradient(135deg, rgba(254, 202, 202, 0.95), rgba(255, 241, 242, 0.82)),
+      rgba(255, 255, 255, 0.92);
+    border-color: rgba(220, 38, 38, 0.34);
+    box-shadow:
+      0 16px 30px rgba(185, 28, 28, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  }
+
+  .cancel-booking-button__icon {
+    color: #b91c1c;
+    background: rgba(254, 202, 202, 0.72);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.78),
+      0 8px 16px rgba(185, 28, 28, 0.08);
+  }
+
+  .cancel-keep-button {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.76)),
+      rgba(255, 255, 255, 0.82);
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .weekly-slots-open-banner {
+    background:
+      linear-gradient(135deg, rgba(209, 250, 229, 0.92) 0%, rgba(224, 242, 254, 0.76) 100%),
+      rgba(255, 255, 255, 0.76);
+    border-color: rgba(16, 185, 129, 0.2);
+    box-shadow: 0 20px 54px rgba(15, 23, 42, 0.08);
+  }
+
+  .weekly-slots-date-button,
+  .weekly-slots-stats .glass-panel,
+  .weekly-slots-board-head,
+  .weekly-slots-time-cell,
+  .weekly-slots-cell {
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .weekly-slots-date-button--selected {
+    background: rgba(224, 231, 255, 0.86);
+  }
+
   .text-gradient {
     background: linear-gradient(to right, #4f46e5, #6366f1);
     -webkit-background-clip: text;
@@ -1192,6 +1374,10 @@ button {
 }
 
 @media (max-width: 640px) {
+  .container.weekly-slots-page {
+    padding: 16px 14px 88px;
+  }
+
   .resident-header {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -1214,37 +1400,155 @@ button {
   .weekly-slots-header {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
+    gap: 12px;
+    margin: 8px 0 16px;
+  }
+
+  .weekly-slots-header h2 {
+    font-size: 21px;
+  }
+
+  .weekly-slots-header p {
+    font-size: 12px;
   }
 
   .weekly-slots-language-button {
     grid-column: 2;
     justify-self: start;
+    padding: 7px 11px;
+  }
+
+  .weekly-slots-language-button span {
+    font-size: 12px;
   }
 
   .weekly-slots-overview {
     grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
   }
 
   .weekly-slots-open-banner {
-    padding: 16px;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  .weekly-slots-open-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+  }
+
+  .weekly-slots-open-banner h3 {
+    font-size: 16px;
+  }
+
+  .weekly-slots-open-banner p,
+  .weekly-slots-open-banner span {
+    font-size: 12px;
   }
 
   .weekly-slots-date-strip {
-    grid-template-columns: repeat(7, minmax(76px, 1fr));
+    grid-template-columns: repeat(7, minmax(68px, 1fr));
+    gap: 7px;
+    scroll-snap-type: x proximity;
+    margin-bottom: 4px;
   }
 
   .weekly-slots-date-button {
-    min-width: 76px;
-    min-height: 74px;
-    padding: 10px 8px;
+    min-width: 68px;
+    min-height: 70px;
+    padding: 9px 7px;
+    scroll-snap-align: start;
+  }
+
+  .weekly-slots-date-number {
+    font-size: 18px;
+  }
+
+  .weekly-slots-date-badge {
+    padding: 3px 6px;
+    font-size: 9px;
   }
 
   .weekly-slots-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .weekly-slots-stats .glass-panel {
+    padding: 11px 12px;
+    border-radius: 13px;
+  }
+
+  .weekly-slots-stats .glass-panel:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .weekly-slots-stats span {
+    font-size: 11px;
+  }
+
+  .weekly-slots-stats strong {
+    font-size: 14px;
+  }
+
+  .weekly-slots-help,
+  .weekly-slots-closed {
+    margin-bottom: 8px;
+    font-size: 13px;
   }
 
   .weekly-slots-board {
-    min-width: 690px;
+    min-width: 560px;
+    gap: 5px;
+  }
+
+  .weekly-slots-board-head,
+  .weekly-slots-time-cell,
+  .weekly-slots-cell {
+    min-height: 58px;
+    border-radius: 11px;
+  }
+
+  .weekly-slots-board-head {
+    min-height: 38px;
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .weekly-slots-cell {
+    padding: 9px;
+  }
+
+  .weekly-slots-cell strong {
+    font-size: 13px;
+  }
+
+  .weekly-slots-cell span,
+  .weekly-slots-cell small {
+    font-size: 11px;
+  }
+
+  .weekly-slots-live-pill {
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .cancel-booking-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cancel-booking-button--compact,
+  .cancel-booking-button--modal,
+  .cancel-keep-button {
+    width: auto;
+    min-width: 118px;
   }
 
   .resident-shepherd-step {
