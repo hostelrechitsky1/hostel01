@@ -49,7 +49,6 @@ export default function DashboardBookingSummary({
             googleCalendar: 'Google Календарь',
             appleOutlook: 'Apple / Outlook',
             cancelBooking: 'Отменить бронь',
-            cancelHint: 'Освободить слот сразу',
             noUpcomingBookings: 'Нет предстоящих бронирований.',
             pastBookings: 'Прошлые бронирования',
             quickBook: 'Быстро забронировать',
@@ -75,7 +74,6 @@ export default function DashboardBookingSummary({
             googleCalendar: 'Google Cal',
             appleOutlook: 'Apple / Outlook',
             cancelBooking: 'Cancel Booking',
-            cancelHint: 'Free the slot instantly',
             noUpcomingBookings: 'No upcoming bookings.',
             pastBookings: 'Past Bookings',
             quickBook: 'Quick Book',
@@ -552,12 +550,7 @@ export default function DashboardBookingSummary({
                                         <span className="cancel-booking-button__icon">
                                             <XCircle size={15} />
                                         </span>
-                                        <span className="cancel-booking-button__copy">
-                                            <span>{t.cancelBooking}</span>
-                                            <span className="cancel-booking-button__hint">
-                                                {t.cancelHint}
-                                            </span>
-                                        </span>
+                                        <span>{t.cancelBooking}</span>
                                     </>
                                 )}
                             </button>

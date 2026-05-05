@@ -185,16 +185,15 @@ button {
   --cancel-accent: #f87171;
   --cancel-accent-strong: #ef4444;
   --cancel-text: #fecaca;
-  --cancel-muted: rgba(254, 202, 202, 0.78);
-  min-width: 136px;
-  min-height: 46px;
+  min-width: 156px;
+  min-height: 48px;
   flex: 1;
-  padding: 10px 15px;
+  padding: 12px 18px;
   border-radius: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
   position: relative;
   overflow: visible;
   border: 1px solid rgba(248, 113, 113, 0.32);
@@ -207,6 +206,9 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   font-size: 14px;
   font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
   transition:
     transform 0.18s ease,
     border-color 0.18s ease,
@@ -252,8 +254,8 @@ button {
 }
 
 .cancel-booking-button__icon {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -269,20 +271,6 @@ button {
 .cancel-booking-button--compact .cancel-booking-button__icon {
   width: 22px;
   height: 22px;
-}
-
-.cancel-booking-button__copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.06;
-}
-
-.cancel-booking-button__hint {
-  margin-top: 3px;
-  color: var(--cancel-muted);
-  font-size: 10px;
-  font-weight: 700;
 }
 
 .glass-button.cancel-keep-button {
@@ -973,9 +961,12 @@ button {
 }
 
 .weekly-slots-board-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: min(72vh, 720px);
   padding: 8px 0 12px;
   border-radius: 18px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .weekly-slots-board {
@@ -993,6 +984,9 @@ button {
 }
 
 .weekly-slots-board-head {
+  position: sticky;
+  top: 8px;
+  z-index: 3;
   min-height: 42px;
   display: flex;
   align-items: center;
@@ -1001,8 +995,27 @@ button {
   padding: 10px;
   color: var(--text-muted);
   background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(18px);
   font-size: 13px;
   font-weight: 700;
+}
+
+.weekly-slots-board-head:first-child {
+  left: 0;
+  z-index: 6;
+  background:
+    linear-gradient(135deg, rgba(31, 41, 78, 0.96), rgba(23, 31, 57, 0.96)),
+    rgba(15, 23, 42, 0.96);
+  box-shadow:
+    8px 0 18px rgba(2, 6, 23, 0.16),
+    0 8px 18px rgba(2, 6, 23, 0.12);
+}
+
+.weekly-slots-machine-head {
+  background:
+    linear-gradient(135deg, rgba(31, 41, 78, 0.94), rgba(23, 31, 57, 0.94)),
+    rgba(15, 23, 42, 0.94);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.12);
 }
 
 .weekly-slots-machine-head span {
@@ -1012,12 +1025,17 @@ button {
 }
 
 .weekly-slots-time-cell {
+  position: sticky;
+  left: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 10px;
   color: var(--text-main);
   background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+  box-shadow: 8px 0 18px rgba(2, 6, 23, 0.12);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -1361,6 +1379,17 @@ button {
     background: rgba(255, 255, 255, 0.7);
   }
 
+  .weekly-slots-board-head:first-child,
+  .weekly-slots-machine-head,
+  .weekly-slots-time-cell {
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92)),
+      rgba(255, 255, 255, 0.92);
+    box-shadow:
+      8px 0 18px rgba(15, 23, 42, 0.08),
+      0 8px 18px rgba(15, 23, 42, 0.06);
+  }
+
   .weekly-slots-date-button--selected {
     background: rgba(224, 231, 255, 0.86);
   }
@@ -1529,6 +1558,11 @@ button {
     gap: 5px;
   }
 
+  .weekly-slots-board-wrap {
+    max-height: min(68vh, 620px);
+    padding-top: 6px;
+  }
+
   .weekly-slots-board-head,
   .weekly-slots-time-cell,
   .weekly-slots-cell {
@@ -1537,6 +1571,7 @@ button {
   }
 
   .weekly-slots-board-head {
+    top: 6px;
     min-height: 38px;
     padding: 8px;
     font-size: 12px;
