@@ -160,9 +160,19 @@ button {
   }
 }
 
-@keyframes shineBorderSweep {
+@property --shine-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes shineBorderOrbit {
+  from {
+    --shine-angle: 0deg;
+  }
+
   to {
-    transform: rotate(360deg);
+    --shine-angle: 360deg;
   }
 }
 
@@ -563,6 +573,7 @@ button {
 }
 
 .weekly-slots-dashboard-button {
+  --shine-angle: 0deg;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -571,33 +582,27 @@ button {
   align-items: center;
   justify-content: center;
   color: var(--text-main);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(14, 165, 233, 0.12) 100%);
-  border: 1px solid rgba(16, 185, 129, 0.26);
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(14, 165, 233, 0.12) 100%) padding-box,
+    conic-gradient(
+      from var(--shine-angle),
+      rgba(16, 185, 129, 0.18) 0deg,
+      rgba(16, 185, 129, 0.18) 250deg,
+      rgba(125, 211, 252, 0.92) 285deg,
+      rgba(255, 255, 255, 0.96) 305deg,
+      rgba(16, 185, 129, 0.18) 340deg,
+      rgba(16, 185, 129, 0.18) 360deg
+    ) border-box;
+  border: 1px solid transparent;
   box-shadow: 0 10px 24px rgba(16, 185, 129, 0.16);
   position: relative;
   overflow: hidden;
+  animation: shineBorderOrbit 2.8s linear infinite;
 }
 
-.weekly-slots-dashboard-button::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(16, 185, 129, 0.18),
-    rgba(125, 211, 252, 0.95),
-    rgba(255, 255, 255, 0.86),
-    rgba(16, 185, 129, 0.18)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: shineBorderSweep 2.8s linear infinite;
-  pointer-events: none;
+.weekly-slots-dashboard-button > svg {
+  position: relative;
+  z-index: 1;
 }
 
 .weekly-slots-dashboard-button::after {
@@ -610,6 +615,7 @@ button {
   border-radius: 999px;
   background: var(--success);
   box-shadow: 0 0 12px var(--success);
+  z-index: 2;
 }
 
 .weekly-slots-page {
@@ -885,49 +891,46 @@ button {
 }
 
 .resident-shepherd-step {
+  --shine-angle: 0deg;
   width: min(360px, calc(100vw - 32px));
   max-width: min(360px, calc(100vw - 32px));
   border-radius: 22px;
   background:
-    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%) padding-box,
+    conic-gradient(
+      from var(--shine-angle),
+      rgba(99, 102, 241, 0.12) 0deg,
+      rgba(99, 102, 241, 0.12) 258deg,
+      rgba(125, 211, 252, 0.8) 292deg,
+      rgba(255, 255, 255, 0.9) 310deg,
+      rgba(124, 58, 237, 0.68) 332deg,
+      rgba(99, 102, 241, 0.12) 360deg
+    ) border-box;
   color: var(--text-main);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid transparent;
   box-shadow: 0 28px 70px rgba(2, 6, 23, 0.52);
   overflow: hidden;
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
   position: relative;
+  animation: shineBorderOrbit 4s linear infinite;
 }
 
 .shepherd-element.resident-shepherd-step,
 .shepherd-element.shepherd-has-title.resident-shepherd-step {
   background:
-    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%) !important;
+    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%) padding-box,
+    conic-gradient(
+      from var(--shine-angle),
+      rgba(99, 102, 241, 0.12) 0deg,
+      rgba(99, 102, 241, 0.12) 258deg,
+      rgba(125, 211, 252, 0.8) 292deg,
+      rgba(255, 255, 255, 0.9) 310deg,
+      rgba(124, 58, 237, 0.68) 332deg,
+      rgba(99, 102, 241, 0.12) 360deg
+    ) border-box !important;
   border-radius: 22px !important;
-}
-
-.resident-shepherd-step::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(99, 102, 241, 0.16),
-    rgba(125, 211, 252, 0.82),
-    rgba(255, 255, 255, 0.88),
-    rgba(124, 58, 237, 0.76),
-    rgba(99, 102, 241, 0.16)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: shineBorderSweep 4s linear infinite;
-  pointer-events: none;
-  z-index: 1;
+  border: 1px solid transparent !important;
 }
 
 .resident-shepherd-step .shepherd-content {
