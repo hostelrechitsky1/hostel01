@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
@@ -23,8 +23,6 @@ interface DashboardBookingSummaryProps {
 }
 
 let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
-const CANCEL_BOOKING_BADGE_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_badge_seen_v2:';
-
 const loadResidentMutationsService = () => {
     residentMutationsServicePromise ??= import('../services/residentMutationsService');
     return residentMutationsServicePromise;
@@ -102,13 +100,6 @@ export default function DashboardBookingSummary({
     const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
     const [cancelModalMessage, setCancelModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
-    const [showCancelFeatureBadge, setShowCancelFeatureBadge] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const storageKey = `${CANCEL_BOOKING_BADGE_STORAGE_KEY_PREFIX}${user.id}`;
-        setShowCancelFeatureBadge(window.localStorage.getItem(storageKey) !== '1');
-    }, [user.id]);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -153,10 +144,6 @@ export default function DashboardBookingSummary({
         if (!canCancelBooking(booking)) return;
         void loadResidentMutationsService();
         hapticSelection();
-        if (showCancelFeatureBadge && typeof window !== 'undefined') {
-            window.localStorage.setItem(`${CANCEL_BOOKING_BADGE_STORAGE_KEY_PREFIX}${user.id}`, '1');
-            setShowCancelFeatureBadge(false);
-        }
         setCancelModalBooking(booking);
         setCancelModalMessage(null);
     };
@@ -332,34 +319,6 @@ export default function DashboardBookingSummary({
     const cancelBookingMachineLabel = cancelBookingMachine?.name || `Machine ${cancelModalBooking?.machineId || ''}`;
     const modalRoot = typeof document !== 'undefined' ? document.body : null;
     const primaryCancelButtonDisabled = !primaryUpcomingBooking || !canCancelBooking(primaryUpcomingBooking) || cancelBookingId === primaryUpcomingBooking.id;
-    const renderCancelBadge = () => showCancelFeatureBadge ? (
-        <span
-            className="feature-badge feature-badge--cancel"
-            style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '4px 9px',
-                borderRadius: '999px',
-                fontSize: '10px',
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: '#ffffff',
-                background: 'var(--resident-ready-green)',
-                border: '1px solid var(--resident-ready-green)',
-                boxShadow: '0 10px 20px rgba(16, 185, 129, 0.22)',
-                flexShrink: 0,
-                position: 'absolute',
-                top: '-10px',
-                right: '10px',
-                zIndex: 2,
-                pointerEvents: 'none'
-            }}
-        >
-            New
-        </span>
-    ) : null;
 
     return (
         <>
@@ -583,7 +542,6 @@ export default function DashboardBookingSummary({
                                 className="glass-button cancel-booking-button"
                                 title={canCancelBooking(primaryUpcomingBooking) ? 'Cancel upcoming booking' : 'Started bookings can no longer be cancelled'}
                             >
-                                {renderCancelBadge()}
                                 {cancelBookingId === primaryUpcomingBooking.id ? (
                                     <>
                                         <ActionSpinner size={16} tone="neutral" />
@@ -701,7 +659,6 @@ export default function DashboardBookingSummary({
                                                     className="glass-button cancel-booking-button cancel-booking-button--compact"
                                                     disabled={cancelBookingId === booking.id}
                                                 >
-                                                    {renderCancelBadge()}
                                                     {cancelBookingId === booking.id ? (
                                                         <>
                                                             <ActionSpinner size={14} tone="neutral" />
