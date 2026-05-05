@@ -11,7 +11,7 @@ vi.mock('../../services/residentFirestoreService', () => ({
         maintenanceDay: 3,
         autoOpenWeekday: 6,
         autoOpenTime: '16:00',
-        autoOpenDurationHours: 28,
+        autoOpenDurationHours: 168,
         vipAutoEnabled: true,
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
@@ -28,7 +28,7 @@ vi.mock('../../services/residentFirestoreService', () => ({
             maintenanceDay: 3,
             autoOpenWeekday: 6,
             autoOpenTime: '16:00',
-            autoOpenDurationHours: 28,
+            autoOpenDurationHours: 168,
             vipAutoEnabled: true,
             vipLastAppliedWeekId: '',
             topAlert: { message: '', isActive: false, type: 'info' }

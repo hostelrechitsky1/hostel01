@@ -108,7 +108,7 @@ export default function ManagerPanel() {
         maintenanceDay: 3,
         autoOpenWeekday: 6,
         autoOpenTime: '16:00',
-        autoOpenDurationHours: 28,
+        autoOpenDurationHours: 168,
         vipAutoEnabled: true,
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
@@ -811,10 +811,10 @@ export default function ManagerPanel() {
                                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#6b7280' }}>Open Window (hours)</label>
                                     <input
                                         type="number"
-                                        min={1}
+                                        min={168}
                                         max={168}
-                                        value={settings.autoOpenDurationHours ?? 28}
-                                        onChange={(e) => updateSettings({ autoOpenDurationHours: parseInt(e.target.value, 10) || 28 })}
+                                        value={Math.max(settings.autoOpenDurationHours ?? 168, 168)}
+                                        onChange={(e) => updateSettings({ autoOpenDurationHours: Math.max(parseInt(e.target.value, 10) || 168, 168) })}
                                         style={{
                                             width: '100%',
                                             padding: '12px',

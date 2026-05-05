@@ -5,12 +5,12 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, WashingMachine as Washer } from 'lucide-react';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, CalendarSearch, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
-import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
-import { preloadBookingRoute } from '../utils/preloadRoutes';
+import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getActiveBookingWeekStart, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
+import { preloadBookingRoute, preloadWeeklySlotsRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
@@ -23,6 +23,7 @@ import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPort
 const RECENT_BOOKINGS_LIMIT = 12;
 const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
+const WEEKLY_SLOTS_TOUR_STORAGE_KEY_PREFIX = 'hostel_weekly_slots_tour_seen_v1:';
 let dashboardFeedbackModulePromise: Promise<typeof import('../components/DashboardFeedback')> | null = null;
 let dashboardBookingSummaryModulePromise: Promise<typeof import('../components/DashboardBookingSummary')> | null = null;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -122,12 +123,17 @@ export default function Dashboard() {
             retryDashboard: 'Повторить',
             needToWash: 'Нужно постирать?',
             bookNow: 'Забронировать',
-            bookSubtitle: 'Забронируйте слот на следующую неделю',
+            bookSubtitle: 'Бронирование онлайн всю неделю',
             checkStatus: 'Проверить статус',
             bookingsClosed: 'Бронирование сейчас закрыто',
             booked: 'Забронировано',
             bookedSubtitle: 'У вас уже есть бронь. Вы всё ещё можете открыть страницу слотов и посмотреть свободные места.',
             openSlots: 'Открыть слоты',
+            weeklySlots: 'Слоты недели',
+            weeklySlotsAria: 'Открыть свободные и занятые слоты недели',
+            weeklySlotsTourTitle: 'Новая страница слотов',
+            weeklySlotsTourText: 'Теперь здесь можно проверять свободные места и занятые слоты с именем и комнатой всю неделю.',
+            weeklySlotsTourButton: 'Понятно',
             loadingLatest: 'Мы загружаем ваш актуальный статус бронирования в фоне.',
             status: 'Статус',
             systemStatus: 'Статус системы',
@@ -163,12 +169,17 @@ export default function Dashboard() {
             retryDashboard: 'Retry Dashboard',
             needToWash: 'Need to wash?',
             bookNow: 'Book Now',
-            bookSubtitle: 'Book your slot for next week',
+            bookSubtitle: 'Book online during the whole week',
             checkStatus: 'Check Status',
             bookingsClosed: 'Bookings are currently closed',
             booked: 'Booked',
             bookedSubtitle: 'You already booked. You can still open slots page to browse remaining slots.',
             openSlots: 'Open Slots',
+            weeklySlots: 'Weekly Slots',
+            weeklySlotsAria: 'Open weekly free and booked slots',
+            weeklySlotsTourTitle: 'New weekly slots page',
+            weeklySlotsTourText: 'You can now check free slots and booked slots with name and room here during the week.',
+            weeklySlotsTourButton: 'Got it',
             loadingLatest: 'We’re loading your latest booking status in the background.',
             status: 'Status',
             systemStatus: 'System Status',
@@ -205,6 +216,7 @@ export default function Dashboard() {
     const [roommatesLoading, setRoommatesLoading] = useState(false);
     const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
     const roommateMenuRef = useRef<HTMLDivElement>(null);
+    const weeklySlotsButtonRef = useRef<HTMLButtonElement>(null);
     const roommateHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const suppressRoommateClickRef = useRef(false);
     const dashboardWeekIds = useMemo(() => {
@@ -433,6 +445,58 @@ export default function Dashboard() {
     }, [user?.id, user?.roomNumber]);
 
     useEffect(() => {
+        if (!userId || loading || typeof window === 'undefined') {
+            return;
+        }
+
+        const storageKey = `${WEEKLY_SLOTS_TOUR_STORAGE_KEY_PREFIX}${userId}`;
+        if (window.localStorage.getItem(storageKey) === '1') {
+            return;
+        }
+
+        const tourTimeout = window.setTimeout(() => {
+            const weeklySlotsButton = weeklySlotsButtonRef.current;
+            if (!weeklySlotsButton) return;
+
+            void import('shepherd.js').then(({ default: Shepherd }) => {
+                if (window.localStorage.getItem(storageKey) === '1') return;
+
+                const tour = new Shepherd.Tour({
+                    defaultStepOptions: {
+                        classes: 'resident-shepherd-step',
+                        cancelIcon: { enabled: true },
+                        scrollTo: false,
+                    },
+                    useModalOverlay: true,
+                });
+
+                tour.addStep({
+                    title: t.weeklySlotsTourTitle,
+                    text: t.weeklySlotsTourText,
+                    attachTo: {
+                        element: weeklySlotsButton,
+                        on: 'bottom',
+                    },
+                    buttons: [{
+                        text: t.weeklySlotsTourButton,
+                        action: () => tour.complete(),
+                    }],
+                });
+
+                tour.on('complete', () => window.localStorage.setItem(storageKey, '1'));
+                tour.on('cancel', () => window.localStorage.setItem(storageKey, '1'));
+                tour.start();
+            }).catch((error) => {
+                console.error('Failed to load weekly slots tour', error);
+            });
+        }, 850);
+
+        return () => {
+            window.clearTimeout(tourTimeout);
+        };
+    }, [loading, t.weeklySlotsTourButton, t.weeklySlotsTourText, t.weeklySlotsTourTitle, userId]);
+
+    useEffect(() => {
         setRecentBookings(cachedRecentBookings ?? []);
         setRecentBookingsHydrated(hasCachedRecentBookings);
         setRecentBookingsLoading(Boolean(userId) && !hasCachedRecentBookings);
@@ -485,6 +549,7 @@ export default function Dashboard() {
 
         if (typeof window === 'undefined') {
             preloadBookingRoute();
+            preloadWeeklySlotsRoute();
             return;
         }
 
@@ -496,12 +561,16 @@ export default function Dashboard() {
         };
 
         if (typeof idleWindow.requestIdleCallback === 'function') {
-            idleHandle = idleWindow.requestIdleCallback(() => {
-                idleHandle = null;
-                preloadBookingRoute();
-            }, { timeout: 1400 });
+                idleHandle = idleWindow.requestIdleCallback(() => {
+                    idleHandle = null;
+                    preloadBookingRoute();
+                    preloadWeeklySlotsRoute();
+                }, { timeout: 1400 });
         } else {
-            timeoutHandle = window.setTimeout(preloadBookingRoute, 420);
+            timeoutHandle = window.setTimeout(() => {
+                preloadBookingRoute();
+                preloadWeeklySlotsRoute();
+            }, 420);
         }
 
         return () => {
@@ -737,6 +806,10 @@ export default function Dashboard() {
     /* eslint-enable react-hooks/set-state-in-effect */
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+    const activeBookingWeekStart = settings.forceShowNextWeek
+        ? addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7)
+        : getActiveBookingWeekStart(new Date(), settings);
+    const activeBookingWeekId = getBelarusWeekId(activeBookingWeekStart);
 
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
@@ -773,22 +846,18 @@ export default function Dashboard() {
         const activeMachines = machines.filter(m => m.status === 'available');
         const slotsPerDay = TIME_SLOTS.length * activeMachines.length;
 
-        const today = getBelarusDate();
-        const weekStart = isNextWeekOpen ? addBelarusDays(getBelarusWeekStart(today), 7) : getBelarusWeekStart(today);
-        const targetWeekId = getBelarusWeekId(weekStart);
-
         const maintenanceDay = settings.maintenanceDay ?? 3;
-        const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
+        const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(activeBookingWeekStart, i));
         const bookableDates = weekDates.filter(d => getBelarusWeekday(d) !== maintenanceDay).map(formatBelarusDate);
 
         const totalSlots = slotsPerDay * bookableDates.length;
         const bookedInTargetWeek = weekBookings.filter(
-            b => b.weekId === targetWeekId && bookableDates.includes(b.date)
+            b => b.weekId === activeBookingWeekId && bookableDates.includes(b.date)
         ).length;
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, settings.maintenanceDay, isNextWeekOpen, weekBookings]);
+    }, [activeBookingWeekId, activeBookingWeekStart, machines, settings.maintenanceDay, weekBookings]);
 
     const handleLogout = () => {
         bookingService.logout();
@@ -801,6 +870,11 @@ export default function Dashboard() {
         startResidentPerfSpan('resident:booking-data-ready');
         startResidentPerfSpan('resident:booking-live-ready');
         navigate('/book');
+    };
+
+    const handleOpenWeeklySlots = () => {
+        preloadWeeklySlotsRoute();
+        navigate('/weekly-slots');
     };
 
     const ensureRoommatesLoaded = (forceRefresh = false) => {
@@ -885,6 +959,7 @@ export default function Dashboard() {
         setLoadErrorMessage(null);
         setIsRoommateMenuOpen(false);
         preloadBookingRoute();
+        preloadWeeklySlotsRoute();
         void warmResidentAppData(nextResident.id, {
             includeRecentBookings: true,
             roomNumber: nextResident.roomNumber,
@@ -910,12 +985,7 @@ export default function Dashboard() {
         setReloadKey((current) => current + 1);
     };
 
-    const today = getBelarusDate();
-    const nextWeekStart = addBelarusDays(getBelarusWeekStart(today), 7);
-    const nextWeekId = getBelarusWeekId(nextWeekStart);
-
-    // Check if the user has a booking specifically for the *upcoming* week (next week slots)
-    const hasBookedForNextWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === nextWeekId);
+    const hasBookedForActiveWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === activeBookingWeekId);
 
     let mainActionLabel = t.bookNow;
     let mainActionSubtitle = t.bookSubtitle;
@@ -923,7 +993,7 @@ export default function Dashboard() {
     if (isSystemClosed) {
         mainActionLabel = t.checkStatus;
         mainActionSubtitle = t.bookingsClosed;
-    } else if (hasBookedForNextWeek) {
+    } else if (hasBookedForActiveWeek) {
         mainActionLabel = t.booked;
         mainActionSubtitle = t.bookedSubtitle;
     }
@@ -1273,6 +1343,18 @@ export default function Dashboard() {
                 </div>
                 <div className="resident-header-actions">
                     <button
+                        ref={weeklySlotsButtonRef}
+                        type="button"
+                        onClick={handleOpenWeeklySlots}
+                        onMouseEnter={preloadWeeklySlotsRoute}
+                        onTouchStart={preloadWeeklySlotsRoute}
+                        className="glass-button weekly-slots-dashboard-button"
+                        aria-label={t.weeklySlotsAria}
+                        title={t.weeklySlots}
+                    >
+                        <CalendarSearch size={18} />
+                    </button>
+                    <button
                         type="button"
                         onClick={() => {
                             const nextLanguage: ResidentPortalLanguage = language === 'ru' ? 'en' : 'ru';
@@ -1336,30 +1418,30 @@ export default function Dashboard() {
                     onClick={handleOpenBooking}
                     onMouseEnter={preloadBookingRoute}
                     onTouchStart={preloadBookingRoute}
-                    className={hasBookedForNextWeek && !isSystemClosed ? '' : 'primary-button'}
+                    className={hasBookedForActiveWeek && !isSystemClosed ? '' : 'primary-button'}
                     style={{
                         padding: '10px 24px',
                         borderRadius: '10px',
                         background: isSystemClosed
                             ? 'var(--error)'
-                            : hasBookedForNextWeek
+                            : hasBookedForActiveWeek
                                 ? 'var(--resident-ready-green)'
                                 : 'var(--primary)',
                         boxShadow: isSystemClosed
                             ? '0 0 15px rgba(239, 68, 68, 0.3)'
-                            : hasBookedForNextWeek
+                            : hasBookedForActiveWeek
                                 ? '0 10px 24px rgba(16, 185, 129, 0.26)'
                                 : '0 0 15px var(--primary-glow)',
                         fontSize: '14px',
                         fontWeight: 600,
                         border: isSystemClosed
                             ? 'none'
-                            : hasBookedForNextWeek
+                            : hasBookedForActiveWeek
                                 ? '1px solid var(--resident-ready-green)'
                                 : 'none',
                         color: isSystemClosed
                             ? 'white'
-                            : hasBookedForNextWeek
+                            : hasBookedForActiveWeek
                                 ? '#ffffff'
                                 : 'white',
                         cursor: 'pointer',

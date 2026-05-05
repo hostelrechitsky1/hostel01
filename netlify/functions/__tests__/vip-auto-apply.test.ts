@@ -65,7 +65,7 @@ const settingsDoc = (overrides: Record<string, unknown> = {}) => ({
   maintenanceDay: 3,
   autoOpenWeekday: 6,
   autoOpenTime: '16:00',
-  autoOpenDurationHours: 28,
+  autoOpenDurationHours: 168,
   vipAutoEnabled: true,
   vipLastAppliedWeekId: '',
   topAlert: { message: '', isActive: false, type: 'info' },

@@ -10,6 +10,7 @@ import { preloadManagerRoutes, preloadResidentRoutes } from './utils/preloadRout
 const LoginScreen = lazyRoute(() => import('./pages/LoginScreen'));
 const Dashboard = lazyRoute(() => import('./pages/Dashboard'));
 const BookingFlow = lazyRoute(() => import('./pages/BookingFlow'));
+const WeeklySlots = lazyRoute(() => import('./pages/WeeklySlots'));
 const ManagerPanel = lazyRoute(() => import('./pages/ManagerPanel'));
 const ManagerLogin = lazyRoute(() => import('./pages/ManagerLogin'));
 const PrintSchedule = lazyRoute(() => import('./pages/PrintSchedule'));
@@ -150,6 +151,12 @@ function AnimatedRoutes() {
         <Route path="/book" element={
           <PrivateRoute>
             <PageWrapper><BookingFlow /></PageWrapper>
+          </PrivateRoute>
+        } />
+
+        <Route path="/weekly-slots" element={
+          <PrivateRoute>
+            <PageWrapper><WeeklySlots /></PageWrapper>
           </PrivateRoute>
         } />
 

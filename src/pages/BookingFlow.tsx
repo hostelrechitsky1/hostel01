@@ -20,6 +20,7 @@ import {
     getBelarusWeekStart,
     getBelarusWeekday,
     getBelarusWeekId,
+    getActiveBookingWeekStart,
     isAutoBookingWindowOpen,
     isSameBelarusDay,
     getNextAutoOpenDate,
@@ -372,21 +373,21 @@ export default function BookingFlow() {
     }, [liveSyncRequested, reloadKey, selectedDateKey, userId]);
 
     const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+    const activeBookingWeekStart = useMemo(() => {
+        if (settings.forceShowNextWeek) {
+            return addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+        }
+
+        return getActiveBookingWeekStart(new Date(), settings);
+    }, [settings]);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     const dateOptions = useMemo(() => {
-        let start = getBelarusDate();
-        const currentWeekEnd = getBelarusWeekEnd(start);
-        let maxDate = currentWeekEnd;
-
-        if (isNextWeekOpen) {
-            const nextMonday = addBelarusDays(currentWeekEnd, 1);
-            if (start.getTime() <= currentWeekEnd.getTime()) {
-                start = nextMonday;
-            }
-            maxDate = addBelarusDays(currentWeekEnd, 7);
-        }
+        const today = getBelarusDate();
+        const activeWeekEnd = getBelarusWeekEnd(activeBookingWeekStart);
+        const start = today.getTime() > activeBookingWeekStart.getTime() ? today : activeBookingWeekStart;
+        const maxDate = activeWeekEnd;
 
         const dates = [];
         let current = start;
@@ -395,7 +396,7 @@ export default function BookingFlow() {
             current = addBelarusDays(current, 1);
         }
         return dates;
-    }, [isNextWeekOpen]);
+    }, [activeBookingWeekStart]);
 
     useEffect(() => {
         if (dateOptions.length > 0) {
