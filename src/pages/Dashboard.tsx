@@ -1374,10 +1374,10 @@ export default function Dashboard() {
                     onClick={handleOpenBooking}
                     onMouseEnter={preloadBookingRoute}
                     onTouchStart={preloadBookingRoute}
-                    className={hasBookedForActiveWeek && !isSystemClosed ? '' : 'primary-button'}
+                    className="primary-button"
                     style={{
-                        padding: '10px 24px',
-                        borderRadius: '10px',
+                        padding: '11px 24px',
+                        borderRadius: '12px',
                         background: isSystemClosed
                             ? 'var(--error)'
                             : hasBookedForActiveWeek
@@ -1388,18 +1388,12 @@ export default function Dashboard() {
                             : hasBookedForActiveWeek
                                 ? '0 10px 24px rgba(16, 185, 129, 0.26)'
                                 : '0 0 15px var(--primary-glow)',
+                        minWidth: '132px',
+                        flexShrink: 0,
                         fontSize: '14px',
-                        fontWeight: 600,
-                        border: isSystemClosed
-                            ? 'none'
-                            : hasBookedForActiveWeek
-                                ? '1px solid var(--resident-ready-green)'
-                                : 'none',
-                        color: isSystemClosed
-                            ? 'white'
-                            : hasBookedForActiveWeek
-                                ? '#ffffff'
-                                : 'white',
+                        fontWeight: 700,
+                        border: 'none',
+                        color: 'white',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                     }}

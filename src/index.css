@@ -160,6 +160,12 @@ button {
   }
 }
 
+@keyframes shineBorderSweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .skeleton-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -517,13 +523,36 @@ button {
   border: 1px solid rgba(16, 185, 129, 0.26);
   box-shadow: 0 10px 24px rgba(16, 185, 129, 0.16);
   position: relative;
+  overflow: hidden;
+}
+
+.weekly-slots-dashboard-button::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(16, 185, 129, 0.18),
+    rgba(125, 211, 252, 0.95),
+    rgba(255, 255, 255, 0.86),
+    rgba(16, 185, 129, 0.18)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: shineBorderSweep 2.8s linear infinite;
+  pointer-events: none;
 }
 
 .weekly-slots-dashboard-button::after {
   content: '';
   position: absolute;
-  right: 4px;
-  top: 4px;
+  right: 5px;
+  top: 5px;
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -815,6 +844,7 @@ button {
   overflow: hidden;
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
+  position: relative;
 }
 
 .shepherd-element.resident-shepherd-step,
@@ -824,10 +854,36 @@ button {
   border-radius: 22px !important;
 }
 
+.resident-shepherd-step::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(99, 102, 241, 0.16),
+    rgba(125, 211, 252, 0.82),
+    rgba(255, 255, 255, 0.88),
+    rgba(124, 58, 237, 0.76),
+    rgba(99, 102, 241, 0.16)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: shineBorderSweep 4s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .resident-shepherd-step .shepherd-content {
   border-radius: 22px;
   background: transparent !important;
   overflow: hidden;
+  position: relative;
+  z-index: 2;
 }
 
 .resident-shepherd-step .shepherd-header,
