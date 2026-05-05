@@ -9,7 +9,7 @@ import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check,
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
-import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getActiveBookingWeekStart, getBelarusDate, getBelarusNow, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, getTimeStringMinutes, isAutoBookingWindowOpen } from '../utils/time';
+import { addBelarusDays, formatBelarusClockLabel, formatBelarusDate, getActiveBookingWeekStart, getBelarusDate, getBelarusWeekStart, getBelarusWeekday, getBelarusWeekId, isAutoBookingWindowOpen } from '../utils/time';
 import { preloadBookingRoute, preloadWeeklySlotsRoute } from '../utils/preloadRoutes';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
@@ -18,6 +18,7 @@ import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getResidentShortNameForLanguage } from '../utils/residentNames';
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
+import { getMachineOperatingState } from '../utils/machineStatus';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
@@ -135,6 +136,7 @@ export default function Dashboard() {
             inUse: 'Занято',
             maintenanceDay: 'День обслуживания',
             underMaintenance: 'На обслуживании',
+            closedForToday: 'Закрыто на сегодня',
             ready: 'Готово',
             finishesSoon: 'Скоро освободится',
             closedShort: 'Закрыто',
@@ -194,6 +196,7 @@ export default function Dashboard() {
             inUse: 'In Use',
             maintenanceDay: 'Maintenance Day',
             underMaintenance: 'Under Maintenance',
+            closedForToday: 'Closed for today',
             ready: 'Ready',
             finishesSoon: 'Finishes soon',
             closedShort: 'Closed',
@@ -800,31 +803,22 @@ export default function Dashboard() {
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
     const getMachineRealTimeStatus = (machine: Machine) => {
-        const now = getBelarusNow();
-        const currentBWeekday = getBelarusWeekday(getBelarusDate());
-        // Use setting or default to 3 (Wednesday)
         const maintenanceDay = settings.maintenanceDay ?? 3;
-        const isMaintenanceDay = currentBWeekday === maintenanceDay;
-
-        if (isMaintenanceDay) return { state: 'maintenance', label: t.maintenanceDay, color: '#ef4444' };
-        if (machine.status === 'maintenance') return { state: 'maintenance', label: t.underMaintenance, color: '#ef4444' };
-
-        const today = formatBelarusDate(getBelarusDate());
-        const bookingsToday = weekBookings.filter(b => b.date === today);
-        const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-
-        const currentBooking = bookingsToday.find(b => {
-            if (b.machineId !== machine.id) return false;
-            const startMinutes = getTimeStringMinutes(b.startTime);
-            const endMinutes = startMinutes + 90;
-            return nowMinutes > startMinutes && nowMinutes < endMinutes;
+        const state = getMachineOperatingState({
+            machine,
+            bookings: weekBookings,
+            maintenanceDay,
         });
 
-        if (currentBooking) {
-            return { state: 'occupied', label: t.inUse, color: '#f59e0b' }; // Orange
+        if (state === 'maintenance') {
+            const isMaintenanceDay = getBelarusWeekday(getBelarusDate()) === maintenanceDay;
+            return { state, label: isMaintenanceDay ? t.maintenanceDay : t.underMaintenance, color: '#ef4444' };
         }
 
-        return { state: 'available', label: t.readyToUse, color: '#10b981' };
+        if (state === 'occupied') return { state, label: t.inUse, color: '#f59e0b' };
+        if (state === 'closed') return { state, label: t.closedForToday, color: '#ef4444' };
+
+        return { state, label: t.readyToUse, color: '#10b981' };
     };
 
 
@@ -1795,7 +1789,7 @@ export default function Dashboard() {
                                                 padding: '8px',
                                                 borderRadius: '10px'
                                             }}>
-                                                {status.state === 'maintenance' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
+                                                {status.state === 'maintenance' || status.state === 'closed' ? <AlertCircle size={24} color={status.color} /> : <Washer size={24} color={status.color} />}
                                             </div>
                                             <span style={{
                                                 fontSize: '12px',
