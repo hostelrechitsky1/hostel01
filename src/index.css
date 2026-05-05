@@ -181,11 +181,32 @@ button {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+.booking-summary-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+  gap: 10px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.booking-summary-action-button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--glass-button-bg);
+  white-space: nowrap;
+}
+
 .glass-button.cancel-booking-button {
   --cancel-accent: #f87171;
   --cancel-accent-strong: #ef4444;
   --cancel-text: #fecaca;
-  min-width: 156px;
+  min-width: 0;
   min-height: 48px;
   flex: 1;
   padding: 12px 18px;
@@ -1595,6 +1616,14 @@ button {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
     padding: 7px 10px;
     font-size: 11px;
+  }
+
+  .booking-summary-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .booking-summary-actions > .cancel-booking-button {
+    grid-column: 1 / -1;
   }
 
   .glass-button.cancel-booking-button {

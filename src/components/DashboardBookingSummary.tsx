@@ -441,7 +441,7 @@ export default function DashboardBookingSummary({
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
+                        <div className="booking-summary-actions">
                             <button
                                 onClick={() => {
                                     if (!primaryUpcomingBooking) return;
@@ -459,8 +459,7 @@ export default function DashboardBookingSummary({
 
                                     window.open(url, '_blank');
                                 }}
-                                className="glass-button"
-                                style={{ padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '140px', justifyContent: 'center' }}
+                                className="glass-button booking-summary-action-button"
                             >
                                 <Calendar size={18} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>{t.googleCalendar}</span>
@@ -527,8 +526,7 @@ export default function DashboardBookingSummary({
                                     document.body.removeChild(link);
                                     window.URL.revokeObjectURL(url);
                                 }}
-                                className="glass-button"
-                                style={{ padding: '10px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '136px', minHeight: '44px', justifyContent: 'center', background: 'var(--glass-button-bg)' }}
+                                className="glass-button booking-summary-action-button"
                             >
                                 <Download size={18} />
                                 <span style={{ fontSize: '14px', fontWeight: 500 }}>{t.appleOutlook}</span>
@@ -546,12 +544,7 @@ export default function DashboardBookingSummary({
                                         Cancelling...
                                     </>
                                 ) : (
-                                    <>
-                                        <span className="cancel-booking-button__icon">
-                                            <XCircle size={15} />
-                                        </span>
-                                        <span>{t.cancelBooking}</span>
-                                    </>
+                                    <span>{t.cancelBooking}</span>
                                 )}
                             </button>
                         </div>
