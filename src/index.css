@@ -582,18 +582,8 @@ button {
   align-items: center;
   justify-content: center;
   color: var(--text-main);
-  background:
-    linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(14, 165, 233, 0.12) 100%) padding-box,
-    conic-gradient(
-      from var(--shine-angle),
-      rgba(16, 185, 129, 0.18) 0deg,
-      rgba(16, 185, 129, 0.18) 250deg,
-      rgba(125, 211, 252, 0.92) 285deg,
-      rgba(255, 255, 255, 0.96) 305deg,
-      rgba(16, 185, 129, 0.18) 340deg,
-      rgba(16, 185, 129, 0.18) 360deg
-    ) border-box;
-  border: 1px solid transparent;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(14, 165, 233, 0.12) 100%);
+  border: 1px solid rgba(125, 211, 252, 0.18);
   box-shadow: 0 10px 24px rgba(16, 185, 129, 0.16);
   position: relative;
   overflow: hidden;
@@ -602,6 +592,29 @@ button {
 
 .weekly-slots-dashboard-button > svg {
   position: relative;
+  z-index: 2;
+}
+
+.weekly-slots-dashboard-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--shine-angle),
+    rgba(16, 185, 129, 0) 0deg,
+    rgba(16, 185, 129, 0) 250deg,
+    rgba(125, 211, 252, 0.92) 285deg,
+    rgba(255, 255, 255, 0.98) 305deg,
+    rgba(16, 185, 129, 0) 340deg,
+    rgba(16, 185, 129, 0) 360deg
+  );
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
   z-index: 1;
 }
 
