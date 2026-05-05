@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
-import { beforeEach, vi, describe, it, expect } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { afterEach, beforeEach, vi, describe, it, expect } from 'vitest';
 import BookingFlow from '../BookingFlow';
 import * as timeUtils from '../../utils/time';
 
@@ -85,13 +85,23 @@ vi.mock('../../utils/time', async (importOriginal) => {
     };
 });
 
+function LocationProbe() {
+    const location = useLocation();
+    return <div data-testid="location-probe">{location.pathname + location.search}</div>;
+}
+
 describe('BookingFlow Component', () => {
     beforeEach(() => {
+        vi.useRealTimers();
         window.localStorage.setItem('hostel_current_user', JSON.stringify({
             id: 'student-1',
             name: 'Silva Shanilka',
             roomNumber: '52-2',
         }));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('renders booking flow without crashing', async () => {
@@ -127,5 +137,31 @@ describe('BookingFlow Component', () => {
 
         expect(await screen.findByRole('button', { name: /back to dashboard/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /open slots/i })).toBeInTheDocument();
+    });
+
+    it('automatically opens the slots page when the status countdown reaches the open window', async () => {
+        vi.spyOn(timeUtils, 'isAutoBookingWindowOpen').mockReturnValue(true);
+
+        render(
+            <MemoryRouter initialEntries={['/book?status=1']}>
+                <Routes>
+                    <Route
+                        path="/book"
+                        element={(
+                            <>
+                                <BookingFlow />
+                                <LocationProbe />
+                            </>
+                        )}
+                    />
+                </Routes>
+            </MemoryRouter>
+        );
+
+        expect(await screen.findByText(/bookings are open all week/i)).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(screen.getByTestId('location-probe')).toHaveTextContent(/^\/book$/);
+        });
     });
 });

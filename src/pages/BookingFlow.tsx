@@ -626,6 +626,16 @@ export default function BookingFlow() {
     const windowDisplay = getAutoOpenWindowDisplay(settings);
     const isOpenStatusView = showStatusView && !settings.forceCloseBookings && isNextWeekOpen;
 
+    useEffect(() => {
+        if (!isOpenStatusView) return;
+
+        const redirectTimer = window.setTimeout(() => {
+            navigate('/book', { replace: true });
+        }, 350);
+
+        return () => window.clearTimeout(redirectTimer);
+    }, [isOpenStatusView, navigate]);
+
     const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
         || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
 
