@@ -441,6 +441,8 @@ export default function Dashboard() {
                     defaultStepOptions: {
                         classes: 'resident-shepherd-step',
                         cancelIcon: { enabled: true },
+                        modalOverlayOpeningPadding: 8,
+                        modalOverlayOpeningRadius: 999,
                         scrollTo: false,
                     },
                     useModalOverlay: true,
@@ -459,8 +461,16 @@ export default function Dashboard() {
                     }],
                 });
 
-                tour.on('complete', () => window.localStorage.setItem(storageKey, '1'));
-                tour.on('cancel', () => window.localStorage.setItem(storageKey, '1'));
+                tour.on('show', () => weeklySlotsButton.classList.add('resident-shepherd-target'));
+                tour.on('complete', () => {
+                    weeklySlotsButton.classList.remove('resident-shepherd-target');
+                    window.localStorage.setItem(storageKey, '1');
+                });
+                tour.on('cancel', () => {
+                    weeklySlotsButton.classList.remove('resident-shepherd-target');
+                    window.localStorage.setItem(storageKey, '1');
+                });
+                tour.on('destroy', () => weeklySlotsButton.classList.remove('resident-shepherd-target'));
                 tour.start();
             }).catch((error) => {
                 console.error('Failed to load weekly slots tour', error);

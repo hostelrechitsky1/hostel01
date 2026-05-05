@@ -85,6 +85,7 @@ export default function WeeklySlots() {
             bookedByYou: 'Ваша бронь',
             passed: 'Прошло',
             maintenance: 'Обслуживание',
+            maintenanceDay: 'День обслуживания',
             closed: 'Закрыто',
             loadingTitle: 'Загружаем слоты недели',
             errorTitle: 'Не удалось загрузить слоты недели',
@@ -113,6 +114,7 @@ export default function WeeklySlots() {
             bookedByYou: 'Booked by you',
             passed: 'Passed',
             maintenance: 'Maintenance',
+            maintenanceDay: 'Maintenance day',
             closed: 'Closed',
             loadingTitle: 'Loading weekly slots',
             errorTitle: 'Unable to load weekly slots',
@@ -404,14 +406,40 @@ export default function WeeklySlots() {
                 </button>
             </header>
 
-            <section className="glass-panel weekly-slots-open-banner">
-                <div className="weekly-slots-open-icon">
-                    <Activity size={24} />
+            <section className="weekly-slots-overview">
+                <div className="glass-panel weekly-slots-open-banner">
+                    <div className="weekly-slots-open-icon">
+                        <Activity size={24} />
+                    </div>
+                    <div>
+                        <h3>{t.openAllWeek}</h3>
+                        <p>{t.openAllWeekCopy}</p>
+                        <span>{windowDisplay.openDay} {windowDisplay.openTime} - {windowDisplay.closeDay} {windowDisplay.closeTime}</span>
+                    </div>
                 </div>
-                <div>
-                    <h3>{t.openAllWeek}</h3>
-                    <p>{t.openAllWeekCopy}</p>
-                    <span>{windowDisplay.openDay} {windowDisplay.openTime} - {windowDisplay.closeDay} {windowDisplay.closeTime}</span>
+
+                <div className="weekly-slots-stats">
+                    <div className="glass-panel">
+                        <CalendarDays size={20} />
+                        <div>
+                            <span>{t.selectedDate}</span>
+                            <strong>{formatBelarusLongDateLabel(selectedDate, dateLocale)}</strong>
+                        </div>
+                    </div>
+                    <div className="glass-panel">
+                        <CheckCircle2 size={20} />
+                        <div>
+                            <span>{t.freeSlots}</span>
+                            <strong>{freeCells}</strong>
+                        </div>
+                    </div>
+                    <div className="glass-panel">
+                        <Washer size={20} />
+                        <div>
+                            <span>{t.bookedSlots}</span>
+                            <strong>{bookedCells}/{totalCells}</strong>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -431,6 +459,7 @@ export default function WeeklySlots() {
                 {dateOptions.map((date) => {
                     const isSelected = isSameBelarusDay(date, selectedDate);
                     const isPastDate = date.getTime() < getBelarusDate().getTime();
+                    const isMaintenanceDate = getBelarusWeekday(date) === maintenanceDay;
                     return (
                         <button
                             key={date.toISOString()}
@@ -439,54 +468,28 @@ export default function WeeklySlots() {
                                 hapticSelection();
                                 setSelectedDate(date);
                             }}
-                            className="glass-panel"
-                            style={{
-                                minWidth: '86px',
-                                padding: '14px 12px',
-                                borderRadius: '14px',
-                                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                                background: isSelected ? 'rgba(99, 102, 241, 0.22)' : 'var(--glass-bg)',
-                                color: isPastDate ? 'var(--text-muted)' : 'var(--text-main)',
-                                opacity: isPastDate ? 0.72 : 1,
-                                cursor: 'pointer',
-                                textAlign: 'center',
-                            }}
+                            className={[
+                                'glass-panel',
+                                'weekly-slots-date-button',
+                                isSelected ? 'weekly-slots-date-button--selected' : '',
+                                isPastDate ? 'weekly-slots-date-button--past' : '',
+                                isMaintenanceDate ? 'weekly-slots-date-button--maintenance' : '',
+                            ].filter(Boolean).join(' ')}
                         >
-                            <div style={{ fontSize: '12px', color: isSelected ? '#c7d2fe' : 'var(--text-muted)', marginBottom: '4px' }}>
+                            <div className="weekly-slots-date-weekday">
                                 {formatBelarusWeekdayLabel(date, dateLocale).slice(0, 3)}
                             </div>
-                            <div style={{ fontSize: '20px', fontWeight: 800 }}>{date.getUTCDate()}</div>
+                            <div className="weekly-slots-date-number">{date.getUTCDate()}</div>
+                            {isMaintenanceDate && (
+                                <span className="weekly-slots-date-badge">{t.maintenance}</span>
+                            )}
                         </button>
                     );
                 })}
             </section>
 
-            <section className="weekly-slots-stats">
-                <div className="glass-panel">
-                    <CalendarDays size={20} />
-                    <div>
-                        <span>{t.selectedDate}</span>
-                        <strong>{formatBelarusLongDateLabel(selectedDate, dateLocale)}</strong>
-                    </div>
-                </div>
-                <div className="glass-panel">
-                    <CheckCircle2 size={20} />
-                    <div>
-                        <span>{t.freeSlots}</span>
-                        <strong>{freeCells}</strong>
-                    </div>
-                </div>
-                <div className="glass-panel">
-                    <Washer size={20} />
-                    <div>
-                        <span>{t.bookedSlots}</span>
-                        <strong>{bookedCells}/{totalCells}</strong>
-                    </div>
-                </div>
-            </section>
-
             <div className="weekly-slots-help">
-                {userWeeklyBooking ? t.yourWeekBooking : t.chooseFreeSlot}
+                {isMaintenanceDay ? t.maintenanceDay : (userWeeklyBooking ? t.yourWeekBooking : t.chooseFreeSlot)}
             </div>
 
             {settings.forceCloseBookings && (

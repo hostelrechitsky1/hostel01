@@ -631,22 +631,24 @@ button {
   z-index: 2;
 }
 
-.weekly-slots-page {
-  padding-bottom: 96px;
+.container.weekly-slots-page {
+  max-width: 920px;
+  padding: 24px 22px 96px;
 }
 
 .weekly-slots-header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  margin: 16px 0 22px;
+  gap: 16px;
+  margin: 14px 0 24px;
 }
 
 .weekly-slots-header h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.15;
+  letter-spacing: 0;
 }
 
 .weekly-slots-header p {
@@ -671,16 +673,26 @@ button {
   font-weight: 600;
 }
 
+.weekly-slots-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.8fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
 .weekly-slots-open-banner {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   align-items: center;
-  padding: 18px;
+  padding: 18px 20px;
   border-radius: 16px;
-  margin-bottom: 18px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(14, 165, 233, 0.08) 100%);
-  border: 1px solid rgba(16, 185, 129, 0.24);
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(14, 165, 233, 0.06) 100%),
+    rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 20px 54px rgba(2, 6, 23, 0.16);
 }
 
 .weekly-slots-open-icon {
@@ -716,26 +728,94 @@ button {
 }
 
 .weekly-slots-date-strip {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(86px, 1fr));
+  gap: 9px;
   overflow-x: auto;
-  padding-bottom: 14px;
-  margin-bottom: 4px;
+  padding: 1px 1px 12px;
+  margin-bottom: 8px;
+}
+
+.weekly-slots-date-button {
+  min-width: 86px;
+  min-height: 78px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: center;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.weekly-slots-date-button:hover {
+  transform: translateY(-1px);
+}
+
+.weekly-slots-date-button--selected {
+  border-color: rgba(129, 140, 248, 0.82);
+  background: rgba(99, 102, 241, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.12);
+}
+
+.weekly-slots-date-button--past {
+  color: var(--text-muted);
+  opacity: 0.72;
+}
+
+.weekly-slots-date-button--maintenance {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.055);
+}
+
+.weekly-slots-date-weekday {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.weekly-slots-date-button--selected .weekly-slots-date-weekday {
+  color: #c7d2fe;
+}
+
+.weekly-slots-date-number {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.weekly-slots-date-badge {
+  justify-self: center;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .weekly-slots-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
-  margin: 0 0 14px;
+  margin: 0;
 }
 
 .weekly-slots-stats .glass-panel {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px;
+  padding: 13px 14px;
   border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .weekly-slots-stats span {
@@ -755,7 +835,7 @@ button {
 
 .weekly-slots-help,
 .weekly-slots-closed {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   color: var(--text-muted);
   font-size: 14px;
   line-height: 1.4;
@@ -772,32 +852,33 @@ button {
 
 .weekly-slots-board-wrap {
   overflow-x: auto;
-  padding-bottom: 12px;
+  padding: 8px 0 12px;
+  border-radius: 18px;
 }
 
 .weekly-slots-board {
   display: grid;
-  gap: 8px;
-  min-width: 640px;
+  gap: 6px;
+  min-width: 820px;
 }
 
 .weekly-slots-board-head,
 .weekly-slots-time-cell,
 .weekly-slots-cell {
-  min-height: 72px;
-  border-radius: 14px;
+  min-height: 64px;
+  border-radius: 12px;
   border: 1px solid var(--glass-border);
 }
 
 .weekly-slots-board-head {
-  min-height: 46px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 10px;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.035);
   font-size: 13px;
   font-weight: 700;
 }
@@ -814,7 +895,7 @@ button {
   justify-content: center;
   padding: 10px;
   color: var(--text-main);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -824,10 +905,10 @@ button {
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  padding: 12px;
+  padding: 11px 12px;
   text-align: left;
   color: var(--text-main);
-  background: var(--glass-bg);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .weekly-slots-cell span,
@@ -845,8 +926,8 @@ button {
 }
 
 .weekly-slots-cell--booked {
-  background: rgba(245, 158, 11, 0.11);
-  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.07);
+  border-color: rgba(245, 158, 11, 0.2);
 }
 
 .weekly-slots-cell--mine {
@@ -856,7 +937,7 @@ button {
 
 .weekly-slots-cell--free {
   cursor: not-allowed;
-  opacity: 0.64;
+  opacity: 0.52;
 }
 
 .weekly-slots-cell--bookable {
@@ -1026,6 +1107,15 @@ button {
   fill: rgba(2, 6, 23, 0.64);
 }
 
+.weekly-slots-dashboard-button.resident-shepherd-target {
+  border-radius: 50% !important;
+  z-index: 10001;
+  box-shadow:
+    0 0 0 8px rgba(16, 185, 129, 0.1),
+    0 0 0 1px rgba(125, 211, 252, 0.32),
+    0 12px 30px rgba(16, 185, 129, 0.22);
+}
+
 /* Utility */
 .text-gradient {
   background: linear-gradient(to right, #818cf8, #c7d2fe);
@@ -1123,6 +1213,7 @@ button {
 
   .weekly-slots-header {
     grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
   }
 
   .weekly-slots-language-button {
@@ -1130,12 +1221,50 @@ button {
     justify-self: start;
   }
 
+  .weekly-slots-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-slots-open-banner {
+    padding: 16px;
+  }
+
+  .weekly-slots-date-strip {
+    grid-template-columns: repeat(7, minmax(76px, 1fr));
+  }
+
+  .weekly-slots-date-button {
+    min-width: 76px;
+    min-height: 74px;
+    padding: 10px 8px;
+  }
+
   .weekly-slots-stats {
     grid-template-columns: 1fr;
   }
 
   .weekly-slots-board {
-    min-width: 600px;
+    min-width: 690px;
+  }
+
+  .resident-shepherd-step {
+    width: min(340px, calc(100vw - 24px));
+    max-width: min(340px, calc(100vw - 24px));
+    border-radius: 20px;
+  }
+
+  .resident-shepherd-step .shepherd-header,
+  .shepherd-has-title.resident-shepherd-step .shepherd-content .shepherd-header {
+    padding: 18px 18px 6px;
+  }
+
+  .resident-shepherd-step .shepherd-text {
+    padding: 8px 18px 2px;
+    font-size: 14px;
+  }
+
+  .resident-shepherd-step .shepherd-footer {
+    padding: 12px 14px 14px;
   }
 }
 

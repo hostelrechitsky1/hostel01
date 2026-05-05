@@ -93,6 +93,7 @@ describe('WeeklySlots', () => {
         );
 
         expect(screen.getByText('Bookings now open entire week')).toBeInTheDocument();
+        expect(screen.getByText('Maintenance')).toBeInTheDocument();
         expect(await screen.findByText('Ivanov Ivan')).toBeInTheDocument();
         expect(screen.getByText('Room 401')).toBeInTheDocument();
     });
@@ -107,6 +108,7 @@ describe('WeeklySlots', () => {
         await userEvent.click(screen.getByRole('button', { name: /русский/i }));
 
         expect(await screen.findByText('Бронирование открыто всю неделю')).toBeInTheDocument();
+        expect(screen.getByText('Обслуживание')).toBeInTheDocument();
         expect(screen.getByText('Иванов Иван')).toBeInTheDocument();
     });
 });
