@@ -5,7 +5,7 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, CalendarSearch, WashingMachine as Washer } from 'lucide-react';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Clock, Languages, CalendarSearch, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
@@ -120,10 +120,13 @@ export default function Dashboard() {
             dashboardRetryDescription: 'Соединение может быть медленным. Попробуйте снова, чтобы обновить панель жильца.',
             retryDashboard: 'Повторить',
             needToWash: 'Нужно постирать?',
+            bookNow: 'Забронировать',
             bookSubtitle: 'Бронирование онлайн всю неделю',
             checkStatus: 'Проверить статус',
             bookingsClosed: 'Бронирование сейчас закрыто',
+            booked: 'Забронировано',
             bookedSubtitle: 'У вас уже есть бронь. Вы всё ещё можете открыть страницу слотов и посмотреть свободные места.',
+            openSlots: 'Открыть слоты',
             weeklySlots: 'Слоты недели',
             weeklySlotsAria: 'Открыть свободные и занятые слоты недели',
             weeklySlotsTourTitle: 'Новая страница слотов',
@@ -162,10 +165,13 @@ export default function Dashboard() {
             dashboardRetryDescription: 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.',
             retryDashboard: 'Retry Dashboard',
             needToWash: 'Need to wash?',
+            bookNow: 'Book Now',
             bookSubtitle: 'Book online during the whole week',
             checkStatus: 'Check Status',
             bookingsClosed: 'Bookings are currently closed',
+            booked: 'Booked',
             bookedSubtitle: 'You already booked. You can still open slots page to browse remaining slots.',
+            openSlots: 'Open Slots',
             weeklySlots: 'Weekly Slots',
             weeklySlotsAria: 'Open weekly free and booked slots',
             weeklySlotsTourTitle: 'New weekly slots page',
@@ -830,6 +836,11 @@ export default function Dashboard() {
         navigate('/book');
     };
 
+    const handleOpenBookingStatus = () => {
+        preloadBookingRoute();
+        navigate('/book?status=1');
+    };
+
     const handleOpenWeeklySlots = () => {
         preloadWeeklySlotsRoute();
         navigate('/weekly-slots');
@@ -945,12 +956,13 @@ export default function Dashboard() {
 
     const hasBookedForActiveWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === activeBookingWeekId);
 
-    let mainActionLabel = t.checkStatus;
+    let mainActionLabel = t.bookNow;
     let mainActionSubtitle = t.bookSubtitle;
 
     if (isSystemClosed) {
         mainActionSubtitle = t.bookingsClosed;
     } else if (hasBookedForActiveWeek) {
+        mainActionLabel = t.booked;
         mainActionSubtitle = t.bookedSubtitle;
     }
 
@@ -961,7 +973,7 @@ export default function Dashboard() {
         || (loading && (!hasCachedMachines || !hasCachedWeekBookings) && (machines.length === 0 || weekBookings.length === 0));
 
     if (isDashboardShellBooting) {
-        mainActionLabel = t.checkStatus;
+        mainActionLabel = t.openSlots;
         mainActionSubtitle = t.loadingLatest;
     }
 
@@ -1370,36 +1382,49 @@ export default function Dashboard() {
                         {mainActionSubtitle}
                     </p>
                 </div>
-                <button
-                    onClick={handleOpenBooking}
-                    onMouseEnter={preloadBookingRoute}
-                    onTouchStart={preloadBookingRoute}
-                    className="primary-button"
-                    style={{
-                        padding: '11px 24px',
-                        borderRadius: '12px',
-                        background: isSystemClosed
-                            ? 'var(--error)'
-                            : hasBookedForActiveWeek
-                                ? 'var(--resident-ready-green)'
-                                : 'var(--primary)',
-                        boxShadow: isSystemClosed
-                            ? '0 0 15px rgba(239, 68, 68, 0.3)'
-                            : hasBookedForActiveWeek
-                                ? '0 10px 24px rgba(16, 185, 129, 0.26)'
-                                : '0 0 15px var(--primary-glow)',
-                        minWidth: '132px',
-                        flexShrink: 0,
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        border: 'none',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                    }}
-                >
-                    {mainActionLabel}
-                </button>
+                <div className="main-action-buttons">
+                    <button
+                        onClick={handleOpenBooking}
+                        onMouseEnter={preloadBookingRoute}
+                        onTouchStart={preloadBookingRoute}
+                        className="primary-button"
+                        style={{
+                            padding: '11px 24px',
+                            borderRadius: '12px',
+                            background: isSystemClosed
+                                ? 'var(--error)'
+                                : hasBookedForActiveWeek
+                                    ? 'var(--resident-ready-green)'
+                                    : 'var(--primary)',
+                            boxShadow: isSystemClosed
+                                ? '0 0 15px rgba(239, 68, 68, 0.3)'
+                                : hasBookedForActiveWeek
+                                    ? '0 10px 24px rgba(16, 185, 129, 0.26)'
+                                    : '0 0 15px var(--primary-glow)',
+                            minWidth: '118px',
+                            flexShrink: 0,
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {mainActionLabel}
+                    </button>
+                    <button
+                        onClick={handleOpenBookingStatus}
+                        onMouseEnter={preloadBookingRoute}
+                        onTouchStart={preloadBookingRoute}
+                        className="glass-button check-status-button"
+                    >
+                        <span className="check-status-clock" aria-hidden="true">
+                            <Clock size={15} />
+                        </span>
+                        <span>{t.checkStatus}</span>
+                    </button>
+                </div>
             </div>
 
 

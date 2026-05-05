@@ -1,6 +1,6 @@
 import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
@@ -67,6 +67,7 @@ const replaceBookingsForDate = (bookings: Booking[], date: string, nextDateBooki
 
 export default function BookingFlow() {
     const navigate = useNavigate();
+    const location = useLocation();
     const user = bookingService.getCurrentUser();
     const userId = user?.id ?? '';
     const bookingWeekIds = useMemo(() => {
@@ -113,6 +114,7 @@ export default function BookingFlow() {
     // Async State
     const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
     const [bookings, setBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
+    const showStatusView = useMemo(() => new URLSearchParams(location.search).get('status') === '1', [location.search]);
     const selectedDateKey = useMemo(() => formatBelarusDate(selectedDate), [selectedDate]);
     const hasBookingSnapshot = hasCachedMachines
         || hasCachedWeekBookings
@@ -622,6 +624,7 @@ export default function BookingFlow() {
     }, [settings]);
 
     const windowDisplay = getAutoOpenWindowDisplay(settings);
+    const isOpenStatusView = showStatusView && !settings.forceCloseBookings && isNextWeekOpen;
 
     const showBlockingBookingNotice = (loading && bookingLoadSlow && !hasBookingSnapshot)
         || (!loading && loadIssue === 'error' && !hasBookingSnapshot);
@@ -664,7 +667,7 @@ export default function BookingFlow() {
         );
     }
 
-    if (settings.forceCloseBookings || !isNextWeekOpen) {
+    if (settings.forceCloseBookings || !isNextWeekOpen || showStatusView) {
         return (
             <div className="container flex-center" style={{
                 minHeight: '80vh',
@@ -676,22 +679,28 @@ export default function BookingFlow() {
                 <div
                     className="animate-fade-in"
                     style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
+                        background: isOpenStatusView ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.1)',
                         padding: '32px',
                         borderRadius: '50%',
                         marginBottom: '24px',
-                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                        border: isOpenStatusView ? '1px solid rgba(16, 185, 129, 0.24)' : '1px solid rgba(239, 68, 68, 0.2)'
                     }}>
-                    <AlertCircle size={48} color="#ef4444" />
+                    {isOpenStatusView ? <Activity size={48} color="var(--success)" /> : <AlertCircle size={48} color="#ef4444" />}
                 </div>
 
                 <h2 style={{ fontSize: '28px', marginBottom: '12px', fontWeight: 700 }}>
-                    {settings.forceCloseBookings ? 'Bookings Are Paused' : 'Bookings Are Currently Closed'}
+                    {settings.forceCloseBookings
+                        ? 'Bookings Are Paused'
+                        : isOpenStatusView
+                            ? 'Bookings Are Open All Week'
+                            : 'Bookings Are Currently Closed'}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontSize: '16px' }}>
                     {settings.forceCloseBookings
                         ? 'Temporarily disabled by admin.'
-                        : `Open ${windowDisplay.openDay} ${windowDisplay.openTime} - ${windowDisplay.closeDay} ${windowDisplay.closeTime}.`}
+                        : isOpenStatusView
+                            ? `Next weekly slots open ${windowDisplay.openDay} ${windowDisplay.openTime}.`
+                            : `Open ${windowDisplay.openDay} ${windowDisplay.openTime} - ${windowDisplay.closeDay} ${windowDisplay.closeTime}.`}
                 </p>
 
                 {!settings.forceCloseBookings && (
@@ -762,7 +771,7 @@ export default function BookingFlow() {
                 )}
 
                 <button
-                    onClick={() => navigate('/')}
+                    onClick={() => navigate(isOpenStatusView ? '/book' : '/')}
                     className="primary-button"
                     style={{
                         padding: '16px 32px',
@@ -774,7 +783,7 @@ export default function BookingFlow() {
                         fontWeight: 600
                     }}
                 >
-                    <ChevronLeft size={20} /> Back to Dashboard
+                    <ChevronLeft size={20} /> {isOpenStatusView ? 'Open Slots' : 'Back to Dashboard'}
                 </button>
             </div>
         );

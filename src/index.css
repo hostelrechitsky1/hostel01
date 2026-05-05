@@ -358,6 +358,53 @@ button {
   gap: 16px;
 }
 
+.main-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.check-status-button {
+  min-height: 42px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.check-status-clock {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.14);
+  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.34);
+  animation: checkStatusClockPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes checkStatusClockPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px rgba(99, 102, 241, 0);
+    transform: scale(1.04);
+  }
+}
+
 @media (max-width: 640px) {
   .main-action-layout {
     flex-direction: column;
@@ -368,6 +415,11 @@ button {
 
   .main-action-layout button {
     width: 100%;
+  }
+
+  .main-action-buttons {
+    width: 100%;
+    flex-direction: column;
   }
 }
 
