@@ -1,3 +1,4 @@
+import { Activity } from 'lucide-react';
 import { DataLoadNotice } from './DataLoadNotice';
 import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 
@@ -5,21 +6,40 @@ export function RouteFallback() {
     const showLoadHelp = useSlowLoadFlag(true, 3500);
 
     return (
-        <div className="container animate-fade-in" style={{ minHeight: '100vh', padding: '24px' }}>
-            <div style={{ height: '32px', width: '220px', borderRadius: '10px', background: 'var(--glass-border)', marginBottom: '12px' }} className="skeleton-pulse"></div>
-            <div style={{ height: '18px', width: '140px', borderRadius: '10px', background: 'var(--glass-border)', marginBottom: '28px' }} className="skeleton-pulse"></div>
-            <div style={{ height: '160px', width: '100%', borderRadius: '24px', background: 'var(--glass-border)', marginBottom: '20px' }} className="skeleton-pulse"></div>
-            <div className="grid-cols-2">
-                {[1, 2, 3, 4].map((card) => (
-                    <div
-                        key={card}
-                        style={{ height: '128px', width: '100%', borderRadius: '18px', background: 'var(--glass-border)' }}
-                        className="skeleton-pulse"
-                    ></div>
-                ))}
+        <div className="container animate-fade-in flex-center" style={{ minHeight: '100vh', padding: '24px' }}>
+            <div
+                className="glass-panel scroll-loading-shell"
+                style={{
+                    width: '100%',
+                    maxWidth: '420px',
+                    padding: '28px',
+                    borderRadius: '24px',
+                    textAlign: 'center',
+                }}
+            >
+                <div
+                    style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '20px',
+                        margin: '0 auto 18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--success)',
+                        background: 'rgba(16, 185, 129, 0.14)',
+                        border: '1px solid rgba(16, 185, 129, 0.22)',
+                    }}
+                >
+                    <Activity size={30} />
+                </div>
+                <h2 style={{ margin: 0, fontSize: '22px', lineHeight: 1.15 }}>Opening hostel booking</h2>
+                <p style={{ margin: '10px 0 0', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                    Preparing the latest slots and dashboard data.
+                </p>
             </div>
             {showLoadHelp && (
-                <div style={{ marginTop: '24px' }}>
+                <div style={{ width: '100%', maxWidth: '520px', marginTop: '20px' }}>
                     <DataLoadNotice
                         compact
                         title="Still loading this page"

@@ -102,6 +102,7 @@ describe('BookingFlow Component', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+        vi.restoreAllMocks();
     });
 
     it('renders booking flow without crashing', async () => {
@@ -139,7 +140,7 @@ describe('BookingFlow Component', () => {
         expect(screen.getByRole('button', { name: /open slots/i })).toBeInTheDocument();
     });
 
-    it('automatically opens the slots page when the status countdown reaches the open window', async () => {
+    it('keeps the status countdown visible when bookings are already open', async () => {
         vi.spyOn(timeUtils, 'isAutoBookingWindowOpen').mockReturnValue(true);
 
         render(
@@ -159,6 +160,30 @@ describe('BookingFlow Component', () => {
         );
 
         expect(await screen.findByText(/bookings are open all week/i)).toBeInTheDocument();
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+
+        expect(screen.getByTestId('location-probe')).toHaveTextContent('/book?status=1');
+    });
+
+    it('automatically opens the slots page when the visible countdown reaches zero', async () => {
+        vi.spyOn(timeUtils, 'isAutoBookingWindowOpen').mockReturnValue(false);
+        vi.spyOn(timeUtils, 'getNextAutoOpenDate').mockReturnValue(new Date(Date.now() - 1000));
+
+        render(
+            <MemoryRouter initialEntries={['/book?status=1']}>
+                <Routes>
+                    <Route
+                        path="/book"
+                        element={(
+                            <>
+                                <BookingFlow />
+                                <LocationProbe />
+                            </>
+                        )}
+                    />
+                </Routes>
+            </MemoryRouter>
+        );
 
         await waitFor(() => {
             expect(screen.getByTestId('location-probe')).toHaveTextContent(/^\/book$/);

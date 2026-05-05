@@ -23,6 +23,12 @@ import { getMachineOperatingState } from '../utils/machineStatus';
 const RECENT_BOOKINGS_LIMIT = 12;
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
 const WEEKLY_SLOTS_TOUR_STORAGE_KEY_PREFIX = 'hostel_weekly_slots_tour_seen_v1:';
+const DASHBOARD_FALLBACK_MACHINES: Machine[] = [
+    { id: '1', name: 'Machine 1', status: 'available' },
+    { id: '2', name: 'Machine 2', status: 'available' },
+    { id: '3', name: 'Machine 3', status: 'available' },
+    { id: '4', name: 'Machine 4', status: 'available' },
+];
 let dashboardFeedbackModulePromise: Promise<typeof import('../components/DashboardFeedback')> | null = null;
 let dashboardBookingSummaryModulePromise: Promise<typeof import('../components/DashboardBookingSummary')> | null = null;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -260,7 +266,7 @@ export default function Dashboard() {
     const hasCachedMachines = cachedMachines !== undefined;
     const hasCachedWeekBookings = cachedWeekBookings !== undefined;
     const hasCachedRecentBookings = cachedRecentBookings !== undefined;
-    const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
+    const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? DASHBOARD_FALLBACK_MACHINES);
     const [weekBookings, setWeekBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
     const [recentBookings, setRecentBookings] = useState<Booking[]>(() => cachedRecentBookings ?? []);
     const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
@@ -1028,8 +1034,7 @@ export default function Dashboard() {
     const showBlockingDashboardNotice = (loading && residentLoadSlow && !hasCoreResidentSnapshot)
         || (!loading && loadIssue === 'error' && !hasCoreResidentSnapshot);
     const isDashboardShellBooting = loading && !hasCoreResidentSnapshot;
-    const showStatusSkeleton = isDashboardShellBooting
-        || (loading && (!hasCachedMachines || !hasCachedWeekBookings) && (machines.length === 0 || weekBookings.length === 0));
+    const showStatusSkeleton = loading && machines.length === 0;
 
     if (isDashboardShellBooting) {
         mainActionLabel = t.openSlots;
