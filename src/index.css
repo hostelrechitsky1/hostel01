@@ -817,29 +817,39 @@ button {
   -webkit-backdrop-filter: blur(22px);
 }
 
+.shepherd-element.resident-shepherd-step,
+.shepherd-element.shepherd-has-title.resident-shepherd-step {
+  background:
+    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%) !important;
+  border-radius: 22px !important;
+}
+
 .resident-shepherd-step .shepherd-content {
   border-radius: 22px;
-  background: transparent;
+  background: transparent !important;
   overflow: hidden;
 }
 
-.resident-shepherd-step .shepherd-header {
+.resident-shepherd-step .shepherd-header,
+.shepherd-has-title.resident-shepherd-step .shepherd-content .shepherd-header {
   min-height: auto;
   padding: 20px 22px 8px;
-  background: transparent;
+  background: transparent !important;
   align-items: flex-start;
 }
 
-.resident-shepherd-step .shepherd-title {
-  color: var(--text-main);
+.resident-shepherd-step .shepherd-title,
+.shepherd-has-title.resident-shepherd-step .shepherd-content .shepherd-title {
+  color: #f8fafc !important;
   font-size: 17px;
   line-height: 1.25;
   font-weight: 800;
   letter-spacing: 0;
+  text-shadow: none;
 }
 
 .resident-shepherd-step .shepherd-text {
-  color: var(--text-muted);
+  color: #dbe4f0;
   padding: 8px 22px 2px;
   font-size: 15px;
   line-height: 1.5;
@@ -864,23 +874,27 @@ button {
   background: linear-gradient(135deg, #7377ff 0%, #8b5cf6 100%);
 }
 
-.resident-shepherd-step .shepherd-cancel-icon {
+.resident-shepherd-step .shepherd-cancel-icon,
+.shepherd-has-title.resident-shepherd-step .shepherd-content .shepherd-cancel-icon {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  color: var(--text-muted);
-  background: rgba(148, 163, 184, 0.1);
+  color: #cbd5e1 !important;
+  background: rgba(148, 163, 184, 0.12) !important;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.resident-shepherd-step .shepherd-cancel-icon:hover {
-  color: var(--text-main);
-  background: rgba(148, 163, 184, 0.18);
+.resident-shepherd-step .shepherd-cancel-icon:hover,
+.shepherd-has-title.resident-shepherd-step .shepherd-content .shepherd-cancel-icon:hover {
+  color: #ffffff !important;
+  background: rgba(148, 163, 184, 0.22) !important;
 }
 
-.resident-shepherd-step .shepherd-arrow::before {
+.resident-shepherd-step .shepherd-arrow::before,
+.shepherd-element.shepherd-has-title.resident-shepherd-step[data-popper-placement^=bottom] > .shepherd-arrow::before {
   background:
-    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%) !important;
+  background-color: rgba(30, 41, 59, 0.98) !important;
   border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
