@@ -5,7 +5,7 @@ import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/resi
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
 import { TIME_SLOTS } from '../types';
-import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Clock, Languages, CalendarSearch, WashingMachine as Washer } from 'lucide-react';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Clock, Languages, CalendarSearch, UserPlus, X, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
@@ -63,36 +63,15 @@ const dedupeRoommates = (students: Student[]) => {
     });
 };
 
-const buildRoommateList = (currentUser: Student | null, students: Student[]) => {
-    if (!currentUser?.roomNumber) return [];
+const buildSavedAccountList = (currentUser: Student | null, students: Student[]) => {
+    if (!currentUser) return dedupeRoommates(students);
 
-    const sameRoomResidents = dedupeRoommates(
-        students.filter((student) => student.roomNumber === currentUser.roomNumber)
-    );
-
-    if (sameRoomResidents.length === 0) {
-        return [currentUser];
-    }
-
-    const hasCurrentResident = sameRoomResidents.some((student) => student.id === currentUser.id);
-    if (hasCurrentResident) {
-        return sameRoomResidents;
-    }
-
-    return dedupeRoommates([currentUser, ...sameRoomResidents]);
+    return dedupeRoommates([currentUser, ...students]);
 };
 
-const getInitialRoommates = (currentUser: Student | null) => {
-    if (!currentUser?.roomNumber) return [];
-
-    const cachedRoommates = buildRoommateList(currentUser, bookingService.getCurrentRoommates());
-
-    if (cachedRoommates.length > 0) {
-        return cachedRoommates;
-    }
-
-    return [currentUser];
-};
+const getInitialSavedAccounts = (currentUser: Student | null) => (
+    buildSavedAccountList(currentUser, bookingService.getSavedAccounts())
+);
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -105,13 +84,26 @@ export default function Dashboard() {
             switchLanguage: 'English',
             hello: 'Здравствуйте',
             roomLabel: (roomNumber: string) => `Комната ${roomNumber}`,
-            tapAvatarToSwitch: 'Нажмите на аватар, чтобы сменить жильца',
-            switchRoommateProfile: 'Сменить профиль жильца',
+            tapAvatarToSwitch: 'Нажмите на аватар, чтобы управлять аккаунтами',
+            switchRoommateProfile: 'Сменить сохранённый аккаунт',
             currentResidentProfile: 'Текущий профиль жильца',
-            bookForRoommate: 'Бронировать для соседа',
-            roommatesOnly: (roomNumber: string) => `Здесь можно выбрать только жильцов из комнаты ${roomNumber}.`,
-            refreshingRoommates: 'Обновляем список соседей...',
-            noOtherRoommates: 'Сейчас нет других соседей для переключения.',
+            bookForRoommate: 'Сохранённые аккаунты',
+            addAccount: 'Добавить аккаунт',
+            addAccountDescription: 'Введите комнату и PIN, затем выберите имя.',
+            accountRoomLabel: 'Комната',
+            accountPinLabel: 'PIN',
+            accountRoomPlaceholder: 'например, 52-2',
+            accountPinPlaceholder: '000',
+            verifyAccount: 'Проверить',
+            cancelAddAccount: 'Отмена',
+            chooseAccount: 'Выберите аккаунт',
+            accountAlreadySaved: 'Этот аккаунт уже сохранён. Вы можете переключиться на него.',
+            accountNotFound: 'Комната не найдена.',
+            accountWrongPin: 'Неверный PIN.',
+            accountLookupFailed: 'Не удалось проверить аккаунт. Попробуйте снова.',
+            savedAccountsHint: 'Здесь отображаются только аккаунты, добавленные с PIN.',
+            refreshingRoommates: 'Проверяем аккаунт...',
+            noOtherRoommates: 'Добавьте аккаунт с PIN, чтобы быстро переключаться.',
             showingSavedTitle: 'Показаны сохранённые данные панели',
             showingSavedDescription: 'Живые обновления переподключаются в фоновом режиме. Вы можете продолжать пользоваться страницей.',
             refreshData: 'Обновить данные',
@@ -150,13 +142,26 @@ export default function Dashboard() {
             switchLanguage: 'Русский',
             hello: 'Hello',
             roomLabel: (roomNumber: string) => `Room ${roomNumber}`,
-            tapAvatarToSwitch: 'Tap avatar to switch resident',
-            switchRoommateProfile: 'Switch roommate profile',
+            tapAvatarToSwitch: 'Tap avatar to manage saved accounts',
+            switchRoommateProfile: 'Switch saved account',
             currentResidentProfile: 'Current resident profile',
-            bookForRoommate: 'Book For Roommate',
-            roommatesOnly: (roomNumber: string) => `Only residents from Room ${roomNumber} can be selected here.`,
-            refreshingRoommates: 'Refreshing roommate list...',
-            noOtherRoommates: 'No other roommates are available for switching right now.',
+            bookForRoommate: 'Saved Accounts',
+            addAccount: 'Add Account',
+            addAccountDescription: 'Enter room and PIN, then choose the student name.',
+            accountRoomLabel: 'Room',
+            accountPinLabel: 'PIN',
+            accountRoomPlaceholder: 'e.g. 52-2',
+            accountPinPlaceholder: '000',
+            verifyAccount: 'Verify',
+            cancelAddAccount: 'Cancel',
+            chooseAccount: 'Choose Account',
+            accountAlreadySaved: 'This account is already saved. You can switch to it.',
+            accountNotFound: 'Room not found.',
+            accountWrongPin: 'Incorrect PIN.',
+            accountLookupFailed: 'Could not verify account. Please try again.',
+            savedAccountsHint: 'Only accounts added with a PIN are shown here.',
+            refreshingRoommates: 'Verifying account...',
+            noOtherRoommates: 'Add an account with PIN to switch quickly.',
             showingSavedTitle: 'Showing saved dashboard data',
             showingSavedDescription: 'Live updates are reconnecting in the background. You can keep using the page.',
             refreshData: 'Refresh Data',
@@ -208,8 +213,13 @@ export default function Dashboard() {
         idleTimeout: null,
         threshold: 0.01,
     });
-    const [roommates, setRoommates] = useState<Student[]>(() => getInitialRoommates(bookingService.getCurrentUser()));
-    const [roommatesLoading, setRoommatesLoading] = useState(false);
+    const [savedAccounts, setSavedAccounts] = useState<Student[]>(() => getInitialSavedAccounts(bookingService.getCurrentUser()));
+    const [accountLookupLoading, setAccountLookupLoading] = useState(false);
+    const [accountLookupRoom, setAccountLookupRoom] = useState('');
+    const [accountLookupPin, setAccountLookupPin] = useState('');
+    const [accountLookupError, setAccountLookupError] = useState<string | null>(null);
+    const [accountLookupCandidates, setAccountLookupCandidates] = useState<Student[]>([]);
+    const [isAddAccountMode, setIsAddAccountMode] = useState(false);
     const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
     const roommateMenuRef = useRef<HTMLDivElement>(null);
     const weeklySlotsButtonRef = useRef<HTMLButtonElement>(null);
@@ -257,7 +267,7 @@ export default function Dashboard() {
     const [reloadKey, setReloadKey] = useState(0);
     const [loadIssue, setLoadIssue] = useState<'saved' | 'error' | null>(null);
     const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
-    const canOpenRoommateMenu = Boolean(user?.roomNumber);
+    const canOpenRoommateMenu = Boolean(user);
     const hasResidentSnapshot = hasCachedMachines
         || hasCachedWeekBookings
         || hasCachedRecentBookings
@@ -405,8 +415,8 @@ export default function Dashboard() {
     }, [loading, userId]);
 
     useEffect(() => {
-        setRoommates(getInitialRoommates(user));
-    }, [user?.id, user?.roomNumber]);
+        setSavedAccounts(getInitialSavedAccounts(user));
+    }, [user]);
 
     useEffect(() => {
         if (!userId || loading || typeof window === 'undefined') {
@@ -846,32 +856,6 @@ export default function Dashboard() {
         navigate('/weekly-slots');
     };
 
-    const ensureRoommatesLoaded = (forceRefresh = false) => {
-        if (!user?.roomNumber || roommatesLoading) {
-            return;
-        }
-
-        const alreadyLoadedRoommates = roommates.filter((student) => student.roomNumber === user.roomNumber);
-        if (!forceRefresh && alreadyLoadedRoommates.length > 1) {
-            return;
-        }
-
-        setRoommatesLoading(true);
-
-        void residentFirestoreService.getStudentsByRoom(user.roomNumber)
-            .then((fetchedRoommates) => {
-                const nextRoommates = buildRoommateList(user, fetchedRoommates);
-                setRoommates(nextRoommates);
-                bookingService.setCurrentRoommates(nextRoommates);
-            })
-            .catch((error) => {
-                console.error('Failed to load roommates for current room', error);
-            })
-            .finally(() => {
-                setRoommatesLoading(false);
-            });
-    };
-
     const clearRoommateHold = () => {
         if (roommateHoldTimerRef.current) {
             window.clearTimeout(roommateHoldTimerRef.current);
@@ -882,7 +866,6 @@ export default function Dashboard() {
     const startRoommateHold = () => {
         if (!canOpenRoommateMenu) return;
 
-        ensureRoommatesLoaded(true);
         clearRoommateHold();
         roommateHoldTimerRef.current = window.setTimeout(() => {
             suppressRoommateClickRef.current = true;
@@ -899,11 +882,69 @@ export default function Dashboard() {
             return;
         }
 
-        if (!isRoommateMenuOpen) {
-            ensureRoommatesLoaded(true);
+        setIsRoommateMenuOpen((current) => !current);
+        hapticSelection();
+    };
+
+    const resetAddAccountForm = () => {
+        setAccountLookupRoom('');
+        setAccountLookupPin('');
+        setAccountLookupError(null);
+        setAccountLookupCandidates([]);
+    };
+
+    const handleAddAccountSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        const normalizedRoom = accountLookupRoom.trim();
+        const normalizedPin = accountLookupPin.trim();
+
+        if (!normalizedRoom || !normalizedPin || accountLookupLoading) {
+            return;
         }
 
-        setIsRoommateMenuOpen((current) => !current);
+        setAccountLookupLoading(true);
+        setAccountLookupError(null);
+        setAccountLookupCandidates([]);
+
+        try {
+            const roomStudents = await residentFirestoreService.getStudentsByRoom(normalizedRoom);
+            if (roomStudents.length === 0) {
+                setAccountLookupError(t.accountNotFound);
+                return;
+            }
+
+            const correctPin = roomStudents[0]?.pin;
+            if (correctPin && normalizedPin !== correctPin) {
+                setAccountLookupError(t.accountWrongPin);
+                return;
+            }
+
+            const candidates = dedupeRoommates(roomStudents);
+            const hasUnsavedCandidate = candidates.some((student) => !savedAccounts.some((account) => account.id === student.id));
+            setAccountLookupCandidates(candidates);
+            if (!hasUnsavedCandidate) {
+                setAccountLookupError(t.accountAlreadySaved);
+            }
+        } catch (error) {
+            console.error('Failed to verify saved account', error);
+            setAccountLookupError(t.accountLookupFailed);
+        } finally {
+            setAccountLookupLoading(false);
+        }
+    };
+
+    const saveAccounts = (nextAccounts: Student[]) => {
+        const normalizedAccounts = buildSavedAccountList(user, nextAccounts);
+        bookingService.setSavedAccounts(normalizedAccounts);
+        setSavedAccounts(normalizedAccounts);
+    };
+
+    const handleSavedAccountRemove = (studentId: string) => {
+        if (studentId === user?.id) {
+            return;
+        }
+
+        saveAccounts(savedAccounts.filter((student) => student.id !== studentId));
         hapticSelection();
     };
 
@@ -916,17 +957,21 @@ export default function Dashboard() {
         const cachedBookings = residentSnapshotService.getCachedWarmSnapshot(dashboardWeekIds, nextResident.id, true)?.recentBookings
             ?? residentFirestoreService.getCachedRecentBookingsForStudent(nextResident.id, RECENT_BOOKINGS_LIMIT);
 
+        bookingService.addSavedAccount(nextResident);
         bookingService.setCurrentUser(nextResident);
         startTransition(() => {
             setUser(nextResident);
             setRecentBookings(cachedBookings ?? []);
         });
+        setSavedAccounts(getInitialSavedAccounts(nextResident));
         setLoading(false);
         setRecentBookingsHydrated(cachedBookings !== undefined);
         setRecentBookingsLoading(cachedBookings === undefined);
         setLoadIssue(null);
         setLoadErrorMessage(null);
         setIsRoommateMenuOpen(false);
+        setIsAddAccountMode(false);
+        resetAddAccountForm();
         preloadBookingRoute();
         preloadWeeklySlotsRoute();
         void warmResidentAppData(nextResident.id, {
@@ -1178,98 +1223,256 @@ export default function Dashboard() {
                                     boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)'
                                 }}
                             >
-                                    <div style={{ marginBottom: '10px' }}>
-                                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{t.bookForRoommate}</div>
-                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
-                                            {t.roommatesOnly(user.roomNumber)}
+                                    <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                                        <div>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>{t.bookForRoommate}</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                                                {t.savedAccountsHint}
+                                            </div>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsAddAccountMode((current) => !current);
+                                                resetAddAccountForm();
+                                            }}
+                                            className="glass-button"
+                                            style={{
+                                                width: '34px',
+                                                height: '34px',
+                                                borderRadius: '999px',
+                                                padding: 0,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0
+                                            }}
+                                            aria-label={isAddAccountMode ? t.cancelAddAccount : t.addAccount}
+                                            title={isAddAccountMode ? t.cancelAddAccount : t.addAccount}
+                                        >
+                                            {isAddAccountMode ? <X size={16} /> : <UserPlus size={16} />}
+                                        </button>
                                     </div>
 
                                     <div style={{ display: 'grid', gap: '8px' }}>
-                                        {roommates.map((resident) => {
+                                        {savedAccounts.map((resident) => {
                                             const isActiveResident = resident.id === user.id;
                                             return (
-                                                <button
+                                                <div
                                                     key={resident.id}
-                                                    type="button"
-                                                    onClick={() => handleRoommateSwitch(resident)}
-                                                    className="glass-button"
                                                     style={{
-                                                        width: '100%',
-                                                        padding: '12px 14px',
-                                                        borderRadius: '16px',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'space-between',
-                                                        gap: '10px',
-                                                        background: isActiveResident
-                                                            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(14, 165, 233, 0.12) 100%)'
-                                                            : 'rgba(148, 163, 184, 0.08)',
-                                                        border: isActiveResident
-                                                            ? '1px solid rgba(99, 102, 241, 0.22)'
-                                                            : '1px solid rgba(148, 163, 184, 0.2)',
-                                                        textAlign: 'left'
+                                                        display: 'grid',
+                                                        gridTemplateColumns: isActiveResident ? '1fr' : '1fr auto',
+                                                        gap: '8px',
+                                                        alignItems: 'stretch'
                                                     }}
                                                 >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                                                        <div
-                                                            style={{
-                                                                width: '36px',
-                                                                height: '36px',
-                                                                borderRadius: '50%',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                background: isActiveResident ? 'rgba(99, 102, 241, 0.2)' : 'rgba(148, 163, 184, 0.16)',
-                                                                color: 'var(--text-main)',
-                                                                fontWeight: 700,
-                                                                border: '1px solid rgba(148, 163, 184, 0.24)',
-                                                                flexShrink: 0
-                                                            }}
-                                                        >
-                                                            {getResidentInitialsForLanguage(resident.name, isRussian)}
-                                                        </div>
-                                                        <div style={{ minWidth: 0 }}>
-                                                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {getResidentShortNameForLanguage(resident.name, isRussian)}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRoommateSwitch(resident)}
+                                                        className="glass-button"
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '12px 14px',
+                                                            borderRadius: '16px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            gap: '10px',
+                                                            background: isActiveResident
+                                                                ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.16) 0%, rgba(14, 165, 233, 0.12) 100%)'
+                                                                : 'rgba(148, 163, 184, 0.08)',
+                                                            border: isActiveResident
+                                                                ? '1px solid rgba(99, 102, 241, 0.22)'
+                                                                : '1px solid rgba(148, 163, 184, 0.2)',
+                                                            textAlign: 'left'
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                            <div
+                                                                style={{
+                                                                    width: '36px',
+                                                                    height: '36px',
+                                                                    borderRadius: '50%',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    background: isActiveResident ? 'rgba(99, 102, 241, 0.2)' : 'rgba(148, 163, 184, 0.16)',
+                                                                    color: 'var(--text-main)',
+                                                                    fontWeight: 700,
+                                                                    border: '1px solid rgba(148, 163, 184, 0.24)',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            >
+                                                                {getResidentInitialsForLanguage(resident.name, isRussian)}
                                                             </div>
-                                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                                {t.roomLabel(resident.roomNumber)}
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                    {getResidentShortNameForLanguage(resident.name, isRussian)}
+                                                                </div>
+                                                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                                    {t.roomLabel(resident.roomNumber)}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    {isActiveResident && (
-                                                        <span
+                                                        {isActiveResident && (
+                                                            <span
+                                                                style={{
+                                                                    width: '24px',
+                                                                    height: '24px',
+                                                                    borderRadius: '999px',
+                                                                    background: 'rgba(16, 185, 129, 0.16)',
+                                                                    color: 'var(--success)',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            >
+                                                                <Check size={14} />
+                                                            </span>
+                                                        )}
+                                                    </button>
+
+                                                    {!isActiveResident && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleSavedAccountRemove(resident.id)}
+                                                            className="glass-button"
+                                                            aria-label={`Remove ${getResidentShortNameForLanguage(resident.name, isRussian)}`}
                                                             style={{
-                                                                width: '24px',
-                                                                height: '24px',
-                                                                borderRadius: '999px',
-                                                                background: 'rgba(16, 185, 129, 0.16)',
-                                                                color: 'var(--success)',
+                                                                width: '42px',
+                                                                borderRadius: '14px',
+                                                                padding: 0,
                                                                 display: 'flex',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
-                                                                flexShrink: 0
+                                                                color: 'var(--text-muted)'
                                                             }}
                                                         >
-                                                            <Check size={14} />
-                                                        </span>
+                                                            <X size={15} />
+                                                        </button>
                                                     )}
-                                                </button>
+                                                </div>
                                             );
                                         })}
 
-                                        {roommatesLoading && (
-                                            <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                {t.refreshingRoommates}
+                                        {savedAccounts.length <= 1 && !isAddAccountMode && (
+                                            <div style={{ padding: '8px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                {t.noOtherRoommates}
                                             </div>
                                         )}
 
-                                        {!roommatesLoading && roommates.length <= 1 && (
-                                            <div style={{ padding: '10px 4px 2px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                {t.noOtherRoommates}
-                                            </div>
+                                        {isAddAccountMode && (
+                                            <form onSubmit={handleAddAccountSubmit} style={{ display: 'grid', gap: '10px', paddingTop: '6px' }}>
+                                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                    {t.addAccountDescription}
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 92px', gap: '8px' }}>
+                                                    <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                        {t.accountRoomLabel}
+                                                        <input
+                                                            type="text"
+                                                            value={accountLookupRoom}
+                                                            onChange={(event) => setAccountLookupRoom(event.target.value)}
+                                                            placeholder={t.accountRoomPlaceholder}
+                                                            autoComplete="off"
+                                                            style={{
+                                                                width: '100%',
+                                                                minWidth: 0,
+                                                                boxSizing: 'border-box',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid var(--glass-border)',
+                                                                background: 'rgba(15, 23, 42, 0.42)',
+                                                                color: 'var(--text-main)',
+                                                                padding: '11px 12px',
+                                                                outline: 'none'
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                        {t.accountPinLabel}
+                                                        <input
+                                                            type="password"
+                                                            inputMode="numeric"
+                                                            maxLength={3}
+                                                            value={accountLookupPin}
+                                                            onChange={(event) => setAccountLookupPin(event.target.value)}
+                                                            placeholder={t.accountPinPlaceholder}
+                                                            style={{
+                                                                width: '100%',
+                                                                minWidth: 0,
+                                                                boxSizing: 'border-box',
+                                                                borderRadius: '12px',
+                                                                border: '1px solid var(--glass-border)',
+                                                                background: 'rgba(15, 23, 42, 0.42)',
+                                                                color: 'var(--text-main)',
+                                                                padding: '11px 12px',
+                                                                outline: 'none',
+                                                                textAlign: 'center',
+                                                                letterSpacing: '0.1em'
+                                                            }}
+                                                        />
+                                                    </label>
+                                                </div>
+
+                                                <button
+                                                    type="submit"
+                                                    className="primary-button"
+                                                    disabled={accountLookupLoading}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '11px 14px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '13px',
+                                                        opacity: accountLookupLoading ? 0.72 : 1
+                                                    }}
+                                                >
+                                                    {accountLookupLoading ? t.refreshingRoommates : t.verifyAccount}
+                                                </button>
+
+                                                {accountLookupError && (
+                                                    <div style={{ fontSize: '12px', color: accountLookupCandidates.length > 0 ? 'var(--text-muted)' : '#fca5a5' }}>
+                                                        {accountLookupError}
+                                                    </div>
+                                                )}
+
+                                                {accountLookupCandidates.length > 0 && (
+                                                    <div style={{ display: 'grid', gap: '8px' }}>
+                                                        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                                                            {t.chooseAccount}
+                                                        </div>
+                                                        {accountLookupCandidates.map((resident) => {
+                                                            const isSaved = savedAccounts.some((account) => account.id === resident.id);
+                                                            return (
+                                                                <button
+                                                                    key={resident.id}
+                                                                    type="button"
+                                                                    onClick={() => handleRoommateSwitch(resident)}
+                                                                    className="glass-button"
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        padding: '11px 12px',
+                                                                        borderRadius: '14px',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'space-between',
+                                                                        gap: '10px',
+                                                                        textAlign: 'left',
+                                                                        background: isSaved ? 'rgba(16, 185, 129, 0.1)' : 'rgba(148, 163, 184, 0.08)'
+                                                                    }}
+                                                                >
+                                                                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {getResidentShortNameForLanguage(resident.name, isRussian)}
+                                                                    </span>
+                                                                    {isSaved && <Check size={14} color="var(--success)" />}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </form>
                                         )}
                                     </div>
                             </div>

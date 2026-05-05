@@ -770,21 +770,41 @@ export default function BookingFlow() {
                     </div>
                 )}
 
-                <button
-                    onClick={() => navigate(isOpenStatusView ? '/book' : '/')}
-                    className="primary-button"
-                    style={{
-                        padding: '16px 32px',
-                        borderRadius: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        fontSize: '16px',
-                        fontWeight: 600
-                    }}
-                >
-                    <ChevronLeft size={20} /> {isOpenStatusView ? 'Open Slots' : 'Back to Dashboard'}
-                </button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                        onClick={() => navigate('/')}
+                        className={isOpenStatusView ? 'glass-button' : 'primary-button'}
+                        style={{
+                            padding: '16px 28px',
+                            borderRadius: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontSize: '16px',
+                            fontWeight: 600
+                        }}
+                    >
+                        <ChevronLeft size={20} /> Back to Dashboard
+                    </button>
+
+                    {isOpenStatusView && (
+                        <button
+                            onClick={() => navigate('/book')}
+                            className="primary-button"
+                            style={{
+                                padding: '16px 32px',
+                                borderRadius: '16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                fontSize: '16px',
+                                fontWeight: 600
+                            }}
+                        >
+                            Open Slots
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }
