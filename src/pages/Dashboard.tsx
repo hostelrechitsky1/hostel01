@@ -15,13 +15,11 @@ import { useSlowLoadFlag } from '../utils/useSlowLoadFlag';
 import { useViewportActivation } from '../utils/useViewportActivation';
 import { warmResidentAppData } from '../utils/warmResidentApp';
 import { hapticSelection, hapticSoftPulse } from '../utils/haptics';
-import { notifySuccess } from '../utils/notify';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getResidentShortNameForLanguage } from '../utils/residentNames';
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 
 const RECENT_BOOKINGS_LIMIT = 12;
-const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
 const WEEKLY_SLOTS_TOUR_STORAGE_KEY_PREFIX = 'hostel_weekly_slots_tour_seen_v1:';
 let dashboardFeedbackModulePromise: Promise<typeof import('../components/DashboardFeedback')> | null = null;
@@ -122,13 +120,10 @@ export default function Dashboard() {
             dashboardRetryDescription: 'Соединение может быть медленным. Попробуйте снова, чтобы обновить панель жильца.',
             retryDashboard: 'Повторить',
             needToWash: 'Нужно постирать?',
-            bookNow: 'Забронировать',
             bookSubtitle: 'Бронирование онлайн всю неделю',
             checkStatus: 'Проверить статус',
             bookingsClosed: 'Бронирование сейчас закрыто',
-            booked: 'Забронировано',
             bookedSubtitle: 'У вас уже есть бронь. Вы всё ещё можете открыть страницу слотов и посмотреть свободные места.',
-            openSlots: 'Открыть слоты',
             weeklySlots: 'Слоты недели',
             weeklySlotsAria: 'Открыть свободные и занятые слоты недели',
             weeklySlotsTourTitle: 'Новая страница слотов',
@@ -147,7 +142,6 @@ export default function Dashboard() {
             ready: 'Готово',
             finishesSoon: 'Скоро освободится',
             closedShort: 'Закрыто',
-            toastNewCancel: 'Новинка: теперь вы можете отменять свои будущие бронирования прямо с панели.',
         }
         : {
             switchLanguage: 'Русский',
@@ -168,13 +162,10 @@ export default function Dashboard() {
             dashboardRetryDescription: 'Your connection may be slow right now. Retry to reconnect and load the resident dashboard.',
             retryDashboard: 'Retry Dashboard',
             needToWash: 'Need to wash?',
-            bookNow: 'Book Now',
             bookSubtitle: 'Book online during the whole week',
             checkStatus: 'Check Status',
             bookingsClosed: 'Bookings are currently closed',
-            booked: 'Booked',
             bookedSubtitle: 'You already booked. You can still open slots page to browse remaining slots.',
-            openSlots: 'Open Slots',
             weeklySlots: 'Weekly Slots',
             weeklySlotsAria: 'Open weekly free and booked slots',
             weeklySlotsTourTitle: 'New weekly slots page',
@@ -193,7 +184,6 @@ export default function Dashboard() {
             ready: 'Ready',
             finishesSoon: 'Finishes soon',
             closedShort: 'Closed',
-            toastNewCancel: 'New: you can now cancel your own upcoming bookings directly from the dashboard.',
         };
     const userId = user?.id ?? '';
     const {
@@ -279,7 +269,6 @@ export default function Dashboard() {
     const dashboardShellMetricRef = useRef(false);
     const dashboardDataMetricRef = useRef(false);
     const bannerReadyMetricRef = useRef(false);
-    const cancelToastSeenRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -367,37 +356,6 @@ export default function Dashboard() {
             banners: 0,
         });
     }, [banners.length, bannersLoading]);
-
-    useEffect(() => {
-        if (!userId || loading) {
-            return;
-        }
-
-        if (loadIssue === 'error' && !hasCoreResidentSnapshot) {
-            return;
-        }
-
-        if (typeof window === 'undefined') {
-            return;
-        }
-
-        const storageKey = `${CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX}${userId}`;
-
-        if (cancelToastSeenRef.current === storageKey || window.localStorage.getItem(storageKey) === '1') {
-            cancelToastSeenRef.current = storageKey;
-            return;
-        }
-
-        const timeoutId = window.setTimeout(() => {
-            notifySuccess(t.toastNewCancel);
-            window.localStorage.setItem(storageKey, '1');
-            cancelToastSeenRef.current = storageKey;
-        }, 900);
-
-        return () => {
-            window.clearTimeout(timeoutId);
-        };
-    }, [hasCoreResidentSnapshot, loadIssue, loading, t.toastNewCancel, userId]);
 
     /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
@@ -987,14 +945,12 @@ export default function Dashboard() {
 
     const hasBookedForActiveWeek = weekBookings.some((booking) => booking.studentId === userId && booking.weekId === activeBookingWeekId);
 
-    let mainActionLabel = t.bookNow;
+    let mainActionLabel = t.checkStatus;
     let mainActionSubtitle = t.bookSubtitle;
 
     if (isSystemClosed) {
-        mainActionLabel = t.checkStatus;
         mainActionSubtitle = t.bookingsClosed;
     } else if (hasBookedForActiveWeek) {
-        mainActionLabel = t.booked;
         mainActionSubtitle = t.bookedSubtitle;
     }
 
@@ -1005,7 +961,7 @@ export default function Dashboard() {
         || (loading && (!hasCachedMachines || !hasCachedWeekBookings) && (machines.length === 0 || weekBookings.length === 0));
 
     if (isDashboardShellBooting) {
-        mainActionLabel = t.openSlots;
+        mainActionLabel = t.checkStatus;
         mainActionSubtitle = t.loadingLatest;
     }
 

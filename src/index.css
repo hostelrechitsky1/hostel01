@@ -804,31 +804,88 @@ button {
 }
 
 .resident-shepherd-step {
-  max-width: min(340px, calc(100vw - 32px));
-  border-radius: 16px;
-  background: var(--floating-bar-bg);
+  width: min(360px, calc(100vw - 32px));
+  max-width: min(360px, calc(100vw - 32px));
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
   color: var(--text-main);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 22px 46px rgba(15, 23, 42, 0.32);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.52);
+  overflow: hidden;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.resident-shepherd-step .shepherd-content {
+  border-radius: 22px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.resident-shepherd-step .shepherd-header {
+  min-height: auto;
+  padding: 20px 22px 8px;
+  background: transparent;
+  align-items: flex-start;
 }
 
 .resident-shepherd-step .shepherd-title {
   color: var(--text-main);
-  font-size: 16px;
+  font-size: 17px;
+  line-height: 1.25;
   font-weight: 800;
+  letter-spacing: 0;
 }
 
 .resident-shepherd-step .shepherd-text {
   color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.45;
+  padding: 8px 22px 2px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.resident-shepherd-step .shepherd-footer {
+  padding: 14px 16px 16px;
+  justify-content: flex-end;
 }
 
 .resident-shepherd-step .shepherd-button {
-  border-radius: 10px;
-  background: var(--primary);
+  min-height: 44px;
+  padding: 11px 22px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
   color: white;
   font-weight: 700;
+  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.34);
+}
+
+.resident-shepherd-step .shepherd-button:hover {
+  background: linear-gradient(135deg, #7377ff 0%, #8b5cf6 100%);
+}
+
+.resident-shepherd-step .shepherd-cancel-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.1);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.resident-shepherd-step .shepherd-cancel-icon:hover {
+  color: var(--text-main);
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.resident-shepherd-step .shepherd-arrow::before {
+  background:
+    linear-gradient(145deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.shepherd-modal-overlay-container.shepherd-modal-is-visible path {
+  fill: rgba(2, 6, 23, 0.64);
 }
 
 /* Utility */
