@@ -1766,7 +1766,7 @@ export default function Dashboard() {
                     </>
                 ) : (
                     <>
-                        <div className="glass-panel" style={{
+                        <div className="glass-panel dashboard-status-overview" style={{
                             marginBottom: '20px',
                             padding: '20px',
                             borderRadius: '16px',
@@ -1775,8 +1775,8 @@ export default function Dashboard() {
                             background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
                             border: '1px solid rgba(99, 102, 241, 0.2)'
                         }}>
-                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div className="dashboard-status-overview-row" style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div className="dashboard-status-state" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                                     <div style={{
                                         background: 'rgba(99, 102, 241, 0.15)',
                                         padding: '12px',
@@ -1803,13 +1803,13 @@ export default function Dashboard() {
                                     </div>
                                 </div>
 
-                                <div style={{ textAlign: 'right' }}>
+                                <div className="dashboard-status-slots" style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>{t.weekSlots}</div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
-                                        <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                    <div className="dashboard-status-slot-count" style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                        <span className="dashboard-status-slot-remaining" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
                                             {slotCapacity.remainingSlots}
                                         </span>
-                                        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                        <span className="dashboard-status-slot-total" style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
                                             / {slotCapacity.totalSlots}
                                         </span>
                                     </div>
