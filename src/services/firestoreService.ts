@@ -721,6 +721,10 @@ export const firestoreService = {
         await setDoc(doc(db, VIP_RULES_COL, rule.id), rule);
     },
 
+    async updateVipRecurringRule(rule: VipRecurringRule) {
+        await setDoc(doc(db, VIP_RULES_COL, rule.id), rule, { merge: true });
+    },
+
     async toggleVipRecurringRule(id: string, isActive: boolean) {
         await updateDoc(doc(db, VIP_RULES_COL, id), { isActive });
     },
