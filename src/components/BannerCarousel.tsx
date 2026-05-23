@@ -491,18 +491,20 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
                 background: '#1f2937', // Fallback background
                 touchAction: 'pan-y', // Allow vertical scroll but reserve horizontal for custom swipe
                 userSelect: 'none',   // Prevent text selection while dragging
-                WebkitUserSelect: 'none'
+                WebkitUserSelect: 'none',
+                contain: 'layout paint'
             }}
         >
             {/* Slides Track */}
             <div style={{
                 display: 'flex',
                 // Using calc to combine the index offset with the manual drag offset
-                transform: `translateX(calc(-${currentIndex * 100}% + ${dragOffset}px))`,
+                transform: `translate3d(calc(-${currentIndex * 100}% + ${dragOffset}px), 0, 0)`,
                 // disable transition while dragging for instant feedback, enable it on release for smooth snap
                 transition: isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
                 height: '100%',
-                width: '100%'
+                width: '100%',
+                willChange: isDragging ? 'transform' : 'auto'
             }}>
                 {activeBanners.map((banner, index) => {
                     // Check if title should be shown (ignore legacy default "Announcement")
