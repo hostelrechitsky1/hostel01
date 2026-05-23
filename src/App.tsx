@@ -22,6 +22,16 @@ const LazyResidentPerfDebug = lazy(() =>
   import('./components/ResidentPerfDebug').then((module) => ({ default: module.ResidentPerfDebug }))
 );
 
+const clearStaleShepherdArtifacts = () => {
+  document
+    .querySelectorAll('.shepherd-modal-overlay-container, .shepherd-element')
+    .forEach((element) => element.remove());
+
+  document
+    .querySelectorAll('.resident-shepherd-target')
+    .forEach((element) => element.classList.remove('resident-shepherd-target'));
+};
+
 function ScrollToTopOnRouteChange() {
   const { pathname, key } = useLocation();
 
@@ -46,6 +56,7 @@ function ScrollToTopOnRouteChange() {
   };
 
   useLayoutEffect(() => {
+    clearStaleShepherdArtifacts();
     forceScrollToTop();
   }, [pathname, key]);
 
