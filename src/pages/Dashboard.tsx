@@ -29,6 +29,12 @@ const DASHBOARD_FALLBACK_MACHINES: Machine[] = [
     { id: '3', name: 'Machine 3', status: 'available' },
     { id: '4', name: 'Machine 4', status: 'available' },
 ];
+
+type ResidentTourHandle = {
+    cancel: () => void;
+    destroy?: () => void;
+};
+
 let dashboardFeedbackModulePromise: Promise<typeof import('../components/DashboardFeedback')> | null = null;
 let dashboardBookingSummaryModulePromise: Promise<typeof import('../components/DashboardBookingSummary')> | null = null;
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
@@ -234,6 +240,7 @@ export default function Dashboard() {
     const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
     const roommateMenuRef = useRef<HTMLDivElement>(null);
     const weeklySlotsButtonRef = useRef<HTMLButtonElement>(null);
+    const weeklySlotsTourRef = useRef<ResidentTourHandle | null>(null);
     const roommateHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const suppressRoommateClickRef = useRef(false);
     const dashboardWeekIds = useMemo(() => {
@@ -439,11 +446,36 @@ export default function Dashboard() {
             return;
         }
 
+        let isDisposed = false;
+        let autoDismissTimer: number | null = null;
+        const cleanupTour = () => {
+            const activeTour = weeklySlotsTourRef.current;
+            weeklySlotsTourRef.current = null;
+            weeklySlotsButtonRef.current?.classList.remove('resident-shepherd-target');
+
+            if (!activeTour) return;
+
+            try {
+                activeTour.cancel();
+            } catch {
+                // Tour may already be closed.
+            }
+
+            if (activeTour.destroy) {
+                try {
+                    activeTour.destroy();
+                } catch {
+                    // Shepherd can throw if destroy races with cancel.
+                }
+            }
+        };
+
         const tourTimeout = window.setTimeout(() => {
             const weeklySlotsButton = weeklySlotsButtonRef.current;
             if (!weeklySlotsButton) return;
 
             void import('shepherd.js').then(({ default: Shepherd }) => {
+                if (isDisposed) return;
                 if (window.localStorage.getItem(storageKey) === '1') return;
 
                 const tour = new Shepherd.Tour({
@@ -454,8 +486,9 @@ export default function Dashboard() {
                         modalOverlayOpeningRadius: 999,
                         scrollTo: false,
                     },
-                    useModalOverlay: true,
+                    useModalOverlay: false,
                 });
+                weeklySlotsTourRef.current = tour;
 
                 tour.addStep({
                     title: t.weeklySlotsTourTitle,
@@ -470,16 +503,34 @@ export default function Dashboard() {
                     }],
                 });
 
-                tour.on('show', () => weeklySlotsButton.classList.add('resident-shepherd-target'));
+                tour.on('show', () => {
+                    weeklySlotsButton.classList.add('resident-shepherd-target');
+                    window.localStorage.setItem(storageKey, '1');
+                    autoDismissTimer = window.setTimeout(() => tour.complete(), 6500);
+                });
                 tour.on('complete', () => {
                     weeklySlotsButton.classList.remove('resident-shepherd-target');
                     window.localStorage.setItem(storageKey, '1');
+                    weeklySlotsTourRef.current = null;
+                    if (autoDismissTimer !== null) {
+                        window.clearTimeout(autoDismissTimer);
+                    }
                 });
                 tour.on('cancel', () => {
                     weeklySlotsButton.classList.remove('resident-shepherd-target');
                     window.localStorage.setItem(storageKey, '1');
+                    weeklySlotsTourRef.current = null;
+                    if (autoDismissTimer !== null) {
+                        window.clearTimeout(autoDismissTimer);
+                    }
                 });
-                tour.on('destroy', () => weeklySlotsButton.classList.remove('resident-shepherd-target'));
+                tour.on('destroy', () => {
+                    weeklySlotsButton.classList.remove('resident-shepherd-target');
+                    weeklySlotsTourRef.current = null;
+                    if (autoDismissTimer !== null) {
+                        window.clearTimeout(autoDismissTimer);
+                    }
+                });
                 tour.start();
             }).catch((error) => {
                 console.error('Failed to load weekly slots tour', error);
@@ -487,7 +538,12 @@ export default function Dashboard() {
         }, 850);
 
         return () => {
+            isDisposed = true;
             window.clearTimeout(tourTimeout);
+            if (autoDismissTimer !== null) {
+                window.clearTimeout(autoDismissTimer);
+            }
+            cleanupTour();
         };
     }, [loading, t.weeklySlotsTourButton, t.weeklySlotsTourText, t.weeklySlotsTourTitle, userId]);
 
@@ -1710,7 +1766,7 @@ export default function Dashboard() {
                     </>
                 ) : (
                     <>
-                        <div className="glass-panel" style={{
+                        <div className="glass-panel dashboard-status-overview" style={{
                             marginBottom: '20px',
                             padding: '20px',
                             borderRadius: '16px',
@@ -1719,8 +1775,8 @@ export default function Dashboard() {
                             background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 100%)',
                             border: '1px solid rgba(99, 102, 241, 0.2)'
                         }}>
-                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div className="dashboard-status-overview-row" style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div className="dashboard-status-state" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                                     <div style={{
                                         background: 'rgba(99, 102, 241, 0.15)',
                                         padding: '12px',
@@ -1747,13 +1803,13 @@ export default function Dashboard() {
                                     </div>
                                 </div>
 
-                                <div style={{ textAlign: 'right' }}>
+                                <div className="dashboard-status-slots" style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '2px' }}>{t.weekSlots}</div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
-                                        <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
+                                    <div className="dashboard-status-slot-count" style={{ display: 'flex', alignItems: 'baseline', gap: '4px', justifyContent: 'flex-end' }}>
+                                        <span className="dashboard-status-slot-remaining" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1 }}>
                                             {slotCapacity.remainingSlots}
                                         </span>
-                                        <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                                        <span className="dashboard-status-slot-total" style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
                                             / {slotCapacity.totalSlots}
                                         </span>
                                     </div>

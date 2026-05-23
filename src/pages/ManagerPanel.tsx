@@ -13,7 +13,9 @@ import {
     Lightbulb,
     Sparkles,
     Clock3,
-    CheckCircle2
+    CheckCircle2,
+    Pencil,
+    X
 } from 'lucide-react';
 // bookingService removed
 import { firestoreService } from '../services/firestoreService';
@@ -30,6 +32,12 @@ import { normalizeBannerSource } from '../utils/bannerImages';
 const BOOKING_ITEMS_PER_PAGE = 12;
 const INITIAL_RECENT_BOOKINGS_LIMIT = 80;
 const INITIAL_RECENT_FEEDBACK_LIMIT = 40;
+const DEFAULT_VIP_FORM = {
+    studentId: '',
+    machineId: '',
+    weekday: 6,
+    startTime: '16:30'
+};
 const feedbackTypeMeta = {
     bug: {
         label: 'Bug',
@@ -79,12 +87,7 @@ export default function ManagerPanel() {
     const [vipRules, setVipRules] = useState<VipRecurringRule[]>([]);
     const [showBannerForm, setShowBannerForm] = useState(false);
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
-    const [vipForm, setVipForm] = useState({
-        studentId: '',
-        machineId: '',
-        weekday: 6,
-        startTime: '16:30'
-    });
+    const [vipForm, setVipForm] = useState(DEFAULT_VIP_FORM);
     const [vipStudentSearch, setVipStudentSearch] = useState('');
     const [vipApplyStatus, setVipApplyStatus] = useState<{
         weekId: string;
@@ -119,6 +122,7 @@ export default function ManagerPanel() {
     const [replyingFeedbackId, setReplyingFeedbackId] = useState<string | null>(null);
     const [addingVipRule, setAddingVipRule] = useState(false);
     const [applyingVipRules, setApplyingVipRules] = useState(false);
+    const [editingVipRuleId, setEditingVipRuleId] = useState<string | null>(null);
     const autoVipInFlightRef = useRef(false);
     const navigate = useNavigate();
     const { alertDialog, confirmDialog, promptDialog, dialogNode } = useAdminDialog();
@@ -328,7 +332,23 @@ export default function ManagerPanel() {
         refreshCoreData();
     };
 
-    const handleAddVipRule = async () => {
+    const resetVipForm = () => {
+        setVipForm(DEFAULT_VIP_FORM);
+        setEditingVipRuleId(null);
+    };
+
+    const handleStartEditVipRule = (rule: VipRecurringRule) => {
+        setVipForm({
+            studentId: rule.studentId,
+            machineId: rule.machineId,
+            weekday: rule.weekday,
+            startTime: rule.startTime
+        });
+        setVipStudentSearch('');
+        setEditingVipRuleId(rule.id);
+    };
+
+    const handleSaveVipRule = async () => {
         setAddingVipRule(true);
 
         try {
@@ -338,7 +358,8 @@ export default function ManagerPanel() {
             }
 
             const existingRule = vipRules.find((rule) =>
-                rule.studentId === vipForm.studentId
+                rule.id !== editingVipRuleId
+                && rule.studentId === vipForm.studentId
                 && rule.machineId === vipForm.machineId
                 && rule.weekday === vipForm.weekday
                 && rule.startTime === vipForm.startTime
@@ -346,6 +367,42 @@ export default function ManagerPanel() {
 
             if (existingRule) {
                 await alertDialog('Rule Exists', 'This VIP recurring rule already exists.');
+                return;
+            }
+
+            if (editingVipRuleId) {
+                const currentRule = vipRules.find((rule) => rule.id === editingVipRuleId);
+                if (!currentRule) {
+                    await alertDialog('Rule Missing', 'This VIP rule no longer exists. Please refresh and try again.');
+                    resetVipForm();
+                    return;
+                }
+
+                const updatedRule: VipRecurringRule = {
+                    ...currentRule,
+                    studentId: vipForm.studentId,
+                    machineId: vipForm.machineId,
+                    weekday: vipForm.weekday,
+                    startTime: vipForm.startTime
+                };
+
+                await firestoreService.updateVipRecurringRule(updatedRule);
+                const nextVipRules = vipRules.map((rule) => rule.id === updatedRule.id ? updatedRule : rule);
+                setVipRules(nextVipRules);
+                resetVipForm();
+                toast.success('VIP rule updated. Booking next week slot now...');
+
+                setApplyingVipRules(true);
+                try {
+                    await applyVipForWeek('manual', [updatedRule], {
+                        markWeekApplied: false,
+                        emptyMessage: 'This VIP rule is paused. Turn it Active before booking it automatically.'
+                    });
+                } finally {
+                    setApplyingVipRules(false);
+                }
+
+                await refreshCoreData();
                 return;
             }
 
@@ -361,16 +418,11 @@ export default function ManagerPanel() {
 
             await firestoreService.addVipRecurringRule(nextRule);
             await refreshCoreData();
-            setVipForm({
-                studentId: '',
-                machineId: '',
-                weekday: 6,
-                startTime: '16:30'
-            });
+            resetVipForm();
             toast.success('VIP recurring rule added.');
         } catch (error) {
-            console.error('Failed to add VIP rule', error);
-            toast.error('Failed to add VIP rule.');
+            console.error('Failed to save VIP rule', error);
+            toast.error('Failed to save VIP rule.');
         } finally {
             setAddingVipRule(false);
         }
@@ -394,11 +446,15 @@ export default function ManagerPanel() {
         await refreshCoreData();
     };
 
-    const applyVipForWeek = async (mode: 'auto' | 'manual') => {
-        const activeRules = vipRules.filter((rule) => rule.isActive);
+    const applyVipForWeek = async (
+        mode: 'auto' | 'manual',
+        rulesToApply: VipRecurringRule[] = vipRules,
+        options: { markWeekApplied?: boolean; emptyMessage?: string } = {}
+    ) => {
+        const activeRules = rulesToApply.filter((rule) => rule.isActive);
         if (activeRules.length === 0) {
             if (mode === 'manual') {
-                await alertDialog('No Active Rules', 'Enable or add at least one VIP rule first.');
+                await alertDialog('No Active Rules', options.emptyMessage ?? 'Enable or add at least one VIP rule first.');
             }
             return;
         }
@@ -485,17 +541,18 @@ export default function ManagerPanel() {
             }
 
             const applied = failed === 0 && blocked === 0;
+            const shouldMarkWeekApplied = options.markWeekApplied !== false;
 
             setVipApplyStatus({ weekId: nextWeekId, success, skipped, overridden, failed, blocked, applied, mode, at: Date.now() });
 
             if (mode === 'manual') {
                 await alertDialog(
                     applied ? 'VIP Apply Complete' : 'VIP Apply Needs Attention',
-                    `${applied ? 'Applied' : 'Processed'} for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}\nBlocked: ${blocked}\nFailed: ${failed}${applied ? '' : '\n\nThe week was NOT marked as applied, so the system can retry automatically.'}`
+                    `${applied ? 'Applied' : 'Processed'} for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}\nBlocked: ${blocked}\nFailed: ${failed}${applied && !shouldMarkWeekApplied ? '\n\nSaved edit was booked immediately. Weekly auto-apply status was left unchanged.' : applied ? '' : '\n\nThe week was NOT marked as applied, so the system can retry automatically.'}`
                 );
             }
 
-            if (applied && settings.vipLastAppliedWeekId !== nextWeekId) {
+            if (applied && shouldMarkWeekApplied && settings.vipLastAppliedWeekId !== nextWeekId) {
                 await firestoreService.updateSettings({ vipLastAppliedWeekId: nextWeekId });
                 setSettings((current) => ({ ...current, vipLastAppliedWeekId: nextWeekId }));
             }
@@ -1089,9 +1146,18 @@ export default function ManagerPanel() {
                         </select>
                     </div>
 
-                    <button onClick={handleAddVipRule} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px' }}>
-                        {addingVipRule ? 'Adding VIP...' : 'Add VIP Rule'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                        <button onClick={handleSaveVipRule} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px' }}>
+                            {addingVipRule
+                                ? editingVipRuleId ? 'Saving Edit...' : 'Adding VIP...'
+                                : editingVipRuleId ? 'Save Edit & Book Next Week' : 'Add VIP Rule'}
+                        </button>
+                        {editingVipRuleId && (
+                            <button onClick={resetVipForm} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <X size={14} /> Cancel
+                            </button>
+                        )}
+                    </div>
 
                     <div style={{ display: 'grid', gap: '10px' }}>
                         {vipRules.map((rule) => {
@@ -1099,13 +1165,16 @@ export default function ManagerPanel() {
                             const machine = machines.find((washer) => washer.id === rule.machineId);
 
                             return (
-                                <div key={rule.id} className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <div key={rule.id} className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', border: editingVipRuleId === rule.id ? '1px solid rgba(99,102,241,0.75)' : undefined }}>
                                     <div style={{ fontSize: '14px' }}>
                                         <strong>{student?.name || 'Unknown student'}</strong> · {machine?.name || 'Unknown machine'} · {WEEKDAY_LABELS[rule.weekday]} {rule.startTime}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         <button onClick={() => toggleVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px' }}>
                                             {rule.isActive ? 'Active' : 'Paused'}
+                                        </button>
+                                        <button onClick={() => handleStartEditVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                            <Pencil size={14} /> Edit
                                         </button>
                                         <button onClick={() => handleDeleteVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}>
                                             Delete

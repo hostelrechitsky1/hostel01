@@ -30,6 +30,8 @@ let firebaseMutationFallbackPromise: Promise<{
     addFeedback: (feedback: Feedback) => Promise<void>;
 }> | null = null;
 
+const MUTATION_REQUEST_TIMEOUT_MS = 12000;
+
 class ResidentMutationRequestError extends Error {
     status: number;
     payload: Record<string, unknown> | null;
@@ -130,14 +132,29 @@ const loadFirebaseMutationFallback = () => {
 };
 
 const postJson = async <T>(url: string, body: unknown) => {
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), MUTATION_REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+    } catch (error) {
+        if (controller.signal.aborted) {
+            throw new ResidentMutationRequestError(408, 'Request timed out. Please try again.');
+        }
+
+        throw error;
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
 
     const payload = await response.json().catch(() => ({}));
 
