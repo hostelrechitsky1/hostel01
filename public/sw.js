@@ -1,9 +1,8 @@
-const VERSION = 'v10'
+const VERSION = 'v11'
 const STATIC_CACHE = `app-static-${VERSION}`
-const DOCUMENT_CACHE = `app-documents-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
 const RESIDENT_API_CACHE = `resident-api-${VERSION}`
-const PRECACHE_URLS = ['/', '/index.html']
+const ACTIVE_CACHES = [STATIC_CACHE, BANNER_CACHE, RESIDENT_API_CACHE]
 const IMAGE_HOSTS = [
   'drive.google.com',
   'lh3.googleusercontent.com',
@@ -11,9 +10,7 @@ const IMAGE_HOSTS = [
 ]
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(DOCUMENT_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)).catch(() => undefined)
-  )
+  event.waitUntil(Promise.resolve())
   self.skipWaiting()
 })
 
@@ -22,11 +19,17 @@ self.addEventListener('activate', (event) => {
     const cacheNames = await caches.keys()
     await Promise.all(
       cacheNames
-        .filter((cacheName) => ![STATIC_CACHE, DOCUMENT_CACHE, BANNER_CACHE, RESIDENT_API_CACHE].includes(cacheName))
+        .filter((cacheName) => !ACTIVE_CACHES.includes(cacheName))
         .map((cacheName) => caches.delete(cacheName))
     )
     await self.clients.claim()
   })())
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 const isBannerImageRequest = (requestUrl, destination) => {
@@ -70,6 +73,53 @@ const staleWhileRevalidate = async (request, cacheName) => {
   return cached || networkFetch
 }
 
+const buildAssetRefreshModule = () => new Response(
+  [
+    "try {",
+    "  sessionStorage.setItem('hostel_asset_recovery_attempted', Date.now().toString());",
+    "  location.reload();",
+    "} catch {",
+    "  location.reload();",
+    "}",
+    "export {};",
+  ].join('\n'),
+  {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  }
+)
+
+const networkFirstStatic = async (request, cacheName) => {
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
+
+  try {
+    const response = await fetch(request)
+    if (response.ok || response.type === 'opaque') {
+      void cache.put(request, response.clone())
+    }
+
+    if (response.status === 404 && request.destination === 'script') {
+      return buildAssetRefreshModule()
+    }
+
+    return response
+  } catch {
+    if (cached) {
+      return cached
+    }
+
+    if (request.destination === 'script') {
+      return buildAssetRefreshModule()
+    }
+
+    throw new Error('offline')
+  }
+}
+
 const cacheFirstWithRefresh = async (request, cacheName) => {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
@@ -97,26 +147,19 @@ const cacheFirstWithRefresh = async (request, cacheName) => {
 }
 
 const networkFirstDocument = async (request) => {
-  const cache = await caches.open(DOCUMENT_CACHE)
-
   try {
-    const response = await fetch(request)
-    if (response.ok) {
-      void cache.put(request, response.clone())
-    }
-    return response
+    return await fetch(request, { cache: 'no-store' })
   } catch {
-    const cachedDocument = await cache.match(request)
-    if (cachedDocument) {
-      return cachedDocument
-    }
-
-    const appShell = await cache.match('/index.html')
-    if (appShell) {
-      return appShell
-    }
-
-    throw new Error('offline')
+    return new Response(
+      '<!doctype html><title>Refreshing Hostel Portal</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1230;color:#fff;font-family:system-ui,sans-serif}main{max-width:320px;padding:24px;text-align:center}</style><main><h1>Refreshing...</h1><p>Please check your connection. This page will try again shortly.</p></main><script>setTimeout(function(){location.reload()},2500)</script>',
+      {
+        status: 503,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+        },
+      }
+    )
   }
 }
 
@@ -145,6 +188,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isStaticAssetRequest(requestUrl, request)) {
-    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
+    event.respondWith(networkFirstStatic(request, STATIC_CACHE))
   }
 })
