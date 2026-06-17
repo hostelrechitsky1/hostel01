@@ -9,6 +9,8 @@ export type MachineQrOverviewProps = {
     nowMinutes: number;
     highlightMachineId?: string | null;
     clockLabel: string;
+    timeSlots: string[];
+    slotDurationMinutes: number;
 };
 
 function ownerLabel(booking: Booking | null): string {
@@ -24,6 +26,8 @@ export default function MachineQrOverview({
     nowMinutes,
     highlightMachineId,
     clockLabel,
+    timeSlots,
+    slotDurationMinutes,
 }: MachineQrOverviewProps) {
     const highlightedRef = useRef<HTMLDivElement | null>(null);
 
@@ -58,6 +62,8 @@ export default function MachineQrOverview({
                         bookingsForDate: bookingsForToday,
                         machineId: machine.id,
                         nowMinutes,
+                        timeSlots,
+                        slotDurationMinutes,
                     });
                     const isHighlight = highlightMachineId === machine.id;
                     const isMaintenance = machine.status === 'maintenance';

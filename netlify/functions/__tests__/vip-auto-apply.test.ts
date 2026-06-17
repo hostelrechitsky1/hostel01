@@ -66,6 +66,7 @@ const settingsDoc = (overrides: Record<string, unknown> = {}) => ({
   autoOpenWeekday: 6,
   autoOpenTime: '16:00',
   autoOpenDurationHours: 28,
+  slotDurationMinutes: 90,
   vipAutoEnabled: true,
   vipLastAppliedWeekId: '',
   topAlert: { message: '', isActive: false, type: 'info' },
@@ -148,8 +149,30 @@ describe('applyVipRecurringForNextWeek', () => {
     })
     expect(commitFirestoreWrites).toHaveBeenCalledTimes(2)
 
+    const bookingWrite = commitFirestoreWrites.mock.calls[0][0].find((write: { update?: { name: string } }) => (
+      write.update?.name.startsWith('bookings/')
+    ))
+    expect(bookingWrite.update.fields.endTime).toBe('18:00')
+
     const settingsWrite = commitFirestoreWrites.mock.calls[1][0][0]
     expect(settingsWrite.update.fields.vipLastAppliedWeekId).toBe(result.nextWeekId)
+  })
+
+  it('uses the configured slot duration for VIP booking end time', async () => {
+    getFirestoreDocument.mockImplementation(async (collectionId: string, documentId: string) => {
+      if (collectionId === 'settings' && documentId === 'config') {
+        return settingsDoc({ slotDurationMinutes: 60 })
+      }
+
+      return null
+    })
+
+    await applyVipRecurringForNextWeek({ now: testNow, source: 'test' })
+
+    const bookingWrite = commitFirestoreWrites.mock.calls[0][0].find((write: { update?: { name: string } }) => (
+      write.update?.name.startsWith('bookings/')
+    ))
+    expect(bookingWrite.update.fields.endTime).toBe('17:30')
   })
 
   it('leaves the week retryable when booking creation fails', async () => {

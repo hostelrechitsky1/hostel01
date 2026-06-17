@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo } from 'react';
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useMemo } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PrivateRoute } from './components/PrivateRoute';
 import { RouteFallback } from './components/RouteFallback';
@@ -92,6 +93,47 @@ const PageWrapper = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
+class RouteErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Route render failed', error, info);
+  }
+
+  componentDidUpdate(previousProps: { resetKey: string }) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="container flex-center" style={{ minHeight: '100vh', padding: '24px', textAlign: 'center', flexDirection: 'column' }}>
+          <RouteFallback />
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => window.location.reload()}
+            style={{ marginTop: '18px', padding: '12px 20px', borderRadius: '12px' }}
+          >
+            Reload App
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function RouteWarmup() {
   useEffect(() => {
     const startWarmup = () => {
@@ -138,34 +180,36 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
-    <Suspense fallback={<RouteFallback />}>
-      <Routes location={location} key={location.pathname}>
-        <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
+    <RouteErrorBoundary resetKey={location.key}>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes location={location} key={location.pathname}>
+          <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
 
-        <Route path="/" element={
-          <PrivateRoute>
-            <PageWrapper><Dashboard /></PageWrapper>
-          </PrivateRoute>
-        } />
+          <Route path="/" element={
+            <PrivateRoute>
+              <PageWrapper><Dashboard /></PageWrapper>
+            </PrivateRoute>
+          } />
 
-        <Route path="/book" element={
-          <PrivateRoute>
-            <PageWrapper><BookingFlow /></PageWrapper>
-          </PrivateRoute>
-        } />
+          <Route path="/book" element={
+            <PrivateRoute>
+              <PageWrapper><BookingFlow /></PageWrapper>
+            </PrivateRoute>
+          } />
 
-        <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
-        <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
-        <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
-        <Route path="/manager/print-qr" element={<PageWrapper><PrintMachineQr /></PageWrapper>} />
-        <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
+          <Route path="/manager/login" element={<PageWrapper><ManagerLogin /></PageWrapper>} />
+          <Route path="/manager" element={<PageWrapper><ManagerPanel /></PageWrapper>} />
+          <Route path="/manager/print-schedule" element={<PageWrapper><PrintSchedule /></PageWrapper>} />
+          <Route path="/manager/print-qr" element={<PageWrapper><PrintMachineQr /></PageWrapper>} />
+          <Route path="/manager/print-credentials" element={<PageWrapper><PrintCredentials /></PageWrapper>} />
 
-        <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
-        <Route path="/hostel-admin/dashboard" element={<PageWrapper><HostelAdminDashboard /></PageWrapper>} />
+          <Route path="/hostel-admin" element={<PageWrapper><HostelAdminLogin /></PageWrapper>} />
+          <Route path="/hostel-admin/dashboard" element={<PageWrapper><HostelAdminDashboard /></PageWrapper>} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }
 

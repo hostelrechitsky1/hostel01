@@ -1,4 +1,4 @@
-const VERSION = 'v9'
+const VERSION = 'v10'
 const STATIC_CACHE = `app-static-${VERSION}`
 const DOCUMENT_CACHE = `app-documents-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
@@ -68,6 +68,25 @@ const staleWhileRevalidate = async (request, cacheName) => {
     .catch(() => cached)
 
   return cached || networkFetch
+}
+
+const networkFirstAsset = async (request, cacheName) => {
+  const cache = await caches.open(cacheName)
+
+  try {
+    const response = await fetch(request, { cache: 'no-cache' })
+    if (response.ok || response.type === 'opaque') {
+      void cache.put(request, response.clone())
+    }
+    return response
+  } catch {
+    const cached = await cache.match(request)
+    if (cached) {
+      return cached
+    }
+
+    throw new Error('offline')
+  }
 }
 
 const cacheFirstWithRefresh = async (request, cacheName) => {
@@ -145,6 +164,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isStaticAssetRequest(requestUrl, request)) {
-    event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
+    event.respondWith(networkFirstAsset(request, STATIC_CACHE))
   }
 })

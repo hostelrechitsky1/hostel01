@@ -1,5 +1,6 @@
 import type { AppSettings, Banner, Booking, Feedback, Machine, Student } from '../types';
 import { normalizeBannerRecord } from '../utils/bannerImages';
+import { getSlotDurationMinutes } from '../utils/slotSchedule';
 import {
     CACHE_MAX_AGE_MS,
     DEFAULT_APP_SETTINGS,
@@ -69,6 +70,7 @@ const normalizeAppSettings = (settings: Partial<AppSettings> | null | undefined)
         maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : DEFAULT_APP_SETTINGS.maintenanceDay,
         autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : DEFAULT_APP_SETTINGS.autoOpenWeekday,
         autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' ? Number(data.autoOpenDurationHours) : DEFAULT_APP_SETTINGS.autoOpenDurationHours,
+        slotDurationMinutes: getSlotDurationMinutes(data),
         autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
             ? data.autoOpenTime
             : DEFAULT_APP_SETTINGS.autoOpenTime,

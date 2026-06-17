@@ -10,6 +10,7 @@ const defaultSettings: AppSettings = {
     autoOpenWeekday: 6,
     autoOpenTime: '16:00',
     autoOpenDurationHours: 28,
+    slotDurationMinutes: 90,
     vipAutoEnabled: true,
     vipLastAppliedWeekId: '',
     topAlert: { message: '', isActive: false, type: 'info' },
