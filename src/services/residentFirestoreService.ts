@@ -26,6 +26,7 @@ import {
     runFirestoreQueryDocuments,
 } from './residentFirestoreRest';
 import { residentRoomLookupService } from './residentRoomLookupService';
+import { getSlotDurationMinutes } from '../utils/slotSchedule';
 
 const MACHINES_COL = 'machines';
 const BOOKINGS_COL = 'bookings';
@@ -69,6 +70,7 @@ const normalizeAppSettings = (settings: Partial<AppSettings> | null | undefined)
         maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : DEFAULT_APP_SETTINGS.maintenanceDay,
         autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : DEFAULT_APP_SETTINGS.autoOpenWeekday,
         autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' && Number.isFinite(Number(data.autoOpenDurationHours)) ? Math.max(Number(data.autoOpenDurationHours), DEFAULT_APP_SETTINGS.autoOpenDurationHours) : DEFAULT_APP_SETTINGS.autoOpenDurationHours,
+        slotDurationMinutes: getSlotDurationMinutes(data),
         autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
             ? data.autoOpenTime
             : DEFAULT_APP_SETTINGS.autoOpenTime,

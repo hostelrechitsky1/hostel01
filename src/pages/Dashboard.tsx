@@ -4,7 +4,6 @@ import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
-import { TIME_SLOTS } from '../types';
 import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Clock, Languages, CalendarSearch, UserPlus, X, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
@@ -19,6 +18,7 @@ import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performa
 import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getResidentShortNameForLanguage } from '../utils/residentNames';
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 import { getMachineOperatingState } from '../utils/machineStatus';
+import { buildTimeSlots, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
@@ -861,6 +861,8 @@ export default function Dashboard() {
         ? addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7)
         : getActiveBookingWeekStart(new Date(), settings);
     const activeBookingWeekId = getBelarusWeekId(activeBookingWeekStart);
+    const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
+    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
 
     const isSystemClosed = settings.forceCloseBookings || !isNextWeekOpen;
 
@@ -870,6 +872,8 @@ export default function Dashboard() {
             machine,
             bookings: weekBookings,
             maintenanceDay,
+            slotDurationMinutes,
+            timeSlots,
         });
 
         if (state === 'maintenance') {
@@ -886,7 +890,7 @@ export default function Dashboard() {
 
     const slotCapacity = useMemo(() => {
         const activeMachines = machines.filter(m => m.status === 'available');
-        const slotsPerDay = TIME_SLOTS.length * activeMachines.length;
+        const slotsPerDay = timeSlots.length * activeMachines.length;
 
         const maintenanceDay = settings.maintenanceDay ?? 3;
         const weekDates = Array.from({ length: 7 }, (_, i) => addBelarusDays(activeBookingWeekStart, i));
@@ -899,7 +903,7 @@ export default function Dashboard() {
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [activeBookingWeekId, activeBookingWeekStart, machines, settings.maintenanceDay, weekBookings]);
+    }, [activeBookingWeekId, activeBookingWeekStart, machines, settings.maintenanceDay, timeSlots.length, weekBookings]);
 
     const handleLogout = () => {
         bookingService.logout();

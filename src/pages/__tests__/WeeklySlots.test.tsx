@@ -11,6 +11,7 @@ const fixtures = vi.hoisted(() => {
         autoOpenWeekday: 6,
         autoOpenTime: '16:00',
         autoOpenDurationHours: 28,
+        slotDurationMinutes: 90,
         vipAutoEnabled: true,
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' },
@@ -70,8 +71,9 @@ vi.mock('../../utils/time', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../utils/time')>();
     return {
         ...actual,
-        getBelarusNow: vi.fn(() => new Date('2026-03-03T06:00:00Z')),
-        getBelarusDate: vi.fn(() => new Date(Date.UTC(2026, 2, 3))),
+        getBelarusNow: vi.fn(() => new Date('2026-05-04T06:00:00Z')),
+        getBelarusDate: vi.fn(() => new Date(Date.UTC(2026, 4, 4))),
+        getActiveBookingWeekStart: vi.fn(() => new Date(Date.UTC(2026, 4, 4))),
     };
 });
 

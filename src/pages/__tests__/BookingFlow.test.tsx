@@ -12,6 +12,7 @@ vi.mock('../../services/residentFirestoreService', () => ({
         autoOpenWeekday: 6,
         autoOpenTime: '16:00',
         autoOpenDurationHours: 168,
+        slotDurationMinutes: 90,
         vipAutoEnabled: true,
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
@@ -29,6 +30,7 @@ vi.mock('../../services/residentFirestoreService', () => ({
             autoOpenWeekday: 6,
             autoOpenTime: '16:00',
             autoOpenDurationHours: 168,
+            slotDurationMinutes: 90,
             vipAutoEnabled: true,
             vipLastAppliedWeekId: '',
             topAlert: { message: '', isActive: false, type: 'info' }
@@ -48,6 +50,7 @@ vi.mock('../../services/residentSnapshotService', () => ({
                 autoOpenWeekday: 6,
                 autoOpenTime: '16:00',
                 autoOpenDurationHours: 168,
+                slotDurationMinutes: 90,
                 vipAutoEnabled: true,
                 vipLastAppliedWeekId: '',
                 topAlert: { message: '', isActive: false, type: 'info' }
