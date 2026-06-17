@@ -35,6 +35,16 @@ describe('getMachineOperatingState', () => {
         })).toBe('occupied');
     });
 
+    it('uses the configured duration when a booking has no stored end time', () => {
+        expect(getMachineOperatingState({
+            machine,
+            bookings: [createBooking({ startTime: '18:00', endTime: '' })],
+            maintenanceDay: 3,
+            slotDurationMinutes: 60,
+            now: new Date('2026-05-05T15:45:00.000Z'), // 18:45 Belarus time
+        })).toBe('occupied');
+    });
+
     it('marks a machine available during bookable hours when it has no active booking', () => {
         expect(getMachineOperatingState({
             machine,

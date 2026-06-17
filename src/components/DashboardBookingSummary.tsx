@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
-import { TIME_SLOTS } from '../types';
 import { addBelarusDays, addBelarusMinutes, addMinutesToTimeString, formatBelarusDate, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday, parseBelarusDateTime } from '../utils/time';
 import { hapticSelection, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from './ActionSpinner';
 import { getCancelBookingFailureMessage, getQuickBookFailureMessage } from '../utils/bookingMutations';
 import { getResidentPortalDateLocale } from '../utils/residentPortalLanguage';
+import { buildTimeSlots, getBookingDurationMinutes, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 interface DashboardBookingSummaryProps {
     user: Student;
@@ -98,6 +98,8 @@ export default function DashboardBookingSummary({
     const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
     const [cancelModalMessage, setCancelModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
+    const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
+    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -105,16 +107,20 @@ export default function DashboardBookingSummary({
         );
 
         const now = getBelarusNow();
-        const upcoming = chronological.filter((booking) => addBelarusMinutes(parseBelarusDateTime(booking.date, booking.startTime), 90) > now);
+        const upcoming = chronological.filter((booking) => (
+            addBelarusMinutes(parseBelarusDateTime(booking.date, booking.startTime), getBookingDurationMinutes(booking, slotDurationMinutes)) > now
+        ));
         const past = chronological
-            .filter((booking) => addBelarusMinutes(parseBelarusDateTime(booking.date, booking.startTime), 90) <= now)
+            .filter((booking) => (
+                addBelarusMinutes(parseBelarusDateTime(booking.date, booking.startTime), getBookingDurationMinutes(booking, slotDurationMinutes)) <= now
+            ))
             .reverse();
 
         return {
             upcomingBookings: upcoming,
             history: past.slice(0, 3)
         };
-    }, [recentBookings]);
+    }, [recentBookings, slotDurationMinutes]);
 
     const primaryUpcomingBooking = upcomingBookings[0] || null;
 
@@ -204,7 +210,7 @@ export default function DashboardBookingSummary({
             return;
         }
 
-        if (!TIME_SLOTS.includes(booking.startTime as (typeof TIME_SLOTS)[number])) {
+        if (!timeSlots.includes(booking.startTime)) {
             setQuickBookModalMessage({ type: 'error', text: 'Original slot time is no longer available.' });
             return;
         }
@@ -237,7 +243,7 @@ export default function DashboardBookingSummary({
             roomNumber: user.roomNumber,
             date: targetDateStr,
             startTime: booking.startTime,
-            endTime: addMinutesToTimeString(booking.startTime, 90),
+            endTime: addMinutesToTimeString(booking.startTime, slotDurationMinutes),
             weekId: getBelarusWeekId(targetDate),
             createdAt: Date.now()
         };
@@ -446,7 +452,7 @@ export default function DashboardBookingSummary({
                                 onClick={() => {
                                     if (!primaryUpcomingBooking) return;
                                     const start = parseBelarusDateTime(primaryUpcomingBooking.date, primaryUpcomingBooking.startTime);
-                                    const end = addBelarusMinutes(start, 90);
+                                    const end = addBelarusMinutes(start, getBookingDurationMinutes(primaryUpcomingBooking, slotDurationMinutes));
 
                                     const formatGCal = (date: Date) => date.toISOString().replace(/-|:|\.|Z/g, '').slice(0, 15) + 'Z';
 
@@ -470,7 +476,7 @@ export default function DashboardBookingSummary({
                                     if (!primaryUpcomingBooking) return;
 
                                     const startDate = parseBelarusDateTime(primaryUpcomingBooking.date, primaryUpcomingBooking.startTime);
-                                    const endDate = addBelarusMinutes(startDate, 90);
+                                    const endDate = addBelarusMinutes(startDate, getBookingDurationMinutes(primaryUpcomingBooking, slotDurationMinutes));
                                     const uid = `${primaryUpcomingBooking.id || Date.now()}@hostel-wash`;
 
                                     const icsContent = [

@@ -36,7 +36,10 @@ export const TIME_SLOTS = [
   "21:00"
 ] as const;
 
-export const SLOT_DURATION_MINUTES = 90;
+export const SLOT_DAY_START_TIME = "09:00";
+export const SLOT_DAY_END_TIME = "22:30";
+export const DEFAULT_SLOT_DURATION_MINUTES = 90;
+export const SLOT_DURATION_MINUTES = DEFAULT_SLOT_DURATION_MINUTES;
 
 export interface CalendarSlot {
   time: string;
@@ -107,6 +110,7 @@ export interface AppSettings {
   autoOpenWeekday: number; // 0=Sun, 1=Mon, ..., 6=Sat
   autoOpenTime: string; // HH:mm (Belarus local)
   autoOpenDurationHours: number; // Opening window length
+  slotDurationMinutes: number; // Length of each bookable washing slot
   vipAutoEnabled?: boolean;
   vipLastAppliedWeekId?: string;
   topAlert?: TopAlert;

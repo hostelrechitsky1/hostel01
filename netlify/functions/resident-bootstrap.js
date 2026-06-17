@@ -19,6 +19,7 @@ const SETTINGS_FIELDS = [
   'autoOpenWeekday',
   'autoOpenTime',
   'autoOpenDurationHours',
+  'slotDurationMinutes',
   'vipAutoEnabled',
   'vipLastAppliedWeekId',
   'topAlert',
@@ -60,6 +61,7 @@ const DEFAULT_APP_SETTINGS = {
   autoOpenWeekday: 6,
   autoOpenTime: '16:00',
   autoOpenDurationHours: 168,
+  slotDurationMinutes: 90,
   vipAutoEnabled: true,
   vipLastAppliedWeekId: '',
   topAlert: { message: '', isActive: false, type: 'info' },
@@ -80,6 +82,7 @@ const normalizeWeekIds = (weekIds) => Array.from(new Set(
 
 const normalizeAppSettings = (settings) => {
   const data = settings ?? {}
+  const slotDurationMinutes = Number(data.slotDurationMinutes)
 
   return {
     ...DEFAULT_APP_SETTINGS,
@@ -87,6 +90,9 @@ const normalizeAppSettings = (settings) => {
     maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : DEFAULT_APP_SETTINGS.maintenanceDay,
     autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : DEFAULT_APP_SETTINGS.autoOpenWeekday,
     autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' && Number.isFinite(Number(data.autoOpenDurationHours)) ? Math.max(Number(data.autoOpenDurationHours), DEFAULT_APP_SETTINGS.autoOpenDurationHours) : DEFAULT_APP_SETTINGS.autoOpenDurationHours,
+    slotDurationMinutes: Number.isFinite(slotDurationMinutes)
+      ? Math.min(240, Math.max(30, Math.round(slotDurationMinutes / 5) * 5))
+      : DEFAULT_APP_SETTINGS.slotDurationMinutes,
     autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
       ? data.autoOpenTime
       : DEFAULT_APP_SETTINGS.autoOpenTime,

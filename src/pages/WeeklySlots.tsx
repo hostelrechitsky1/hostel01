@@ -5,7 +5,6 @@ import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { AppSettings, Booking, Machine } from '../types';
-import { TIME_SLOTS } from '../types';
 import { ActionSpinner } from '../components/ActionSpinner';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
@@ -31,6 +30,7 @@ import { getResidentShortNameForLanguage } from '../utils/residentNames';
 import { hapticSelection, hapticSuccess } from '../utils/haptics';
 import { notifyError, notifyInfo, notifySuccess } from '../utils/notify';
 import { getBookNowFailureMessage, isBookingAvailabilityConflict } from '../utils/bookingMutations';
+import { buildTimeSlots, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 let residentLiveServicePromise: Promise<typeof import('../services/residentLiveService')> | null = null;
 let residentMutationsServicePromise: Promise<typeof import('../services/residentMutationsService')> | null = null;
@@ -159,6 +159,8 @@ export default function WeeklySlots() {
     }, [settings]);
     const activeBookingWeekEnd = useMemo(() => getBelarusWeekEnd(activeBookingWeekStart), [activeBookingWeekStart]);
     const activeBookingWeekId = useMemo(() => getBelarusWeekId(activeBookingWeekStart), [activeBookingWeekStart]);
+    const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
+    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
     const dateOptions = useMemo(() => (
         Array.from({ length: 7 }, (_, index) => addBelarusDays(activeBookingWeekStart, index))
     ), [activeBookingWeekStart]);
@@ -173,11 +175,11 @@ export default function WeeklySlots() {
         bookings.find((booking) => booking.studentId === userId && booking.weekId === activeBookingWeekId) ?? null
     ), [activeBookingWeekId, bookings, userId]);
     const windowDisplay = getAutoOpenWindowDisplay(settings);
-    const totalCells = TIME_SLOTS.length * Math.max(machines.length, 1);
+    const totalCells = timeSlots.length * Math.max(machines.length, 1);
     const bookedCells = selectedDateBookings.length;
     const freeCells = isMaintenanceDay
         ? 0
-        : TIME_SLOTS.reduce((sum, time) => {
+        : timeSlots.reduce((sum, time) => {
             if (isPastSlot(selectedDate, time)) return sum;
             return sum + activeMachines.filter((machine) => (
                 !selectedDateBookings.some((booking) => (
@@ -310,7 +312,7 @@ export default function WeeklySlots() {
             roomNumber: user.roomNumber,
             date: selectedDateKey,
             startTime: time,
-            endTime: addMinutesToTimeString(time, 90),
+            endTime: addMinutesToTimeString(time, slotDurationMinutes),
             weekId: getBelarusWeekId(selectedDate),
             createdAt: Date.now(),
         };
@@ -514,7 +516,7 @@ export default function WeeklySlots() {
                         </div>
                     ))}
 
-                    {TIME_SLOTS.map((time) => (
+                    {timeSlots.map((time) => (
                         <Fragment key={time}>
                             <div key={`${time}-label`} className="weekly-slots-time-cell">
                                 {time}

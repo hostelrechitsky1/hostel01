@@ -25,9 +25,17 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
 import { toast } from 'sonner';
-import { TIME_SLOTS } from '../types';
-import { addBelarusDays, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
+import { addBelarusDays, addMinutesToTimeString, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
 import { normalizeBannerSource } from '../utils/bannerImages';
+import {
+    buildTimeSlots,
+    formatSlotDurationLabel,
+    getSlotDurationMinutes,
+    MAX_SLOT_DURATION_MINUTES,
+    MIN_SLOT_DURATION_MINUTES,
+    normalizeSlotDurationMinutes,
+    SLOT_DURATION_PRESETS
+} from '../utils/slotSchedule';
 
 const BOOKING_ITEMS_PER_PAGE = 12;
 const INITIAL_RECENT_BOOKINGS_LIMIT = 80;
@@ -112,10 +120,12 @@ export default function ManagerPanel() {
         autoOpenWeekday: 6,
         autoOpenTime: '16:00',
         autoOpenDurationHours: 168,
+        slotDurationMinutes: 90,
         vipAutoEnabled: true,
         vipLastAppliedWeekId: '',
         topAlert: { message: '', isActive: false, type: 'info' }
     });
+    const [slotDurationDraft, setSlotDurationDraft] = useState(() => String(getSlotDurationMinutes(cachedSettings)));
     const [recentBookingLimit, setRecentBookingLimit] = useState(INITIAL_RECENT_BOOKINGS_LIMIT);
     const [recentFeedbackLimit, setRecentFeedbackLimit] = useState(INITIAL_RECENT_FEEDBACK_LIMIT);
     const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
@@ -190,6 +200,15 @@ export default function ManagerPanel() {
         return new Map(machines.map((machine) => [machine.id, machine]));
     }, [machines]);
 
+    const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
+    const availableTimeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
+    const slotDurationLabel = useMemo(() => formatSlotDurationLabel(slotDurationMinutes), [slotDurationMinutes]);
+    const preferredVipStartTime = useMemo(() => (
+        availableTimeSlots.includes(DEFAULT_VIP_FORM.startTime)
+            ? DEFAULT_VIP_FORM.startTime
+            : availableTimeSlots[Math.max(0, Math.floor(availableTimeSlots.length / 2))] ?? DEFAULT_VIP_FORM.startTime
+    ), [availableTimeSlots]);
+
     const filteredBookings = useMemo(() => {
         const searchLower = bookingSearchTerm.trim().toLowerCase();
         return bookings.filter(b => {
@@ -245,6 +264,18 @@ export default function ManagerPanel() {
         }
     }, [bookingPage, totalBookingPages]);
 
+    useEffect(() => {
+        setSlotDurationDraft(String(slotDurationMinutes));
+    }, [slotDurationMinutes]);
+
+    useEffect(() => {
+        if (availableTimeSlots.includes(vipForm.startTime)) return;
+
+        setVipForm((currentForm) => ({
+            ...currentForm,
+            startTime: preferredVipStartTime
+        }));
+    }, [availableTimeSlots, preferredVipStartTime, vipForm.startTime]);
 
     const toggleMachine = async (machine: Machine) => {
         const newStatus = machine.status === 'available' ? 'maintenance' : 'available';
@@ -333,7 +364,10 @@ export default function ManagerPanel() {
     };
 
     const resetVipForm = () => {
-        setVipForm(DEFAULT_VIP_FORM);
+        setVipForm({
+            ...DEFAULT_VIP_FORM,
+            startTime: preferredVipStartTime
+        });
         setEditingVipRuleId(null);
     };
 
@@ -354,6 +388,11 @@ export default function ManagerPanel() {
         try {
             if (!vipForm.studentId || !vipForm.machineId || !vipForm.startTime) {
                 await alertDialog('Missing Fields', 'Please select student, machine, day, and time.');
+                return;
+            }
+
+            if (!availableTimeSlots.includes(vipForm.startTime)) {
+                await alertDialog('Slot Time Unavailable', 'Please choose a time that matches the current slot duration.');
                 return;
             }
 
@@ -494,9 +533,7 @@ export default function ManagerPanel() {
                 const targetDate = addBelarusDays(nextWeekStart, dayOffset);
                 const targetDateStr = formatBelarusDate(targetDate);
 
-                const [hour, minute] = rule.startTime.split(':').map(Number);
-                const endMinutes = (hour * 60) + minute + 90;
-                const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+                const endTime = addMinutesToTimeString(rule.startTime, slotDurationMinutes);
                 const targetSlotId = `${targetDateStr}_${rule.machineId}_${rule.startTime.replace(':', '-')}`;
 
                 const existingAtSlot = workingBookings.find((booking) => booking.id === targetSlotId);
@@ -736,6 +773,13 @@ export default function ManagerPanel() {
         }
     };
 
+    const commitSlotDurationDraft = async (nextValue = slotDurationDraft) => {
+        const nextDuration = normalizeSlotDurationMinutes(nextValue, slotDurationMinutes);
+        setSlotDurationDraft(String(nextDuration));
+        await updateSettings({ slotDurationMinutes: nextDuration });
+        toast.success(`Slot duration set to ${formatSlotDurationLabel(nextDuration)}.`);
+    };
+
     const autoWindowDisplay = getAutoOpenWindowDisplay(settings);
 
     useEffect(() => {
@@ -885,6 +929,58 @@ export default function ManagerPanel() {
                             </div>
                             <p style={{ marginTop: '10px', fontSize: '13px', color: '#6b7280' }}>
                                 Schedule window: {autoWindowDisplay.openDay} {autoWindowDisplay.openTime} - {autoWindowDisplay.closeDay} {autoWindowDisplay.closeTime} (Belarus).
+                            </p>
+                        </div>
+
+                        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '12px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontWeight: '500', color: '#9ca3af' }}>
+                                <Clock3 size={16} /> Slot Duration
+                            </label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                                {SLOT_DURATION_PRESETS.map((duration) => (
+                                    <button
+                                        key={duration}
+                                        type="button"
+                                        onClick={() => {
+                                            setSlotDurationDraft(String(duration));
+                                            void commitSlotDurationDraft(String(duration));
+                                        }}
+                                        className={slotDurationMinutes === duration ? 'primary-button' : 'glass-button'}
+                                        style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '13px' }}
+                                    >
+                                        {formatSlotDurationLabel(duration)}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'minmax(140px, 220px) 1fr', alignItems: 'center' }}>
+                                <input
+                                    type="number"
+                                    min={MIN_SLOT_DURATION_MINUTES}
+                                    max={MAX_SLOT_DURATION_MINUTES}
+                                    step={5}
+                                    value={slotDurationDraft}
+                                    onChange={(event) => setSlotDurationDraft(event.target.value)}
+                                    onBlur={() => void commitSlotDurationDraft()}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.currentTarget.blur();
+                                        }
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '8px',
+                                        background: '#374151',
+                                        border: '1px solid #4b5563',
+                                        color: 'white'
+                                    }}
+                                />
+                                <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                                    Current: {slotDurationLabel} · {availableTimeSlots.length} slots per machine/day
+                                </div>
+                            </div>
+                            <p style={{ marginTop: '10px', fontSize: '13px', color: '#6b7280' }}>
+                                Starts: {availableTimeSlots[0]} - {availableTimeSlots[availableTimeSlots.length - 1]}
                             </p>
                         </div>
 
@@ -1140,7 +1236,7 @@ export default function ManagerPanel() {
                             className="glass-button"
                             style={{ padding: '10px', borderRadius: '8px' }}
                         >
-                            {TIME_SLOTS.map((slot) => (
+                            {availableTimeSlots.map((slot) => (
                                 <option key={slot} value={slot}>{slot}</option>
                             ))}
                         </select>

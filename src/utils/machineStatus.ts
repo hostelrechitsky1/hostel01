@@ -1,5 +1,5 @@
 import type { Booking, Machine } from '../types';
-import { TIME_SLOTS } from '../types';
+import { buildTimeSlots, getBookingEndTime, normalizeSlotDurationMinutes } from './slotSchedule';
 import { formatBelarusDate, getBelarusDate, getBelarusNow, getBelarusWeekday, getTimeStringMinutes } from './time';
 
 export type MachineOperatingState = 'available' | 'occupied' | 'maintenance' | 'closed';
@@ -8,6 +8,8 @@ interface MachineOperatingStatusInput {
     machine: Machine;
     bookings: Booking[];
     maintenanceDay: number;
+    slotDurationMinutes?: number;
+    timeSlots?: readonly string[];
     now?: Date;
 }
 
@@ -15,8 +17,14 @@ export const getMachineOperatingState = ({
     machine,
     bookings,
     maintenanceDay,
+    slotDurationMinutes,
+    timeSlots,
     now = new Date(),
 }: MachineOperatingStatusInput): MachineOperatingState => {
+    const durationMinutes = normalizeSlotDurationMinutes(slotDurationMinutes);
+    const activeTimeSlots = timeSlots && timeSlots.length > 0
+        ? timeSlots
+        : buildTimeSlots(durationMinutes);
     const belarusDate = getBelarusDate(now);
     const currentBWeekday = getBelarusWeekday(belarusDate);
 
@@ -31,7 +39,7 @@ export const getMachineOperatingState = ({
     const currentBooking = bookings.find((booking) => {
         if (booking.date !== today || booking.machineId !== machine.id) return false;
         const startMinutes = getTimeStringMinutes(booking.startTime);
-        const endMinutes = startMinutes + 90;
+        const endMinutes = getTimeStringMinutes(getBookingEndTime(booking, durationMinutes));
         return nowMinutes >= startMinutes && nowMinutes < endMinutes;
     });
 
@@ -39,8 +47,8 @@ export const getMachineOperatingState = ({
         return 'occupied';
     }
 
-    const firstSlotStartMinutes = getTimeStringMinutes(TIME_SLOTS[0]);
-    const lastSlotStartMinutes = getTimeStringMinutes(TIME_SLOTS[TIME_SLOTS.length - 1]);
+    const firstSlotStartMinutes = getTimeStringMinutes(activeTimeSlots[0]);
+    const lastSlotStartMinutes = getTimeStringMinutes(activeTimeSlots[activeTimeSlots.length - 1]);
 
     if (nowMinutes < firstSlotStartMinutes || nowMinutes >= lastSlotStartMinutes) {
         return 'closed';
