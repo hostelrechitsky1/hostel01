@@ -19,6 +19,7 @@ import type { AppSettings, Banner, Booking, Feedback, Machine, Student, VipRecur
 import { legacyPinMap } from '../data/pinMap';
 import { parseRawStudentData } from '../utils/studentParser';
 import { normalizeBannerSource } from '../utils/bannerImages';
+import { getSlotDurationMinutes } from '../utils/slotSchedule';
 
 const STUDENTS_COL = 'students';
 const MACHINES_COL = 'machines';
@@ -54,6 +55,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     autoOpenWeekday: 6,
     autoOpenTime: '16:00',
     autoOpenDurationHours: 28,
+    slotDurationMinutes: 90,
     vipAutoEnabled: true,
     vipLastAppliedWeekId: '',
     topAlert: { message: '', isActive: false, type: 'info' }
@@ -546,6 +548,7 @@ export const firestoreService = {
                 maintenanceDay: typeof data.maintenanceDay !== 'undefined' ? Number(data.maintenanceDay) : DEFAULT_APP_SETTINGS.maintenanceDay,
                 autoOpenWeekday: typeof data.autoOpenWeekday !== 'undefined' ? Number(data.autoOpenWeekday) : DEFAULT_APP_SETTINGS.autoOpenWeekday,
                 autoOpenDurationHours: typeof data.autoOpenDurationHours !== 'undefined' ? Number(data.autoOpenDurationHours) : DEFAULT_APP_SETTINGS.autoOpenDurationHours,
+                slotDurationMinutes: getSlotDurationMinutes(data),
                 autoOpenTime: typeof data.autoOpenTime === 'string' && /^\d{2}:\d{2}$/.test(data.autoOpenTime)
                     ? data.autoOpenTime
                     : DEFAULT_APP_SETTINGS.autoOpenTime,
@@ -565,6 +568,9 @@ export const firestoreService = {
         }
         if (cleanSettings.autoOpenDurationHours !== undefined) {
             cleanSettings.autoOpenDurationHours = Number(cleanSettings.autoOpenDurationHours);
+        }
+        if (cleanSettings.slotDurationMinutes !== undefined) {
+            cleanSettings.slotDurationMinutes = getSlotDurationMinutes(cleanSettings);
         }
 
         await setDoc(SETTINGS_DOC, cleanSettings, { merge: true });

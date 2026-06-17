@@ -5,7 +5,6 @@ import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { AppSettings, Booking, Machine } from '../types';
-import { TIME_SLOTS } from '../types';
 import { Clock, ChevronLeft, AlertCircle, Activity } from 'lucide-react';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import {
@@ -31,6 +30,7 @@ import { ActionSpinner } from '../components/ActionSpinner';
 import { finishResidentPerfSpan } from '../utils/performance';
 import { notifyError, notifyInfo } from '../utils/notify';
 import { getBookNowFailureMessage, isBookingAvailabilityConflict } from '../utils/bookingMutations';
+import { buildTimeSlots, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 let confettiPromise: Promise<typeof import('react-confetti')> | null = null;
 
@@ -115,6 +115,8 @@ export default function BookingFlow() {
     const [machines, setMachines] = useState<Machine[]>(() => cachedMachines ?? []);
     const [bookings, setBookings] = useState<Booking[]>(() => cachedWeekBookings ?? []);
     const selectedDateKey = useMemo(() => formatBelarusDate(selectedDate), [selectedDate]);
+    const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
+    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
     const hasBookingSnapshot = hasCachedMachines
         || hasCachedWeekBookings
         || machines.length > 0
@@ -469,7 +471,7 @@ export default function BookingFlow() {
         const currentHour = now.getUTCHours();
         const currentMinute = now.getUTCMinutes();
 
-        return TIME_SLOTS.map(time => {
+        return timeSlots.map(time => {
             const bookedMachineIds = dateBookings
                 .filter(b => b.startTime === time)
                 .map(b => b.machineId);
@@ -485,7 +487,7 @@ export default function BookingFlow() {
             const isFull = bookedMachineIds.length >= activeMachines.length;
             return { time, bookedMachineIds, isFull, isPassed };
         });
-    }, [activeMachines, bookings, selectedDate, selectedDateKey]);
+    }, [activeMachines, bookings, selectedDate, selectedDateKey, timeSlots]);
 
 
     const totalSlotsPerTime = activeMachines.length;
@@ -529,7 +531,7 @@ export default function BookingFlow() {
             }
         }
 
-        const endTime = addMinutesToTimeString(startTime, 90);
+        const endTime = addMinutesToTimeString(startTime, slotDurationMinutes);
 
         const bookingData: Booking = {
             id: Date.now().toString(),
@@ -738,6 +740,8 @@ export default function BookingFlow() {
                     nowMinutes={qrNowMinutes}
                     highlightMachineId={machineFromUrl}
                     clockLabel={formatBelarusClockLabel(belarusNowForQr, 'en-US')}
+                    timeSlots={timeSlots}
+                    slotDurationMinutes={slotDurationMinutes}
                 />
             )}
 
@@ -828,7 +832,7 @@ export default function BookingFlow() {
                                     {totalRemainingForDay}
                                 </span>
                                 <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                                    / {TIME_SLOTS.length * totalSlotsPerTime}
+                                    / {timeSlots.length * totalSlotsPerTime}
                                 </span>
                             </div>
                         </div>
@@ -841,7 +845,7 @@ export default function BookingFlow() {
                         <div style={{
                             height: '100%',
                             background: 'var(--success)',
-                            width: `${Math.max(2, (totalRemainingForDay / Math.max(1, TIME_SLOTS.length * totalSlotsPerTime)) * 100)}%`,
+                            width: `${Math.max(2, (totalRemainingForDay / Math.max(1, timeSlots.length * totalSlotsPerTime)) * 100)}%`,
                             transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
                             boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)'
                         }}></div>

@@ -4,7 +4,6 @@ import { bookingService } from '../services/bookingService';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
-import { TIME_SLOTS } from '../types';
 import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Languages, ScanLine, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
@@ -21,6 +20,7 @@ import { notifySuccess } from '../utils/notify';
 import { finishResidentPerfSpan, startResidentPerfSpan } from '../utils/performance';
 import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getResidentShortNameForLanguage } from '../utils/residentNames';
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
+import { buildTimeSlots, getBookingEndTime, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const CANCEL_BOOKING_TOAST_STORAGE_KEY_PREFIX = 'hostel_cancel_booking_toast_seen_v2:';
@@ -256,6 +256,8 @@ export default function Dashboard() {
     const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? DEFAULT_APP_SETTINGS);
     const legacyWindowCountdown = useLegacyBookingWindowCountdown(settings);
     const autoOpenWindowDisplay = useMemo(() => getAutoOpenWindowDisplay(settings), [settings]);
+    const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
+    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
     const residentWeekContext = useMemo(
         () => getResidentBookingWeekContext(new Date(), settings),
         [settings],
@@ -771,7 +773,7 @@ export default function Dashboard() {
         const currentBooking = bookingsToday.find(b => {
             if (b.machineId !== machine.id) return false;
             const startMinutes = getTimeStringMinutes(b.startTime);
-            const endMinutes = startMinutes + 90;
+            const endMinutes = getTimeStringMinutes(getBookingEndTime(b, slotDurationMinutes));
             return nowMinutes > startMinutes && nowMinutes < endMinutes;
         });
 
@@ -785,7 +787,7 @@ export default function Dashboard() {
 
     const slotCapacity = useMemo(() => {
         const activeMachines = machines.filter(m => m.status === 'available');
-        const slotsPerDay = TIME_SLOTS.length * activeMachines.length;
+        const slotsPerDay = timeSlots.length * activeMachines.length;
 
         const weekStart = residentWeekContext.weekStart;
         const targetWeekId = residentWeekContext.targetWeekId;
@@ -801,7 +803,7 @@ export default function Dashboard() {
         const remainingSlots = Math.max(totalSlots - bookedInTargetWeek, 0);
 
         return { totalSlots, remainingSlots, bookableDays: bookableDates.length, slotsPerDay };
-    }, [machines, residentWeekContext.targetWeekId, residentWeekContext.weekStart, settings.maintenanceDay, weekBookings]);
+    }, [machines, residentWeekContext.targetWeekId, residentWeekContext.weekStart, settings.maintenanceDay, timeSlots.length, weekBookings]);
 
     const handleLogout = () => {
         bookingService.logout();

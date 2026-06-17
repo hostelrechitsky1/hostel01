@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react';
 import { firestoreService } from '../services/firestoreService';
 import { Printer, ChevronLeft } from 'lucide-react';
 import type { Booking, Machine, Student } from '../types';
-import { TIME_SLOTS } from '../types';
 import { useNavigate } from 'react-router-dom';
 import {
     addBelarusDays,
@@ -17,6 +16,7 @@ import {
     getBelarusWeekday,
     isAutoBookingWindowOpen
 } from '../utils/time';
+import { buildTimeSlots, formatSlotDurationLabel, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 export default function PrintSchedule() {
     const navigate = useNavigate();
@@ -35,6 +35,7 @@ export default function PrintSchedule() {
         currentWeek: 'Текущая неделя',
         nextWeek: 'Следующая неделя',
         maintenance: 'Обслуживание:',
+        slotDuration: 'Длительность:',
         printNow: 'Печатать',
         time: 'Время'
     } : {
@@ -46,6 +47,7 @@ export default function PrintSchedule() {
         currentWeek: 'Current Week',
         nextWeek: 'Next Week',
         maintenance: 'Maintenance:',
+        slotDuration: 'Duration:',
         printNow: 'Print Now',
         time: 'Time'
     };
@@ -55,6 +57,7 @@ export default function PrintSchedule() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [maintenanceDay, setMaintenanceDay] = useState(3);
+    const [slotDurationMinutes, setSlotDurationMinutes] = useState(90);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -89,6 +92,7 @@ export default function PrintSchedule() {
                 if (typeof settings.maintenanceDay === 'number') {
                     setMaintenanceDay(settings.maintenanceDay);
                 }
+                setSlotDurationMinutes(getSlotDurationMinutes(settings));
             } catch (e) {
                 console.error("Failed to load schedule data", e);
             } finally {
@@ -108,6 +112,12 @@ export default function PrintSchedule() {
     const weekDays = useMemo(() => {
         return Array.from({ length: 7 }, (_, i) => addBelarusDays(weekStart, i));
     }, [weekStart]);
+    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
+    const scheduleCellStyle = useMemo(() => ({
+        ...cellStyle,
+        height: timeSlots.length > 18 ? '18px' : timeSlots.length > 12 ? '22px' : '30px',
+        fontSize: timeSlots.length > 18 ? '8px' : '10px'
+    }), [timeSlots.length]);
 
     const handlePrint = () => {
         window.print();
@@ -182,6 +192,11 @@ export default function PrintSchedule() {
                         </select>
                     </div>
 
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', padding: '8px 10px', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: '8px' }}>{t.slotDuration}</span>
+                        <strong style={{ fontSize: '13px' }}>{formatSlotDurationLabel(slotDurationMinutes)}</strong>
+                    </div>
+
                     <button
                         onClick={handlePrint}
                         className="primary-button"
@@ -244,9 +259,9 @@ export default function PrintSchedule() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {TIME_SLOTS.map(time => (
+                                    {timeSlots.map(time => (
                                         <tr key={time}>
-                                            <td style={{ ...cellStyle, background: '#f5f5f5', fontWeight: 'bold', textAlign: 'center' }}>
+                                            <td style={{ ...scheduleCellStyle, background: '#f5f5f5', fontWeight: 'bold', textAlign: 'center' }}>
                                                 {time}
                                             </td>
                                             {weekDays.map(day => {
@@ -260,7 +275,7 @@ export default function PrintSchedule() {
 
                                                 if (booking) {
                                                     return (
-                                                        <td key={day.toString()} style={cellStyle}>
+                                                        <td key={day.toString()} style={scheduleCellStyle}>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%', justifyContent: 'center' }}>
                                                                 <span style={{ fontWeight: 'bold', fontSize: '14px' }}>
                                                                     {booking.roomNumber || student?.roomNumber || '???'}
@@ -277,14 +292,14 @@ export default function PrintSchedule() {
 
                                                 if (isMaintenanceDay) {
                                                     return (
-                                                        <td key={day.toString()} style={{ ...cellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
+                                                        <td key={day.toString()} style={{ ...scheduleCellStyle, background: '#eee', color: '#999', textAlign: 'center' }}>
                                                             <div style={{ transform: 'rotate(-45deg)', fontSize: '10px', letterSpacing: '1px' }}>MAINTENANCE</div>
                                                         </td>
                                                     );
                                                 }
 
                                                 return (
-                                                    <td key={day.toString()} style={cellStyle}>
+                                                    <td key={day.toString()} style={scheduleCellStyle}>
                                                         {/* Empty cell */}
                                                     </td>
                                                 );
