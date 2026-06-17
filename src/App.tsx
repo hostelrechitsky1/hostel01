@@ -30,6 +30,18 @@ const clearStaleShepherdArtifacts = () => {
   document
     .querySelectorAll('.resident-shepherd-target')
     .forEach((element) => element.classList.remove('resident-shepherd-target'));
+
+  document.body.classList.remove('shepherd-active', 'shepherd-modal-is-visible');
+  document.documentElement.classList.remove('shepherd-active', 'shepherd-modal-is-visible');
+};
+
+const clearStaleInteractionLocks = () => {
+  clearStaleShepherdArtifacts();
+
+  if (!document.querySelector('.modal-overlay')) {
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  }
 };
 
 function ScrollToTopOnRouteChange() {
@@ -56,11 +68,12 @@ function ScrollToTopOnRouteChange() {
   };
 
   useLayoutEffect(() => {
-    clearStaleShepherdArtifacts();
+    clearStaleInteractionLocks();
     forceScrollToTop();
   }, [pathname, key]);
 
   useEffect(() => {
+    clearStaleInteractionLocks();
     forceScrollToTop();
     let cancelled = false;
     const markUserScroll = () => {
@@ -93,6 +106,27 @@ function ScrollToTopOnRouteChange() {
       window.removeEventListener('wheel', markUserScroll);
     };
   }, [pathname, key]);
+
+  return null;
+}
+
+function InteractionRecovery() {
+  useEffect(() => {
+    const recover = () => {
+      clearStaleInteractionLocks();
+    };
+
+    recover();
+    window.addEventListener('pageshow', recover);
+    window.addEventListener('focus', recover);
+    document.addEventListener('visibilitychange', recover);
+
+    return () => {
+      window.removeEventListener('pageshow', recover);
+      window.removeEventListener('focus', recover);
+      document.removeEventListener('visibilitychange', recover);
+    };
+  }, []);
 
   return null;
 }
@@ -203,6 +237,7 @@ function PerfDebugGate() {
 function App() {
   return (
     <Router>
+      <InteractionRecovery />
       <ScrollToTopOnRouteChange />
       <RouteWarmup />
       <AnimatedRoutes />

@@ -442,6 +442,13 @@ export default function Dashboard() {
         }
 
         const storageKey = `${WEEKLY_SLOTS_TOUR_STORAGE_KEY_PREFIX}${userId}`;
+        const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+        if (isTouchDevice) {
+            window.localStorage.setItem(storageKey, '1');
+            weeklySlotsButtonRef.current?.classList.remove('resident-shepherd-target');
+            return;
+        }
+
         if (window.localStorage.getItem(storageKey) === '1') {
             return;
         }

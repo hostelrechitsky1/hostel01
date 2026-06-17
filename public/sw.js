@@ -1,4 +1,4 @@
-const VERSION = 'v11'
+const VERSION = 'v12'
 const STATIC_CACHE = `app-static-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
 const RESIDENT_API_CACHE = `resident-api-${VERSION}`
