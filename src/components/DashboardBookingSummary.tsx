@@ -208,17 +208,10 @@ export default function DashboardBookingSummary({
                             flexDirection: 'column',
                             gap: '20px',
                             background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)',
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
-                            position: 'relative',
-                            overflow: 'hidden',
+                            border: '1px solid var(--glass-border)',
                             boxShadow: '0 10px 30px rgba(0,0,0,0.05)'
                         }}
                     >
-                        <div style={{
-                            position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
-                            background: 'linear-gradient(90deg, var(--success) 0%, #34d399 100%)'
-                        }} />
-
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
                             <div style={{
                                 width: '64px',
@@ -464,8 +457,6 @@ export default function DashboardBookingSummary({
                                             border: '1px solid rgba(168, 85, 247, 0.2)',
                                             background: 'linear-gradient(145deg, rgba(168, 85, 247, 0.03) 0%, rgba(99, 102, 241, 0.02) 100%)',
                                             transition: 'transform 0.2s, background 0.2s',
-                                            position: 'relative',
-                                            overflow: 'hidden',
                                             animationDelay: `${Math.min(index * 0.07, 0.16)}s`
                                         }}
                                         onMouseEnter={(event) => {
@@ -481,12 +472,7 @@ export default function DashboardBookingSummary({
                                             event.currentTarget.style.boxShadow = 'none';
                                         }}
                                     >
-                                        <div style={{
-                                            position: 'absolute', top: 0, left: 0, bottom: 0, width: '4px',
-                                            background: 'linear-gradient(to bottom, var(--success) 0%, #10b98188 100%)'
-                                        }} />
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                             <div style={{
                                                 width: '48px',
                                                 height: '48px',
