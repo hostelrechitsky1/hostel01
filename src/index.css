@@ -905,6 +905,10 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
+.weekly-slots-date-strip--extended {
+  grid-template-columns: repeat(9, minmax(86px, 1fr));
+}
+
 .weekly-slots-date-button {
   min-width: 86px;
   min-height: 84px;
@@ -1630,6 +1634,10 @@ button {
     gap: 7px;
     scroll-snap-type: x proximity;
     margin-bottom: 4px;
+  }
+
+  .weekly-slots-date-strip--extended {
+    grid-template-columns: repeat(9, minmax(68px, 1fr));
   }
 
   .weekly-slots-date-button {
