@@ -73,6 +73,30 @@ button {
   background-color: var(--bg-solid);
 }
 
+.site-footer {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: auto;
+  padding: 20px 24px calc(24px + env(safe-area-inset-bottom, 0px));
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.site-footer::before {
+  content: '';
+  display: block;
+  width: min(100%, 960px);
+  height: 1px;
+  margin: 0 auto 18px;
+  background: linear-gradient(90deg, transparent, var(--glass-border), transparent);
+}
+
+.site-footer strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from {
@@ -905,6 +929,10 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
+.weekly-slots-date-strip--extended {
+  grid-template-columns: repeat(9, minmax(86px, 1fr));
+}
+
 .weekly-slots-date-button {
   min-width: 86px;
   min-height: 84px;
@@ -1630,6 +1658,10 @@ button {
     gap: 7px;
     scroll-snap-type: x proximity;
     margin-bottom: 4px;
+  }
+
+  .weekly-slots-date-strip--extended {
+    grid-template-columns: repeat(9, minmax(68px, 1fr));
   }
 
   .weekly-slots-date-button {

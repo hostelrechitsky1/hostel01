@@ -21,8 +21,10 @@ import {
     getBelarusWeekId,
     getBelarusWeekStart,
     getBelarusWeekday,
+    getNextAutoOpenDate,
     isAutoBookingWindowOpen,
     isSameBelarusDay,
+    parseBelarusDateTime,
 } from '../utils/time';
 import { preloadDashboardRoute } from '../utils/preloadRoutes';
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
@@ -77,6 +79,7 @@ export default function WeeklySlots() {
             freeSlots: 'Свободно',
             bookedSlots: 'Занято',
             yourWeekBooking: 'Ваша бронь на эту неделю уже есть.',
+            currentWeekendView: 'Брони на текущие выходные показаны для просмотра. Новые бронирования доступны на следующую неделю.',
             chooseFreeSlot: 'Выберите свободную машину, чтобы забронировать.',
             machine: 'Машина',
             free: 'Свободно',
@@ -106,6 +109,7 @@ export default function WeeklySlots() {
             freeSlots: 'Free',
             bookedSlots: 'Booked',
             yourWeekBooking: 'You already have a booking for this week.',
+            currentWeekendView: 'Current weekend bookings are shown for reference. New bookings are available for next week.',
             chooseFreeSlot: 'Choose any free machine to book your slot.',
             machine: 'Machine',
             free: 'Free',
@@ -127,13 +131,16 @@ export default function WeeklySlots() {
             switchLanguage: 'Русский',
         };
 
+    const [clockNow, setClockNow] = useState(() => new Date());
+    const currentDayKey = formatBelarusDate(getBelarusDate(clockNow));
+    const currentWeekStartKey = formatBelarusDate(getBelarusWeekStart(getBelarusDate(clockNow)));
     const weekIds = useMemo(() => {
-        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        const currentWeekStart = parseBelarusDateTime(currentWeekStartKey);
         return [
             getBelarusWeekId(currentWeekStart),
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7)),
         ];
-    }, []);
+    }, [currentWeekStartKey]);
     const cachedSnapshot = useMemo(() => residentSnapshotService.getCachedBookingSnapshot(weekIds), [weekIds]);
     const cachedMachines = cachedSnapshot?.machines;
     const cachedWeekBookings = cachedSnapshot?.weekBookings;
@@ -149,22 +156,32 @@ export default function WeeklySlots() {
     const [pendingSlotId, setPendingSlotId] = useState<string | null>(null);
     const isMountedRef = useRef(true);
 
-    const isBookingOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
-    const activeBookingWeekStart = useMemo(() => {
-        if (settings.forceShowNextWeek) {
-            return addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
-        }
-
-        return getActiveBookingWeekStart(new Date(), settings);
-    }, [settings]);
+    const isBookingOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(clockNow, settings);
+    const activeBookingWeekStartKey = formatBelarusDate(settings.forceShowNextWeek
+        ? addBelarusDays(getBelarusWeekStart(getBelarusDate(clockNow)), 7)
+        : getActiveBookingWeekStart(clockNow, settings));
+    const activeBookingWeekStart = useMemo(() => parseBelarusDateTime(activeBookingWeekStartKey), [activeBookingWeekStartKey]);
     const activeBookingWeekEnd = useMemo(() => getBelarusWeekEnd(activeBookingWeekStart), [activeBookingWeekStart]);
     const activeBookingWeekId = useMemo(() => getBelarusWeekId(activeBookingWeekStart), [activeBookingWeekStart]);
     const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
     const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
+    const displayStart = useMemo(() => {
+        const today = parseBelarusDateTime(currentDayKey);
+        const currentWeekStart = getBelarusWeekStart(today);
+        const weekday = getBelarusWeekday(today);
+        const nextWeekIsActive = activeBookingWeekStart.getTime() > currentWeekStart.getTime();
+
+        return nextWeekIsActive && (weekday === 6 || weekday === 0)
+            ? addBelarusDays(currentWeekStart, 5)
+            : activeBookingWeekStart;
+    }, [activeBookingWeekStart, currentDayKey]);
     const dateOptions = useMemo(() => (
-        Array.from({ length: 7 }, (_, index) => addBelarusDays(activeBookingWeekStart, index))
-    ), [activeBookingWeekStart]);
+        Array.from({ length: Math.round((activeBookingWeekEnd.getTime() - displayStart.getTime()) / 86400000) + 1 },
+            (_, index) => addBelarusDays(displayStart, index))
+    ), [activeBookingWeekEnd, displayStart]);
     const selectedDateKey = useMemo(() => formatBelarusDate(selectedDate), [selectedDate]);
+    const isSelectedInActiveWeek = selectedDate.getTime() >= activeBookingWeekStart.getTime()
+        && selectedDate.getTime() <= activeBookingWeekEnd.getTime();
     const selectedDateBookings = useMemo(() => (
         bookings.filter((booking) => booking.date === selectedDateKey)
     ), [bookings, selectedDateKey]);
@@ -189,6 +206,23 @@ export default function WeeklySlots() {
         }, 0);
 
     useEffect(() => {
+        const refreshClock = () => setClockNow(new Date());
+        const intervalId = window.setInterval(refreshClock, 60_000);
+        const nextOpening = getNextAutoOpenDate(new Date(), settings).getTime();
+        const openingTimerId = window.setTimeout(refreshClock, Math.max(nextOpening - Date.now(), 0) + 100);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') refreshClock();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.clearInterval(intervalId);
+            window.clearTimeout(openingTimerId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [activeBookingWeekStartKey, settings]);
+
+    useEffect(() => {
         isMountedRef.current = true;
         return () => {
             isMountedRef.current = false;
@@ -205,16 +239,17 @@ export default function WeeklySlots() {
     }, [navigate, userId]);
 
     useEffect(() => {
-        const isSelectedInWeek = selectedDate.getTime() >= activeBookingWeekStart.getTime()
+        const isSelectedInWeek = selectedDate.getTime() >= displayStart.getTime()
             && selectedDate.getTime() <= activeBookingWeekEnd.getTime();
 
         if (!isSelectedInWeek) {
-            setSelectedDate(activeBookingWeekStart);
+            setSelectedDate(displayStart);
         }
-    }, [activeBookingWeekEnd, activeBookingWeekStart, selectedDate]);
+    }, [activeBookingWeekEnd, displayStart, selectedDate]);
 
     useEffect(() => {
         if (!userId) return;
+        let active = true;
 
         setLoadError(null);
         if (!hasCachedSnapshot) {
@@ -223,7 +258,7 @@ export default function WeeklySlots() {
 
         void residentSnapshotService.getBookingSnapshot(weekIds)
             .then((snapshot) => {
-                if (!isMountedRef.current) return;
+                if (!active || !isMountedRef.current) return;
                 startTransition(() => {
                     setMachines(snapshot.machines);
                     setBookings(snapshot.weekBookings);
@@ -233,29 +268,34 @@ export default function WeeklySlots() {
             })
             .catch((error) => {
                 console.error('Weekly slots snapshot fetch error:', error);
-                if (!isMountedRef.current) return;
+                if (!active || !isMountedRef.current) return;
                 setLoadError('Live slot data could not be loaded right now.');
                 setLoading(false);
             });
+
+        return () => {
+            active = false;
+        };
     }, [hasCachedSnapshot, reloadKey, userId, weekIds]);
 
     useEffect(() => {
         if (!userId || loading) return;
 
+        let active = true;
         let unsubscribeMachines = () => { /* noop */ };
         let unsubscribeBookings = () => { /* noop */ };
 
         void loadResidentLiveService()
             .then(({ residentLiveService }) => {
-                if (!isMountedRef.current) return;
+                if (!active || !isMountedRef.current) return;
 
                 unsubscribeMachines = residentLiveService.subscribeToMachines((nextMachines) => {
-                    if (!isMountedRef.current) return;
+                    if (!active || !isMountedRef.current) return;
                     startTransition(() => setMachines(nextMachines));
                 });
 
                 unsubscribeBookings = residentLiveService.subscribeToBookingsForWeekIds(weekIds, (nextBookings) => {
-                    if (!isMountedRef.current) return;
+                    if (!active || !isMountedRef.current) return;
                     startTransition(() => setBookings(nextBookings));
                 });
             })
@@ -264,6 +304,7 @@ export default function WeeklySlots() {
             });
 
         return () => {
+            active = false;
             unsubscribeBookings();
             unsubscribeMachines();
         };
@@ -291,7 +332,7 @@ export default function WeeklySlots() {
             booking.machineId === machine.id && booking.startTime === time
         ));
 
-        if (settings.forceCloseBookings || !isBookingOpen || isMaintenanceDay || machine.status !== 'available' || isPastSlot(selectedDate, time) || existingSlotBooking) {
+        if (settings.forceCloseBookings || !isBookingOpen || !isSelectedInActiveWeek || isMaintenanceDay || machine.status !== 'available' || isPastSlot(selectedDate, time) || existingSlotBooking) {
             notifyError(t.unavailable);
             return;
         }
@@ -392,7 +433,7 @@ export default function WeeklySlots() {
                 </button>
                 <div>
                     <h2>{t.title}</h2>
-                    <p>{formatBelarusLongDateLabel(activeBookingWeekStart, dateLocale)} - {formatBelarusLongDateLabel(activeBookingWeekEnd, dateLocale)}</p>
+                    <p>{formatBelarusLongDateLabel(displayStart, dateLocale)} - {formatBelarusLongDateLabel(activeBookingWeekEnd, dateLocale)}</p>
                 </div>
                 <button
                     type="button"
@@ -457,10 +498,13 @@ export default function WeeklySlots() {
                 </div>
             )}
 
-            <section className="weekly-slots-date-strip" aria-label={t.selectedDate}>
+            <section
+                className={`weekly-slots-date-strip${dateOptions.length > 7 ? ' weekly-slots-date-strip--extended' : ''}`}
+                aria-label={t.selectedDate}
+            >
                 {dateOptions.map((date) => {
                     const isSelected = isSameBelarusDay(date, selectedDate);
-                    const isPastDate = date.getTime() < getBelarusDate().getTime();
+                    const isPastDate = date.getTime() < getBelarusDate(clockNow).getTime();
                     const isMaintenanceDate = getBelarusWeekday(date) === maintenanceDay;
                     return (
                         <button
@@ -491,7 +535,11 @@ export default function WeeklySlots() {
             </section>
 
             <div className="weekly-slots-help">
-                {isMaintenanceDay ? t.maintenanceDay : (userWeeklyBooking ? t.yourWeekBooking : t.chooseFreeSlot)}
+                {!isSelectedInActiveWeek
+                    ? t.currentWeekendView
+                    : isMaintenanceDay
+                        ? t.maintenanceDay
+                        : (userWeeklyBooking ? t.yourWeekBooking : t.chooseFreeSlot)}
             </div>
 
             {settings.forceCloseBookings && (
@@ -528,7 +576,7 @@ export default function WeeklySlots() {
                                 const slotId = `${selectedDateKey}_${machine.id}_${time.replace(':', '-')}`;
                                 const isPending = pendingSlotId === slotId;
                                 const isPast = isPastSlot(selectedDate, time);
-                                const isUnavailable = settings.forceCloseBookings || !isBookingOpen || isMaintenanceDay || machine.status === 'maintenance' || isPast;
+                                const isUnavailable = settings.forceCloseBookings || !isBookingOpen || !isSelectedInActiveWeek || isMaintenanceDay || machine.status === 'maintenance' || isPast;
                                 const isBookedByUser = booking?.studentId === user.id;
                                 const canBook = !booking && !isUnavailable && !userWeeklyBooking;
 

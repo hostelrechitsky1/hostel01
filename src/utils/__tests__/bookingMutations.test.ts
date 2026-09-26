@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
     getCancelBookingFailureMessage,
     getBookNowFailureMessage,
-    getQuickBookFailureMessage,
     isBookingAvailabilityConflict,
     resolveCancelBookingMutationErrorCode,
     resolveBookingMutationErrorCode,
@@ -24,7 +23,6 @@ describe('bookingMutations', () => {
 
     it('builds resident-friendly failure messages', () => {
         expect(getBookNowFailureMessage('slot_conflict')).toBe('That slot was just booked by another resident.');
-        expect(getQuickBookFailureMessage('weekly_limit')).toBe('You already have a booking for this week, including bookings made from Book Now.');
         expect(getBookNowFailureMessage(undefined, 'Custom backend error')).toBe('Custom backend error');
     });
 

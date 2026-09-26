@@ -57,11 +57,6 @@ const loadResidentLiveService = () => {
     return residentLiveServicePromise;
 };
 
-const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
-    const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
-    return [...withoutExisting, nextBooking];
-};
-
 const dedupeRoommates = (students: Student[]) => {
     const seenIds = new Set<string>();
 
@@ -1161,13 +1156,6 @@ export default function Dashboard() {
         });
     };
 
-    const handleResidentBookingCreated = (createdBooking: Booking) => {
-        startTransition(() => {
-            setWeekBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
-            setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
-        });
-    };
-
     const handleResidentBookingCancelled = (cancelledBookingId: string) => {
         startTransition(() => {
             setWeekBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== cancelledBookingId));
@@ -1904,11 +1892,8 @@ export default function Dashboard() {
                             machines={machines}
                             recentBookings={recentBookings}
                             recentBookingsLoading={shouldShowRecentBookingsLoading}
-                            weekBookings={weekBookings}
                             settings={settings}
-                            isNextWeekOpen={isNextWeekOpen}
                             isRussian={isRussian}
-                            onBookingCreated={handleResidentBookingCreated}
                             onBookingCancelled={handleResidentBookingCancelled}
                         />
                     </Suspense>
