@@ -72,24 +72,6 @@ export const getBookNowFailureMessage = (errorCode?: string, errorMessage?: stri
     return errorMessage || 'Booking failed. Please try again.';
 };
 
-export const getQuickBookFailureMessage = (errorCode?: string, errorMessage?: string) => {
-    const normalizedCode = resolveBookingMutationErrorCode(errorCode, errorMessage);
-
-    if (normalizedCode === 'slot_conflict') {
-        return 'This exact machine and slot was just booked by another resident. Please choose another slot.';
-    }
-
-    if (normalizedCode === 'weekly_limit') {
-        return 'You already have a booking for this week, including bookings made from Book Now.';
-    }
-
-    if (normalizedCode === 'unknown_conflict') {
-        return 'This machine and slot is no longer available right now. Please try another one.';
-    }
-
-    return errorMessage || 'Quick booking failed. Please try again.';
-};
-
 export const resolveCancelBookingMutationErrorCode = (
     errorCode?: string,
     errorMessage?: string

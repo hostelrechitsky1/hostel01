@@ -1,24 +1,21 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, ArrowRight, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
+import { Activity, Calendar, CheckCircle, Download, History, WashingMachine as Washer, XCircle } from 'lucide-react';
 import type { AppSettings, Booking, Machine, Student } from '../types';
-import { addBelarusDays, addBelarusMinutes, addMinutesToTimeString, formatBelarusDate, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusDate, getBelarusNow, getBelarusWeekId, getBelarusWeekStart, getBelarusWeekday, parseBelarusDateTime } from '../utils/time';
+import { addBelarusMinutes, formatBelarusLongDateLabel, formatBelarusLongDateYearLabel, formatBelarusShortDateLabel, getBelarusNow, parseBelarusDateTime } from '../utils/time';
 import { hapticSelection, hapticSuccess } from '../utils/haptics';
 import { ActionSpinner } from './ActionSpinner';
-import { getCancelBookingFailureMessage, getQuickBookFailureMessage } from '../utils/bookingMutations';
+import { getCancelBookingFailureMessage } from '../utils/bookingMutations';
 import { getResidentPortalDateLocale } from '../utils/residentPortalLanguage';
-import { buildTimeSlots, getBookingDurationMinutes, getSlotDurationMinutes } from '../utils/slotSchedule';
+import { getBookingDurationMinutes, getSlotDurationMinutes } from '../utils/slotSchedule';
 
 interface DashboardBookingSummaryProps {
     user: Student;
     machines: Machine[];
     recentBookings: Booking[];
     recentBookingsLoading: boolean;
-    weekBookings: Booking[];
     settings: AppSettings;
-    isNextWeekOpen: boolean;
     isRussian?: boolean;
-    onBookingCreated: (booking: Booking) => void;
     onBookingCancelled: (bookingId: string) => void;
 }
 
@@ -33,11 +30,8 @@ export default function DashboardBookingSummary({
     machines,
     recentBookings,
     recentBookingsLoading,
-    weekBookings,
     settings,
-    isNextWeekOpen,
     isRussian = false,
-    onBookingCreated,
     onBookingCancelled
 }: DashboardBookingSummaryProps) {
     const dateLocale = getResidentPortalDateLocale(isRussian ? 'ru' : 'en');
@@ -51,14 +45,7 @@ export default function DashboardBookingSummary({
             cancelBooking: 'Отменить бронь',
             noUpcomingBookings: 'Нет предстоящих бронирований.',
             pastBookings: 'Прошлые бронирования',
-            quickBook: 'Быстро забронировать',
-            quickBookConfirmation: 'Подтверждение быстрой брони',
-            bookingConfirmed: 'Бронь подтверждена!',
-            close: 'Закрыть',
-            confirmQuickBook: 'Подтвердить быструю бронь',
-            bookingProgress: 'Бронируем...',
             atTime: 'в',
-            quickBooked: (timeLabel: string, dateLabel: string) => `Забронировано на ${timeLabel}, ${dateLabel}.`,
             bookingCancelled: 'Бронь отменена',
             cancelThisBooking: 'Отменить это бронирование?',
             machine: 'Машина',
@@ -76,14 +63,7 @@ export default function DashboardBookingSummary({
             cancelBooking: 'Cancel Booking',
             noUpcomingBookings: 'No upcoming bookings.',
             pastBookings: 'Past Bookings',
-            quickBook: 'Quick Book',
-            quickBookConfirmation: 'Quick Book Confirmation',
-            bookingConfirmed: 'Booking Confirmed!',
-            close: 'Close',
-            confirmQuickBook: 'Confirm Quick Book',
-            bookingProgress: 'Booking...',
             atTime: 'at',
-            quickBooked: (timeLabel: string, dateLabel: string) => `Booked ${timeLabel} on ${dateLabel}.`,
             bookingCancelled: 'Booking Cancelled',
             cancelThisBooking: 'Cancel This Booking?',
             machine: 'Machine',
@@ -92,14 +72,10 @@ export default function DashboardBookingSummary({
             cancelling: 'Cancelling...',
             cancelSuccess: 'Booking cancelled. The slot is now free again.',
         };
-    const [quickBookModalBooking, setQuickBookModalBooking] = useState<Booking | null>(null);
-    const [quickBookModalMessage, setQuickBookModalMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-    const [quickBookingId, setQuickBookingId] = useState<string | null>(null);
     const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
     const [cancelModalMessage, setCancelModalMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
     const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
-    const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
 
     const { upcomingBookings, history } = useMemo(() => {
         const chronological = [...recentBookings].sort((left, right) =>
@@ -126,18 +102,6 @@ export default function DashboardBookingSummary({
 
     const formatUtcForIcs = (date: Date) => {
         return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-    };
-
-    const getUpcomingDateForWeekday = (weekday: number) => {
-        const baseWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
-        const dayOffset = weekday === 0 ? 6 : weekday - 1;
-        return addBelarusDays(baseWeekStart, dayOffset);
-    };
-
-    const handleQuickBookFromHistory = (booking: Booking) => {
-        void loadResidentMutationsService();
-        setQuickBookModalBooking(booking);
-        setQuickBookModalMessage(null);
     };
 
     const canCancelBooking = (booking: Booking) => (
@@ -185,97 +149,6 @@ export default function DashboardBookingSummary({
         }
     };
 
-    const handleConfirmQuickBook = async () => {
-        if (!quickBookModalBooking || quickBookingId) return;
-
-        const booking = quickBookModalBooking;
-        const sourceDate = new Date(`${booking.date}T00:00:00Z`);
-        const targetDate = getUpcomingDateForWeekday(getBelarusWeekday(sourceDate));
-        const targetDateLabel = formatBelarusShortDateLabel(targetDate);
-
-        if (settings.forceCloseBookings || !isNextWeekOpen) {
-            setQuickBookModalMessage({ type: 'error', text: 'Quick Book is closed right now. Booking window is not open yet.' });
-            return;
-        }
-
-        const machine = machines.find((currentMachine) => currentMachine.id === booking.machineId);
-        if (!machine || machine.status === 'maintenance') {
-            setQuickBookModalMessage({ type: 'error', text: 'Machine is under maintenance. Please choose another slot.' });
-            return;
-        }
-
-        const maintenanceDay = settings.maintenanceDay ?? 3;
-        if (getBelarusWeekday(targetDate) === maintenanceDay) {
-            setQuickBookModalMessage({ type: 'error', text: 'Selected day is maintenance day, so quick booking is unavailable.' });
-            return;
-        }
-
-        if (!timeSlots.includes(booking.startTime)) {
-            setQuickBookModalMessage({ type: 'error', text: 'Original slot time is no longer available.' });
-            return;
-        }
-
-        const targetDateStr = formatBelarusDate(targetDate);
-        const existingSlotBooking = weekBookings.find((existingBooking) =>
-            existingBooking.date === targetDateStr
-            && existingBooking.machineId === booking.machineId
-            && existingBooking.startTime === booking.startTime
-        );
-
-        if (existingSlotBooking) {
-            const isYourExistingBooking = existingSlotBooking.studentId === user.id;
-            setQuickBookModalMessage({
-                type: 'error',
-                text: isYourExistingBooking
-                    ? 'You already booked this exact machine and slot for next week (likely from Book Now page).'
-                    : 'This exact machine and slot is already booked by another resident for next week.'
-            });
-            return;
-        }
-
-        setQuickBookingId(booking.id);
-
-        const bookingData: Booking = {
-            id: Date.now().toString(),
-            machineId: booking.machineId,
-            studentId: user.id,
-            studentName: user.name,
-            roomNumber: user.roomNumber,
-            date: targetDateStr,
-            startTime: booking.startTime,
-            endTime: addMinutesToTimeString(booking.startTime, slotDurationMinutes),
-            weekId: getBelarusWeekId(targetDate),
-            createdAt: Date.now()
-        };
-
-        try {
-            const { residentMutationsService } = await loadResidentMutationsService();
-            const result = await residentMutationsService.createBooking(bookingData);
-            if (!result.success) {
-                setQuickBookModalMessage({ type: 'error', text: getQuickBookFailureMessage(result.errorCode, result.error) });
-                return;
-            }
-
-            const createdBooking = result.booking ?? {
-                ...bookingData,
-                id: `${bookingData.date}_${bookingData.machineId}_${bookingData.startTime.replace(':', '-')}`,
-            };
-            hapticSuccess();
-            onBookingCreated(createdBooking);
-            setQuickBookModalMessage({ type: 'success', text: t.quickBooked(booking.startTime, targetDateLabel) });
-
-            setTimeout(() => {
-                setQuickBookModalBooking(null);
-                setQuickBookModalMessage(null);
-            }, 2000);
-        } catch (error) {
-            console.error('Quick booking failed', error);
-            setQuickBookModalMessage({ type: 'error', text: 'Quick booking failed due to a system error.' });
-        } finally {
-            setQuickBookingId(null);
-        }
-    };
-
     const bookingSectionSkeleton = (
         <div
             className="glass-panel"
@@ -310,13 +183,6 @@ export default function DashboardBookingSummary({
         </div>
     );
 
-    const quickBookTargetDate = quickBookModalBooking
-        ? getUpcomingDateForWeekday(getBelarusWeekday(new Date(`${quickBookModalBooking.date}T00:00:00Z`)))
-        : null;
-    const quickBookMachine = quickBookModalBooking
-        ? machines.find((machine) => machine.id === quickBookModalBooking.machineId)
-        : null;
-    const quickBookMachineLabel = quickBookMachine?.name || `Machine ${quickBookModalBooking?.machineId || ''}`;
     const cancelBookingMachine = cancelModalBooking
         ? machines.find((machine) => machine.id === cancelModalBooking.machineId)
         : null;
@@ -666,48 +532,6 @@ export default function DashboardBookingSummary({
                                                     )}
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => handleQuickBookFromHistory(booking)}
-                                                className="glass-button"
-                                                disabled={quickBookingId === booking.id}
-                                                style={{
-                                                    padding: '10px 16px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '13px',
-                                                    fontWeight: 600,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                                                    color: 'var(--primary)',
-                                                    background: 'rgba(168, 85, 247, 0.05)',
-                                                    opacity: quickBookingId && quickBookingId !== booking.id ? 0.7 : 1,
-                                                    cursor: quickBookingId === booking.id ? 'not-allowed' : 'pointer',
-                                                    transition: 'all 0.2s',
-                                                }}
-                                                onMouseEnter={(event) => {
-                                                    if (quickBookingId !== booking.id) {
-                                                        event.currentTarget.style.background = 'rgba(168, 85, 247, 0.15)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(event) => {
-                                                    if (quickBookingId !== booking.id) {
-                                                        event.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
-                                                    }
-                                                }}
-                                            >
-                                                {quickBookingId === booking.id ? (
-                                                    <>
-                                                        <ActionSpinner size={14} tone="primary" />
-                                                        {t.bookingProgress}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {t.quickBook}
-                                                        <ArrowRight size={14} />
-                                                    </>
-                                                )}
-                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -715,90 +539,6 @@ export default function DashboardBookingSummary({
                         </div>
                     )}
                 </div>
-            )}
-
-            {modalRoot && quickBookModalBooking && createPortal(
-                <div className="modal-overlay" onClick={() => setQuickBookModalBooking(null)}>
-                    <div className="glass-panel modal-card" onClick={(event) => event.stopPropagation()}>
-                        {quickBookModalMessage?.type === 'success' ? (
-                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                                <div
-                                    style={{
-                                        background: 'rgba(16, 185, 129, 0.2)', width: '64px', height: '64px', borderRadius: '50%',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
-                                    }}
-                                >
-                                    <CheckCircle size={32} color="var(--success)" />
-                                </div>
-                                <h3 style={{ margin: '0 0 8px', color: 'var(--success)' }}>{t.bookingConfirmed}</h3>
-                                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{quickBookModalMessage.text}</p>
-                            </div>
-                        ) : (
-                            <>
-                                <h3 style={{ margin: '0 0 12px' }}>{t.quickBookConfirmation}</h3>
-                                <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
-                                    {quickBookTargetDate ? `${formatBelarusShortDateLabel(quickBookTargetDate, dateLocale)}` : ''} {t.atTime} {quickBookModalBooking.startTime}
-                                </p>
-                                <p style={{ margin: '0 0 16px', fontWeight: 700 }}>
-                                    {t.machine}: {quickBookMachineLabel}
-                                </p>
-
-                                {quickBookModalMessage && (
-                                    <div
-                                        style={{
-                                            marginBottom: '14px',
-                                            padding: '10px 12px',
-                                            borderRadius: '10px',
-                                            fontSize: '13px',
-                                            color: quickBookModalMessage.type === 'info' ? 'var(--text-main)' : 'var(--error)',
-                                            border: quickBookModalMessage.type === 'info'
-                                                ? '1px solid rgba(16,185,129,0.4)'
-                                                : '1px solid rgba(239,68,68,0.4)',
-                                            background: quickBookModalMessage.type === 'info'
-                                                ? 'rgba(16,185,129,0.12)'
-                                                : 'rgba(239,68,68,0.12)'
-                                        }}
-                                    >
-                                        {quickBookModalMessage.text}
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                                    <button
-                                        onClick={() => setQuickBookModalBooking(null)}
-                                        className="glass-button"
-                                        style={{ padding: '10px 18px', borderRadius: '10px' }}
-                                    >
-                                        {t.close}
-                                    </button>
-                                    <button
-                                        onClick={handleConfirmQuickBook}
-                                        disabled={quickBookingId === quickBookModalBooking.id}
-                                        className="primary-button"
-                                        style={{
-                                            padding: '10px 18px',
-                                            borderRadius: '10px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '8px',
-                                            opacity: quickBookingId === quickBookModalBooking.id ? 0.7 : 1,
-                                            cursor: quickBookingId === quickBookModalBooking.id ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        {quickBookingId === quickBookModalBooking.id ? (
-                                            <>
-                                                <ActionSpinner size={16} tone="inverted" />
-                                                {t.bookingProgress}
-                                            </>
-                                        ) : t.confirmQuickBook}
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>,
-                modalRoot
             )}
 
             {modalRoot && cancelModalBooking && createPortal(
