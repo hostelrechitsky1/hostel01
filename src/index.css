@@ -81,6 +81,7 @@ button {
   color: var(--text-muted);
   font-size: 13px;
   text-align: center;
+  opacity: 0.8;
 }
 
 .site-footer::before {
