@@ -25,15 +25,19 @@ describe('reminder emails', () => {
     expect(email.htmlContent).toContain('&lt;img')
   })
 
-  it('keeps the two-tone design without a card edge and guards Gmail iOS colors', () => {
+  it('provides a light default and a two-tone dark mode without yellow links', () => {
     const { htmlContent } = buildReminderEmail('start', booking)
     expect(htmlContent).toContain('name="color-scheme" content="light dark"')
     expect(htmlContent).toContain('@media (prefers-color-scheme: dark)')
-    expect(htmlContent).toContain('background-image:linear-gradient(#101521,#101521)')
-    expect(htmlContent).toContain('background-image:linear-gradient(#1b2232,#1b2232)')
+    expect(htmlContent).toContain('class="canvas" role="presentation"')
+    expect(htmlContent).toContain('bgcolor="#f3f5fa"')
+    expect(htmlContent).toContain('bgcolor="#ffffff"')
+    expect(htmlContent).toContain('.canvas { background-color:#101521 !important; }')
+    expect(htmlContent).toContain('.panel { background-color:#1b2232 !important; }')
     expect(htmlContent).toContain('u + .email-body .gmail-blend-screen')
     expect(htmlContent).toContain('u + .email-body .gmail-blend-difference')
     expect(htmlContent).toContain('background-image:linear-gradient(#7771e8,#7771e8)')
+    expect(htmlContent).not.toContain('>Manage reminders</a>')
     expect(htmlContent).not.toContain('border-radius:12px')
   })
 })

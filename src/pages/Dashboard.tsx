@@ -1674,7 +1674,6 @@ export default function Dashboard() {
             <div>
                 <BannerCarousel
                     banners={banners}
-                    isLoading={bannersLoading}
                     onPrimaryBannerReady={handlePrimaryBannerReady}
                 />
             </div>

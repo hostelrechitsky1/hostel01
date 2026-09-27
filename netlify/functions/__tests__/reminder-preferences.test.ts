@@ -20,12 +20,11 @@ vi.mock('@netlify/blobs', () => ({ getStore: () => storage.store }))
 vi.mock('../_resident-firestore.js', () => firestore)
 
 import {
-  confirmReminderVerification,
   getReminderPreference,
   getReminderPreferenceStatus,
   normalizeReminderEmail,
   removeReminderPreference,
-  requestReminderVerification,
+  setReminderPreference,
   verifyResidentIdentity,
 } from '../_reminder-preferences.js'
 
@@ -50,30 +49,23 @@ describe('resident email opt-in', () => {
     const studentId = '311-джаялат-араччи-омави-акнара'
     firestore.getFirestoreDocument.mockResolvedValue({ id: studentId, roomNumber: '311', pin: '493' })
     expect(await verifyResidentIdentity({ studentId, roomNumber: '311', pin: '493' })).toMatchObject({ id: studentId })
-    const { token } = await requestReminderVerification({ studentId, email: 'resident@example.com' })
-    expect(await confirmReminderVerification(token)).toBe(true)
+    await setReminderPreference(studentId, 'resident@example.com')
     expect(await getReminderPreference(studentId)).toMatchObject({ enabled: true })
   })
 
-  it('activates only after email verification and removes the preference on request', async () => {
-    const now = Date.parse('2026-09-27T00:00:00Z')
+  it('activates on one click, updates the address, and removes the preference', async () => {
     const email = normalizeReminderEmail('  Ayon@Example.com  ')
     expect(email).toBe('ayon@example.com')
-    const { token } = await requestReminderVerification({ studentId: 'resident-1', email, now })
-    expect(await getReminderPreference('resident-1')).toBeNull()
-    expect(await confirmReminderVerification(token, now + 60_000)).toBe(true)
+    await setReminderPreference('resident-1', email)
     expect(await getReminderPreferenceStatus('resident-1')).toMatchObject({ enabled: true, email: 'a***@example.com' })
-    expect(await confirmReminderVerification(token, now + 60_000)).toBe(false)
+    await setReminderPreference('resident-1', 'other@example.com')
+    expect(await getReminderPreference('resident-1')).toMatchObject({ email: 'other@example.com' })
     await removeReminderPreference('resident-1')
     expect(await getReminderPreference('resident-1')).toBeNull()
   })
 
-  it('expires unused links and limits repeated requests', async () => {
-    const now = Date.parse('2026-09-27T00:00:00Z')
-    const email = 'ayon@example.com'
-    const { token } = await requestReminderVerification({ studentId: 'resident-1', email, now })
-    expect(await requestReminderVerification({ studentId: 'resident-1', email, now: now + 1000 })).toEqual({ cooldown: true })
-    expect(await confirmReminderVerification(token, now + 24 * 60 * 60 * 1000)).toBe(false)
-    expect(await getReminderPreference('resident-1')).toBeNull()
+  it('rejects malformed email addresses', () => {
+    expect(normalizeReminderEmail('')).toBeNull()
+    expect(normalizeReminderEmail('not-an-email')).toBeNull()
   })
 })

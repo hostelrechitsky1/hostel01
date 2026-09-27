@@ -2,26 +2,27 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { BellRing, CheckCircle2, Mail, Send } from 'lucide-react';
 import type { Student } from '../types';
 import type { ResidentPortalLanguage } from '../utils/residentPortalLanguage';
+import './DashboardEmailReminders.css';
 
-type ReminderStatus = { enabled: boolean; email: string; pendingEmail: string };
+type ReminderStatus = { enabled: boolean; email: string };
 type ReminderAction = 'status' | 'subscribe' | 'remove';
 
 const labels = {
     en: {
-        eyebrow: 'OPTIONAL EMAIL REMINDERS', title: 'Stay on schedule',
-        description: 'Get a reminder 15 minutes before your booking starts and another 15 minutes before your slot ends, so you know when to collect your clothes.',
-        placeholder: 'Your email address', subscribe: 'Enable reminders', change: 'Change email', remove: 'Turn off',
-        active: 'Reminders on', pending: 'Check your inbox', pendingDescription: 'Open the confirmation link we sent to',
-        privacy: 'We’ll send a confirmation link first. Your email is only used for booking reminders.',
-        failed: 'Could not update reminders. Please try again.', loading: 'Loading reminders…',
+        title: 'Laundry reminders', optional: 'Optional',
+        description: 'An email 15 minutes before your booking starts, and another 15 minutes before it ends.',
+        email: 'Email address', placeholder: 'you@example.com', subscribe: 'Turn on reminders', update: 'Save new email',
+        change: 'Change email', remove: 'Turn off', active: 'Reminders are on',
+        privacy: 'Only for your bookings. Turn them off anytime.',
+        failed: 'Reminders are unavailable right now. Please try again.', loading: 'Checking your reminder settings…',
     },
     ru: {
-        eyebrow: 'НАПОМИНАНИЯ ПО ЖЕЛАНИЮ', title: 'Не пропустите своё время',
-        description: 'Получите письмо за 15 минут до начала брони и ещё одно за 15 минут до её окончания, чтобы вовремя забрать вещи.',
-        placeholder: 'Ваш адрес электронной почты', subscribe: 'Включить напоминания', change: 'Изменить адрес', remove: 'Отключить',
-        active: 'Напоминания включены', pending: 'Проверьте почту', pendingDescription: 'Откройте ссылку подтверждения в письме, отправленном на',
-        privacy: 'Сначала мы отправим ссылку для подтверждения. Адрес используется только для напоминаний о бронировании.',
-        failed: 'Не удалось обновить напоминания. Попробуйте ещё раз.', loading: 'Загружаем напоминания…',
+        title: 'Напоминания о стирке', optional: 'По желанию',
+        description: 'Письмо за 15 минут до начала брони и ещё одно за 15 минут до её окончания.',
+        email: 'Адрес электронной почты', placeholder: 'you@example.com', subscribe: 'Включить напоминания', update: 'Сохранить новый адрес',
+        change: 'Изменить адрес', remove: 'Отключить', active: 'Напоминания включены',
+        privacy: 'Только о ваших бронированиях. Отключить можно в любой момент.',
+        failed: 'Напоминания сейчас недоступны. Попробуйте позже.', loading: 'Проверяем настройки напоминаний…',
     },
 };
 
@@ -39,6 +40,7 @@ export default function DashboardEmailReminders({ student, language }: { student
     const t = labels[language];
     const [status, setStatus] = useState<ReminderStatus | null>(null);
     const [email, setEmail] = useState('');
+    const [editing, setEditing] = useState(false);
     const [busy, setBusy] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -60,40 +62,60 @@ export default function DashboardEmailReminders({ student, language }: { student
         if (!email.trim()) return;
         setBusy(true);
         setError('');
-        try { setStatus(await requestPreference(student, 'subscribe', email.trim())); setEmail(''); }
-        catch (cause) { setError(cause instanceof Error ? cause.message : t.failed); }
-        finally { setBusy(false); }
+        try {
+            setStatus(await requestPreference(student, 'subscribe', email.trim()));
+            setEmail('');
+            setEditing(false);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : t.failed);
+        } finally { setBusy(false); }
     };
 
     const remove = async () => {
         setBusy(true);
         setError('');
-        try { setStatus(await requestPreference(student, 'remove')); setEmail(''); }
+        try { setStatus(await requestPreference(student, 'remove')); setEmail(''); setEditing(false); }
         catch (cause) { setError(cause instanceof Error ? cause.message : t.failed); }
         finally { setBusy(false); }
     };
 
     return (
         <section className="reminder-card" aria-labelledby="reminder-card-title">
-            <div className="reminder-card-icon" aria-hidden="true"><BellRing size={23} /></div>
-            <div className="reminder-card-content">
-                <div className="reminder-card-eyebrow">{t.eyebrow}</div>
-                <h3 id="reminder-card-title">{t.title}</h3>
-                <p className="reminder-card-description">{t.description}</p>
-                {status?.enabled && <div className="reminder-card-status"><CheckCircle2 size={16} /> {t.active} <span>· {status.email}</span></div>}
-                {status?.pendingEmail && <div className="reminder-card-pending"><Mail size={16} /><span><strong>{t.pending}.</strong> {t.pendingDescription} {status.pendingEmail}.</span></div>}
-                <form className="reminder-card-form" onSubmit={submit}>
-                    <label className="sr-only" htmlFor="reminder-email">{t.placeholder}</label>
-                    <input id="reminder-email" type="email" autoComplete="email" required maxLength={254}
-                        value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t.placeholder} disabled={busy || loading} />
-                    <button type="submit" disabled={busy || loading || !email.trim()}><Send size={16} />{status?.enabled ? t.change : t.subscribe}</button>
-                </form>
-                <div className="reminder-card-bottom">
-                    <p>{loading ? t.loading : t.privacy}</p>
-                    {status?.enabled && <button type="button" className="reminder-card-remove" onClick={remove} disabled={busy}>{t.remove}</button>}
+            <div className="reminder-card-heading">
+                <div className="reminder-card-icon" aria-hidden="true"><BellRing size={21} /></div>
+                <div className="reminder-card-title-group">
+                    <div className="reminder-card-title-line">
+                        <h3 id="reminder-card-title">{t.title}</h3>
+                        <span className="reminder-card-optional">{t.optional}</span>
+                    </div>
+                    <p>{t.description}</p>
                 </div>
-                {error && <p className="reminder-card-error" role="alert">{error}</p>}
             </div>
+
+            {status?.enabled && !editing ? (
+                <div className="reminder-card-saved">
+                    <span className="reminder-card-saved-icon"><CheckCircle2 size={18} /></span>
+                    <div><strong>{t.active}</strong><span>{status.email}</span></div>
+                    <button type="button" onClick={() => setEditing(true)} disabled={busy}>{t.change}</button>
+                </div>
+            ) : (
+                <form className="reminder-card-form" onSubmit={submit}>
+                    <label htmlFor="reminder-email">{t.email}</label>
+                    <div className="reminder-card-controls">
+                        <div className="reminder-card-input-wrap"><Mail size={18} aria-hidden="true" />
+                            <input id="reminder-email" type="email" autoComplete="email" required maxLength={254}
+                                value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t.placeholder} disabled={busy || loading} />
+                        </div>
+                        <button type="submit" disabled={busy || loading || !email.trim()}><Send size={16} />{status?.enabled ? t.update : t.subscribe}</button>
+                    </div>
+                </form>
+            )}
+
+            <div className="reminder-card-footer">
+                <span>{loading ? t.loading : t.privacy}</span>
+                {status?.enabled && <button type="button" onClick={remove} disabled={busy}>{t.remove}</button>}
+            </div>
+            {error && <p className="reminder-card-error" role="alert">{error}</p>}
         </section>
     );
 }
