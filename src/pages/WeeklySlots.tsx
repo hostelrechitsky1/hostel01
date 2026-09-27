@@ -172,7 +172,7 @@ export default function WeeklySlots() {
         const nextWeekIsActive = activeBookingWeekStart.getTime() > currentWeekStart.getTime();
 
         return nextWeekIsActive && (weekday === 6 || weekday === 0)
-            ? addBelarusDays(currentWeekStart, 5)
+            ? today
             : activeBookingWeekStart;
     }, [activeBookingWeekStart, currentDayKey]);
     const dateOptions = useMemo(() => (

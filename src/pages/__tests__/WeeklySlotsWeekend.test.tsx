@@ -97,4 +97,36 @@ describe('WeeklySlots after the Saturday opening', () => {
         expect(screen.getByRole('button', { name: /Sun\s*27/ })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Mon\s*28/ })).toBeInTheDocument();
     });
+
+    it('drops Saturday bookings from the strip on Sunday in Minsk', async () => {
+        vi.setSystemTime(new Date('2026-09-27T14:55:00Z')); // Sunday 17:55 in Belarus
+
+        await act(async () => {
+            render(<MemoryRouter><WeeklySlots /></MemoryRouter>);
+        });
+
+        expect(screen.getByText('Sunday, September 27 - Sunday, October 4')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Sat\s*26/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Sun\s*27/ })).toBeInTheDocument();
+        expect(screen.getByText('Room 502')).toBeInTheDocument();
+        expect(screen.queryByText('Room 501')).not.toBeInTheDocument();
+    });
+
+    it('moves the selected day off Saturday when an open page crosses midnight', async () => {
+        vi.setSystemTime(new Date('2026-09-26T20:59:30Z')); // Saturday 23:59:30 in Belarus
+
+        await act(async () => {
+            render(<MemoryRouter><WeeklySlots /></MemoryRouter>);
+        });
+        expect(screen.getByText('Room 501')).toBeInTheDocument();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(60_000);
+        });
+
+        expect(screen.getByText('Sunday, September 27 - Sunday, October 4')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Sat\s*26/ })).not.toBeInTheDocument();
+        expect(screen.getByText('Room 502')).toBeInTheDocument();
+        expect(screen.queryByText('Room 501')).not.toBeInTheDocument();
+    });
 });
