@@ -19,7 +19,7 @@ const shell = ({ title, intro, booking, action, momentLabel, momentTime }) => {
   const date = escapeHtml(formatDate(booking.date))
   const firstName = escapeHtml(String(booking.studentName || 'there').trim().split(/\s+/)[0])
   const room = booking.roomNumber
-    ? `<tr><td class="muted" style="padding:14px 0;border-top:1px solid #343c52;color:#adb6cb;font-size:13px;">Room</td><td class="strong" align="right" style="padding:14px 0;border-top:1px solid #343c52;color:#f1f3f9;font-size:14px;font-weight:600;">${escapeHtml(booking.roomNumber)}</td></tr>`
+    ? `<tr><td class="muted" style="padding:14px 0;border-top:1px solid #535b6a;color:#ffffff;opacity:.7;font-size:13px;">Room</td><td class="strong" align="right" style="padding:14px 0;border-top:1px solid #535b6a;color:#ffffff;font-size:14px;font-weight:600;">${escapeHtml(booking.roomNumber)}</td></tr>`
     : ''
 
   return `<!doctype html>
@@ -27,42 +27,45 @@ const shell = ({ title, intro, booking, action, momentLabel, momentTime }) => {
 <style>
 :root { color-scheme: light dark; supported-color-schemes: light dark; }
 @media only screen and (max-width: 600px) { .email-pad { padding-left:24px !important;padding-right:24px !important; } .email-title { font-size:27px !important; } .email-time { font-size:43px !important; } }
-@media (prefers-color-scheme: dark) { .canvas { background-color:#101521 !important; } .panel { background-color:#1b2232 !important; } .heading,.strong { color:#f1f3f9 !important; } .body-copy { color:#d4d9e5 !important; } .muted { color:#adb6cb !important; } .divider { border-color:#343c52 !important; } .time { color:#c4bfff !important; } .button { background-color:#7771e8 !important;color:#ffffff !important; } }
-[data-ogsc] .canvas { background-color:#101521 !important; } [data-ogsc] .panel { background-color:#1b2232 !important; } [data-ogsc] .heading,[data-ogsc] .strong { color:#f1f3f9 !important; } [data-ogsc] .body-copy { color:#d4d9e5 !important; } [data-ogsc] .muted { color:#adb6cb !important; }
+@media (prefers-color-scheme: dark) { .canvas { background-color:#171d2b !important; } .heading,.strong { color:#ffffff !important; } .body-copy { color:#ffffff !important; } .muted { color:#ffffff !important; } .time { color:#ffffff !important; } }
+u + .email-body .gmail-blend-screen { background:#000000;mix-blend-mode:screen; }
+u + .email-body .gmail-blend-difference { background:#000000;mix-blend-mode:difference; }
 </style></head>
-<body class="canvas" bgcolor="#101521" style="margin:0;padding:0;background-color:#101521;color:#f1f3f9;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;">
-<div style="display:none;font-size:1px;color:#101521;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(intro)}</div>
-<table class="canvas" role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#101521" style="background-color:#101521;"><tr><td align="center" style="padding:32px 14px;">
-<table class="panel" role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#1b2232" style="width:100%;max-width:560px;background-color:#1b2232;border:1px solid #343c52;border-radius:12px;">
+<body class="email-body canvas" bgcolor="#171d2b" style="margin:0;padding:0;background-color:#171d2b;color:#ffffff;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;">
+<div style="display:none;font-size:1px;color:#171d2b;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(intro)}</div>
+<table class="canvas" role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#171d2b" style="background-color:#171d2b;background-image:linear-gradient(#171d2b,#171d2b);"><tr><td align="center" style="padding:0 14px;">
+<div class="gmail-blend-screen"><div class="gmail-blend-difference">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px;">
   <tr><td class="email-pad" style="padding:31px 38px 0;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td class="heading" style="color:#f1f3f9;font-size:18px;font-weight:700;letter-spacing:-.3px;">Hostelone<span style="color:#8983f3;">.</span></td><td class="muted" align="right" style="color:#adb6cb;font-size:12px;">Laundry reminders</td></tr></table>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td class="heading" style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-.3px;">Hostelone.</td><td class="muted" align="right" style="color:#ffffff;opacity:.65;font-size:12px;">Laundry reminders</td></tr></table>
   </td></tr>
   <tr><td class="email-pad" style="padding:39px 38px 0;">
-    <p class="muted" style="margin:0 0 12px;color:#adb6cb;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;">${escapeHtml(momentLabel)}</p>
-    <h1 class="heading email-title" style="margin:0;color:#f1f3f9;font-size:30px;font-weight:700;line-height:1.24;letter-spacing:-.7px;">${escapeHtml(title)}</h1>
-    <p class="body-copy" style="margin:17px 0 0;color:#d4d9e5;font-size:15px;line-height:1.65;">Hi ${firstName}, ${escapeHtml(intro)}</p>
+    <p class="muted" style="margin:0 0 12px;color:#ffffff;opacity:.65;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;">${escapeHtml(momentLabel)}</p>
+    <h1 class="heading email-title" style="margin:0;color:#ffffff;font-size:30px;font-weight:700;line-height:1.24;letter-spacing:-.7px;">${escapeHtml(title)}</h1>
+    <p class="body-copy" style="margin:17px 0 0;color:#ffffff;opacity:.88;font-size:15px;line-height:1.65;">Hi ${firstName}, ${escapeHtml(intro)}</p>
   </td></tr>
   <tr><td class="email-pad" style="padding:31px 38px 0;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-      <tr><td class="divider" style="padding:24px 0 21px;border-top:1px solid #343c52;border-bottom:1px solid #343c52;">
-        <span class="time email-time" style="color:#c4bfff;font-size:48px;font-weight:700;letter-spacing:-2px;line-height:1;">${escapeHtml(momentTime)}</span><span class="muted" style="padding-left:11px;color:#adb6cb;font-size:12px;white-space:nowrap;">Minsk time</span>
+      <tr><td class="divider" style="padding:24px 0 21px;border-top:1px solid #535b6a;border-bottom:1px solid #535b6a;">
+        <span class="time email-time" style="color:#ffffff;font-size:48px;font-weight:700;letter-spacing:-2px;line-height:1;">${escapeHtml(momentTime)}</span><span class="muted" style="padding-left:11px;color:#ffffff;opacity:.65;font-size:12px;white-space:nowrap;">Minsk time</span>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:10px;">
-      <tr><td class="muted" style="padding:14px 0;color:#adb6cb;font-size:13px;">Date</td><td class="strong" align="right" style="padding:14px 0;color:#f1f3f9;font-size:14px;font-weight:600;">${date}</td></tr>
-      <tr><td class="muted" style="padding:14px 0;border-top:1px solid #343c52;color:#adb6cb;font-size:13px;">Booking</td><td class="strong" align="right" style="padding:14px 0;border-top:1px solid #343c52;color:#f1f3f9;font-size:14px;font-weight:600;">${escapeHtml(`${booking.startTime}–${booking.endTime}`)}</td></tr>
-      <tr><td class="muted" style="padding:14px 0;border-top:1px solid #343c52;color:#adb6cb;font-size:13px;">Machine</td><td class="strong" align="right" style="padding:14px 0;border-top:1px solid #343c52;color:#f1f3f9;font-size:14px;font-weight:600;">${machine}</td></tr>
+      <tr><td class="muted" style="padding:14px 0;color:#ffffff;opacity:.7;font-size:13px;">Date</td><td class="strong" align="right" style="padding:14px 0;color:#ffffff;font-size:14px;font-weight:600;">${date}</td></tr>
+      <tr><td class="muted" style="padding:14px 0;border-top:1px solid #535b6a;color:#ffffff;opacity:.7;font-size:13px;">Booking</td><td class="strong" align="right" style="padding:14px 0;border-top:1px solid #535b6a;color:#ffffff;font-size:14px;font-weight:600;">${escapeHtml(`${booking.startTime}–${booking.endTime}`)}</td></tr>
+      <tr><td class="muted" style="padding:14px 0;border-top:1px solid #535b6a;color:#ffffff;opacity:.7;font-size:13px;">Machine</td><td class="strong" align="right" style="padding:14px 0;border-top:1px solid #535b6a;color:#ffffff;font-size:14px;font-weight:600;">${machine}</td></tr>
       ${room}
     </table>
   </td></tr>
   <tr><td class="email-pad" style="padding:18px 38px 35px;">
-    <p class="body-copy" style="margin:0 0 24px;color:#d4d9e5;font-size:14px;line-height:1.6;">${escapeHtml(action)}</p>
-    <table role="presentation" cellspacing="0" cellpadding="0"><tr><td class="button" bgcolor="#7771e8" style="background-color:#7771e8;border-radius:7px;"><a href="${SITE_URL}" style="display:inline-block;padding:13px 20px;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">View booking</a></td></tr></table>
+    <p class="body-copy" style="margin:0 0 24px;color:#ffffff;opacity:.88;font-size:14px;line-height:1.6;">${escapeHtml(action)}</p>
+    <a href="${SITE_URL}" style="display:inline-block;color:#ffffff;font-size:14px;font-weight:700;text-decoration:underline;">View booking →</a>
   </td></tr>
-  <tr><td class="divider email-pad" style="padding:23px 38px 29px;border-top:1px solid #343c52;">
-    <p class="muted" style="margin:0;color:#adb6cb;font-size:12px;line-height:1.6;">You received this because email reminders are on for your account. <a href="${SITE_URL}" style="color:#c4bfff;text-decoration:underline;">Manage reminders</a></p>
+  <tr><td class="divider email-pad" style="padding:23px 38px 29px;border-top:1px solid #535b6a;">
+    <p class="muted" style="margin:0;color:#ffffff;opacity:.65;font-size:12px;line-height:1.6;">You received this because email reminders are on for your account. <a href="${SITE_URL}" style="color:#ffffff;text-decoration:underline;">Manage reminders</a></p>
   </td></tr>
 </table>
+</div></div>
 </td></tr></table></body></html>`
 }
 

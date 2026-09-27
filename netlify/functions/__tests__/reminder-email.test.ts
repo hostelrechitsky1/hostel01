@@ -25,11 +25,13 @@ describe('reminder emails', () => {
     expect(email.htmlContent).toContain('&lt;img')
   })
 
-  it('keeps the email surface dark in clients that support color schemes', () => {
+  it('uses a flat dark surface with a Gmail iOS color-inversion guard', () => {
     const { htmlContent } = buildReminderEmail('start', booking)
     expect(htmlContent).toContain('name="color-scheme" content="light dark"')
     expect(htmlContent).toContain('@media (prefers-color-scheme: dark)')
-    expect(htmlContent).toContain('bgcolor="#101521"')
-    expect(htmlContent).toContain('bgcolor="#1b2232"')
+    expect(htmlContent).toContain('background-image:linear-gradient(#171d2b,#171d2b)')
+    expect(htmlContent).toContain('u + .email-body .gmail-blend-screen')
+    expect(htmlContent).toContain('u + .email-body .gmail-blend-difference')
+    expect(htmlContent).not.toContain('class="panel"')
   })
 })
