@@ -235,6 +235,9 @@ function PerfDebugGate() {
 }
 
 function SiteFooter() {
+  const { pathname } = useLocation();
+  if (pathname !== '/') return null;
+
   return (
     <footer className="site-footer no-print">
       <span>Created by <strong>Ayon Silva</strong></span>
