@@ -59,7 +59,7 @@ u + .email-body .gmail-blend-difference { background:#000000;mix-blend-mode:diff
   </td></tr>
   <tr><td class="email-pad" style="padding:18px 38px 35px;">
     <p class="body-copy" style="margin:0 0 24px;color:#4d586b;font-size:14px;line-height:1.6;">${escapeHtml(action)}</p>
-    <table role="presentation" cellspacing="0" cellpadding="0"><tr><td bgcolor="#7771e8" style="background-color:#7771e8;background-image:linear-gradient(#7771e8,#7771e8);border-radius:7px;"><a href="${SITE_URL}" style="display:inline-block;padding:13px 20px;color:#ffffff !important;-webkit-text-fill-color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;"><span class="gmail-blend-screen"><span class="gmail-blend-difference">View booking</span></span></a></td></tr></table>
+    <table role="presentation" cellspacing="0" cellpadding="0"><tr><td bgcolor="#7771e8" style="background-color:#7771e8;background-image:linear-gradient(#7771e8,#7771e8);border-radius:7px;"><a href="${SITE_URL}" style="display:block;padding:13px 20px;color:#ffffff !important;-webkit-text-fill-color:#ffffff;font-size:14px;font-weight:700;line-height:20px;text-decoration:none;"><span class="gmail-blend-screen" style="display:block;line-height:20px;"><span class="gmail-blend-difference" style="display:block;line-height:20px;">View booking</span></span></a></td></tr></table>
   </td></tr>
   <tr><td class="divider email-pad" style="padding:23px 38px 29px;border-top:1px solid #dbe0e9;">
     <p class="muted" style="margin:0;color:#647084;font-size:12px;line-height:1.6;">You received this because laundry reminders are on for your account. Manage them on your dashboard.</p>
