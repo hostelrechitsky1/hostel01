@@ -13,7 +13,7 @@ export default function ManagerReminderSubscribers({ students }: { students: Stu
     const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
-        if (students.length === 0) { setLoading(false); return; }
+        if (students.length === 0) { setSubscribers([]); setLoading(false); return; }
         const controller = new AbortController();
         const load = async () => {
             setLoading(true);
