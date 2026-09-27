@@ -24,6 +24,7 @@ import type { Booking, Machine, Student, Feedback, Banner, AppSettings, VipRecur
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
+import ManagerReminderSubscribers from '../components/ManagerReminderSubscribers';
 import { toast } from 'sonner';
 import { addBelarusDays, addMinutesToTimeString, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
 import { normalizeBannerSource } from '../utils/bannerImages';
@@ -1545,6 +1546,8 @@ export default function ManagerPanel() {
                     {students.length === 0 && <div className="p-4 text-center">No students found. Seed DB?</div>}
                 </div>
             </section>
+
+            {sessionStorage.getItem('manager_auth') === 'true' && <ManagerReminderSubscribers students={students} />}
 
             {/* Recent Bookings */}
             <section>

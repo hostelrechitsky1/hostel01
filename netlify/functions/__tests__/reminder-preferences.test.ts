@@ -8,6 +8,7 @@ const storage = vi.hoisted(() => {
       get: vi.fn(async (key: string) => items.get(key) ?? null),
       setJSON: vi.fn(async (key: string, value: unknown) => { items.set(key, value) }),
       delete: vi.fn(async (key: string) => { items.delete(key) }),
+      list: vi.fn(async function* () { yield { blobs: [...items.keys()].map((key) => ({ key })) } }),
     },
   }
 })
@@ -22,6 +23,7 @@ vi.mock('../_resident-firestore.js', () => firestore)
 import {
   getReminderPreference,
   getReminderPreferenceStatus,
+  getSubscribedReminderStatuses,
   normalizeReminderEmail,
   removeReminderPreference,
   setReminderPreference,
@@ -67,5 +69,23 @@ describe('resident email opt-in', () => {
   it('rejects malformed email addresses', () => {
     expect(normalizeReminderEmail('')).toBeNull()
     expect(normalizeReminderEmail('not-an-email')).toBeNull()
+  })
+
+  it('lists only subscribed residents whose identity is verified, with masked emails', async () => {
+    await setReminderPreference('resident-1', 'ayon@example.com')
+    firestore.getFirestoreDocument.mockImplementation(async (_collection: string, id: string) => (
+      id === 'resident-1' ? { id, roomNumber: '52-2', pin: '123' } : null
+    ))
+
+    const residents = [
+      { studentId: 'resident-1', roomNumber: '52-2', pin: '123' },
+      { studentId: 'resident-2', roomNumber: '21-1', pin: '999' },
+    ]
+    expect(await getSubscribedReminderStatuses(residents)).toEqual([
+      { studentId: 'resident-1', email: 'a***@example.com' },
+    ])
+    expect(firestore.getFirestoreDocument).toHaveBeenCalledTimes(1)
+
+    expect(await getSubscribedReminderStatuses([{ ...residents[0], pin: 'wrong' }])).toEqual([])
   })
 })

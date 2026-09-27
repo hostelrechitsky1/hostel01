@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
     MessageSquare,
     Reply,
-    Send
+    Send,
+    Trash2
 } from 'lucide-react';
 import { bookingService } from '../services/bookingService';
+import { clearResidentCacheByPrefix } from '../services/residentCache';
 import { residentFirestoreService } from '../services/residentFirestoreService';
 import type { Feedback, FeedbackType } from '../types';
 import { formatBelarusCompactTimestamp } from '../utils/time';
@@ -54,6 +56,10 @@ export default function DashboardFeedback({ isRussian = false }: { isRussian?: b
             hostelTeam: 'Команда общежития',
             repliedToFeedback: 'Ответ на ваше сообщение',
             yourFeedback: 'Ваше сообщение',
+            removeReply: 'Убрать ответ',
+            removingReply: 'Убираем…',
+            replyRemoved: 'Ответ убран с вашей панели.',
+            removeFailed: 'Не удалось убрать ответ. Попробуйте ещё раз.',
         }
         : {
             heading: 'Feedback',
@@ -65,6 +71,10 @@ export default function DashboardFeedback({ isRussian = false }: { isRussian?: b
             hostelTeam: 'Hostel Team',
             repliedToFeedback: 'Replied to your feedback',
             yourFeedback: 'Your feedback',
+            removeReply: 'Remove reply',
+            removingReply: 'Removing…',
+            replyRemoved: 'Reply removed from your dashboard.',
+            removeFailed: 'Could not remove the reply. Please try again.',
         };
     const cachedFeedbacks = useMemo(() => {
         if (!user) return undefined;
@@ -77,10 +87,12 @@ export default function DashboardFeedback({ isRussian = false }: { isRussian?: b
     }, [user?.id, user?.name, user?.roomNumber]);
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
+    const [removingReplyId, setRemovingReplyId] = useState<string | null>(null);
     const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
     const repliedFeedbacks = useMemo(() => {
         return [...feedbacks]
-            .filter((feedback) => Boolean(feedback.adminReply?.text?.trim()))
+            .filter((feedback) => Boolean(feedback.adminReply?.text?.trim())
+                && (feedback.adminReply?.repliedAt ?? 0) > (feedback.residentDismissedReplyAt ?? 0))
             .sort((left, right) => (right.adminReply?.repliedAt ?? 0) - (left.adminReply?.repliedAt ?? 0));
     }, [feedbacks]);
 
@@ -165,6 +177,31 @@ export default function DashboardFeedback({ isRussian = false }: { isRussian?: b
             notifyError(t.failed);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleRemoveReply = async (feedback: Feedback) => {
+        if (!user || !feedback.adminReply || removingReplyId) return;
+        setRemovingReplyId(feedback.id);
+        try {
+            const response = await fetch('/.netlify/functions/resident-dismiss-feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studentId: user.id, roomNumber: user.roomNumber, pin: user.pin,
+                    feedbackId: feedback.id, repliedAt: feedback.adminReply.repliedAt,
+                }),
+            });
+            if (!response.ok) throw new Error('Could not remove reply');
+            clearResidentCacheByPrefix('feedbacks:');
+            setFeedbacks((current) => current.map((item) => item.id === feedback.id
+                ? { ...item, residentDismissedReplyAt: feedback.adminReply!.repliedAt } : item));
+            notifySuccess(t.replyRemoved);
+        } catch (error) {
+            console.error('Failed to remove resident reply', error);
+            notifyError(t.removeFailed);
+        } finally {
+            setRemovingReplyId(null);
         }
     };
 
@@ -294,17 +331,27 @@ export default function DashboardFeedback({ isRussian = false }: { isRussian?: b
                                         </div>
                                     </div>
 
-                                    <div
-                                        style={{
-                                            padding: '6px 10px',
-                                            borderRadius: '999px',
-                                            fontSize: '12px',
-                                            color: 'var(--primary)',
-                                            background: 'rgba(99, 102, 241, 0.1)',
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <span style={{
+                                            padding: '6px 10px', borderRadius: '999px', fontSize: '12px',
+                                            color: 'var(--primary)', background: 'rgba(99, 102, 241, 0.1)',
                                             border: '1px solid rgba(99, 102, 241, 0.16)'
-                                        }}
-                                    >
-                                        {formatBelarusCompactTimestamp(new Date(feedback.adminReply!.repliedAt), dateLocale)}
+                                        }}>
+                                            {formatBelarusCompactTimestamp(new Date(feedback.adminReply!.repliedAt), dateLocale)}
+                                        </span>
+                                        <button type="button" onClick={() => void handleRemoveReply(feedback)}
+                                            disabled={removingReplyId !== null}
+                                            aria-label={t.removeReply}
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                                padding: '6px 8px', border: '1px solid var(--glass-border)',
+                                                borderRadius: '9px', color: 'var(--text-muted)',
+                                                background: 'var(--glass-button-bg)', font: 'inherit', fontSize: '12px',
+                                                cursor: removingReplyId ? 'wait' : 'pointer'
+                                            }}>
+                                            <Trash2 size={13} aria-hidden="true" />
+                                            {removingReplyId === feedback.id ? t.removingReply : t.removeReply}
+                                        </button>
                                     </div>
                                 </div>
 

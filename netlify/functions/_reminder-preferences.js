@@ -33,6 +33,27 @@ export const getReminderPreferenceStatus = async (studentId) => {
   }
 }
 
+export const getSubscribedReminderStatuses = async (residents) => {
+  const keys = new Set()
+  for await (const page of store().list({ prefix: 'preference/', paginate: true })) {
+    page.blobs.forEach((blob) => keys.add(blob.key))
+  }
+
+  const candidates = residents.filter(({ studentId }) => keys.has(preferenceKey(studentId)))
+  const subscribers = []
+  for (let index = 0; index < candidates.length; index += 8) {
+    const batch = await Promise.all(candidates.slice(index, index + 8).map(async (resident) => {
+      const student = await verifyResidentIdentity(resident)
+      if (!student) return null
+      const status = await getReminderPreferenceStatus(student.id)
+      return status.enabled ? { studentId: student.id, email: status.email } : null
+    }))
+    subscribers.push(...batch.filter(Boolean))
+  }
+
+  return subscribers
+}
+
 export const verifyResidentIdentity = async ({ studentId, roomNumber, pin }) => {
   if (typeof studentId !== 'string' || !STUDENT_ID_PATTERN.test(studentId)
     || typeof roomNumber !== 'string' || (typeof pin !== 'string' && typeof pin !== 'undefined')) return null
