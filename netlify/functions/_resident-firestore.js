@@ -163,7 +163,7 @@ export const getFirestoreDocument = async (collectionId, documentId, fieldPaths 
   const params = new URLSearchParams()
   appendFieldMaskParams(params, fieldPaths)
   const maskQuery = params.toString()
-  return fetchFirestoreJson(`/${collectionId}/${documentId}${maskQuery ? `?${maskQuery}` : ''}`, undefined, true)
+  return fetchFirestoreJson(`/${collectionId}/${encodeURIComponent(documentId)}${maskQuery ? `?${maskQuery}` : ''}`, undefined, true)
 }
 
 export const runFirestoreQueryDocuments = async ({

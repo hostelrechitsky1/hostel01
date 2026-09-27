@@ -19,6 +19,7 @@ import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getRes
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 import { getMachineOperatingState } from '../utils/machineStatus';
 import { buildTimeSlots, getSlotDurationMinutes } from '../utils/slotSchedule';
+import DashboardEmailReminders from '../components/DashboardEmailReminders';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
@@ -1738,6 +1739,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
+
+            {user && <DashboardEmailReminders key={user.id} student={user} language={language} />}
 
             {/* Machine Status - Live View */}
             <section>
