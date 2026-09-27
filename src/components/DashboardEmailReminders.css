@@ -79,7 +79,9 @@
   .reminder-card { padding: 19px; }
   .reminder-card-heading { gap: 12px; }
   .reminder-card-icon { flex-basis: 40px; width: 40px; height: 40px; }
-  .reminder-card-controls { flex-direction: column; }
+  .reminder-card-controls { flex-direction: column; gap: 12px; }
+  .reminder-card-input-wrap { flex: none; width: 100%; height: 52px; }
+  .reminder-card-input-wrap svg { flex: none; }
   .reminder-card-controls > button { width: 100%; }
   .reminder-card-saved { flex-wrap: wrap; }
 }
