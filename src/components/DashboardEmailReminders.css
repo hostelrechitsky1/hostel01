@@ -44,6 +44,17 @@
 }
 .reminder-card-controls > button:hover:not(:disabled) { background: #7779ff; transform: translateY(-1px); }
 .reminder-card button:disabled { opacity: .55; cursor: not-allowed; }
+.reminder-card-loading {
+  display: flex; align-items: center; gap: 11px; min-height: 46px; margin-top: 20px;
+  padding: 0 14px; border: 1px solid var(--glass-border); border-radius: 12px;
+  color: var(--text-muted); background: rgba(9, 15, 39, .18); font-size: 12px;
+}
+.reminder-card-loading::before {
+  width: 15px; height: 15px; border: 2px solid rgba(170, 168, 255, .22);
+  border-top-color: #aaa8ff; border-radius: 50%; content: ''; animation: reminder-card-spin .8s linear infinite;
+}
+@keyframes reminder-card-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .reminder-card-loading::before { animation: none; } }
 .reminder-card-saved {
   display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 20px;
   padding: 12px 14px; border: 1px solid rgba(16, 185, 129, .22);

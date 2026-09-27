@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { BellRing, CheckCircle2, Mail, Send } from 'lucide-react';
 import type { Student } from '../types';
 import type { ResidentPortalLanguage } from '../utils/residentPortalLanguage';
@@ -6,6 +6,23 @@ import './DashboardEmailReminders.css';
 
 type ReminderStatus = { enabled: boolean; email: string };
 type ReminderAction = 'status' | 'subscribe' | 'remove';
+const CACHE_PREFIX = 'hostel_reminder_status_v1:';
+
+const readCachedStatus = (studentId: string): ReminderStatus | null => {
+    try {
+        const value = window.sessionStorage.getItem(`${CACHE_PREFIX}${studentId}`);
+        if (!value) return null;
+        const parsed: unknown = JSON.parse(value);
+        if (!parsed || typeof parsed !== 'object' || !('enabled' in parsed) || !('email' in parsed)
+            || typeof parsed.enabled !== 'boolean' || typeof parsed.email !== 'string') return null;
+        return { enabled: parsed.enabled, email: parsed.email };
+    } catch { return null; }
+};
+
+const cacheStatus = (studentId: string, status: ReminderStatus) => {
+    try { window.sessionStorage.setItem(`${CACHE_PREFIX}${studentId}`, JSON.stringify(status)); }
+    catch { /* Reminders still work when browser storage is unavailable. */ }
+};
 
 const labels = {
     en: {
@@ -38,19 +55,35 @@ const requestPreference = async (student: Student, action: ReminderAction, email
 
 export default function DashboardEmailReminders({ student, language }: { student: Student; language: ResidentPortalLanguage }) {
     const t = labels[language];
-    const [status, setStatus] = useState<ReminderStatus | null>(null);
+    const [status, setStatus] = useState<ReminderStatus | null>(() => readCachedStatus(student.id));
     const [email, setEmail] = useState('');
     const [editing, setEditing] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !readCachedStatus(student.id));
     const [error, setError] = useState('');
+    const requestVersion = useRef(0);
+    const changingPreference = useRef(false);
 
     useEffect(() => {
         let active = true;
         const refresh = () => {
+            if (changingPreference.current) return;
+            const version = ++requestVersion.current;
             void requestPreference(student, 'status')
-                .then((nextStatus) => { if (active) { setStatus(nextStatus); setError(''); setLoading(false); } })
-                .catch(() => { if (active) { setError(t.failed); setLoading(false); } });
+                .then((nextStatus) => {
+                    if (active && version === requestVersion.current) {
+                        cacheStatus(student.id, nextStatus);
+                        setStatus(nextStatus);
+                        setError('');
+                        setLoading(false);
+                    }
+                })
+                .catch(() => {
+                    if (active && version === requestVersion.current) {
+                        if (!readCachedStatus(student.id)) setError(t.failed);
+                        setLoading(false);
+                    }
+                });
         };
         refresh();
         window.addEventListener('focus', refresh);
@@ -60,23 +93,35 @@ export default function DashboardEmailReminders({ student, language }: { student
     const submit = async (event: FormEvent) => {
         event.preventDefault();
         if (!email.trim()) return;
+        changingPreference.current = true;
+        requestVersion.current += 1;
         setBusy(true);
         setError('');
         try {
-            setStatus(await requestPreference(student, 'subscribe', email.trim()));
+            const nextStatus = await requestPreference(student, 'subscribe', email.trim());
+            cacheStatus(student.id, nextStatus);
+            setStatus(nextStatus);
             setEmail('');
             setEditing(false);
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : t.failed);
-        } finally { setBusy(false); }
+        } finally { changingPreference.current = false; setBusy(false); }
     };
 
     const remove = async () => {
+        changingPreference.current = true;
+        requestVersion.current += 1;
         setBusy(true);
         setError('');
-        try { setStatus(await requestPreference(student, 'remove')); setEmail(''); setEditing(false); }
+        try {
+            const nextStatus = await requestPreference(student, 'remove');
+            cacheStatus(student.id, nextStatus);
+            setStatus(nextStatus);
+            setEmail('');
+            setEditing(false);
+        }
         catch (cause) { setError(cause instanceof Error ? cause.message : t.failed); }
-        finally { setBusy(false); }
+        finally { changingPreference.current = false; setBusy(false); }
     };
 
     return (
@@ -92,7 +137,9 @@ export default function DashboardEmailReminders({ student, language }: { student
                 </div>
             </div>
 
-            {status?.enabled && !editing ? (
+            {loading && !status ? (
+                <div className="reminder-card-loading" role="status">{t.loading}</div>
+            ) : status?.enabled && !editing ? (
                 <div className="reminder-card-saved">
                     <span className="reminder-card-saved-icon"><CheckCircle2 size={18} /></span>
                     <div><strong>{t.active}</strong><span>{status.email}</span></div>
@@ -112,7 +159,7 @@ export default function DashboardEmailReminders({ student, language }: { student
             )}
 
             <div className="reminder-card-footer">
-                <span>{loading ? t.loading : t.privacy}</span>
+                <span>{t.privacy}</span>
                 {status?.enabled && <button type="button" onClick={remove} disabled={busy}>{t.remove}</button>}
             </div>
             {error && <p className="reminder-card-error" role="alert">{error}</p>}
