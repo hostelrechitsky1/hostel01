@@ -19,6 +19,7 @@ import { getResidentFirstNameForLanguage, getResidentInitialsForLanguage, getRes
 import { getResidentPortalDateLocale, getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 import { getMachineOperatingState } from '../utils/machineStatus';
 import { buildTimeSlots, getSlotDurationMinutes } from '../utils/slotSchedule';
+import DashboardEmailReminders from '../components/DashboardEmailReminders';
 
 const RECENT_BOOKINGS_LIMIT = 12;
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
@@ -55,11 +56,6 @@ const LazyDashboardBookingSummary = lazy(loadDashboardBookingSummary);
 const loadResidentLiveService = () => {
     residentLiveServicePromise ??= import('../services/residentLiveService');
     return residentLiveServicePromise;
-};
-
-const upsertBooking = (bookings: Booking[], nextBooking: Booking) => {
-    const withoutExisting = bookings.filter((booking) => booking.id !== nextBooking.id);
-    return [...withoutExisting, nextBooking];
 };
 
 const dedupeRoommates = (students: Student[]) => {
@@ -1161,13 +1157,6 @@ export default function Dashboard() {
         });
     };
 
-    const handleResidentBookingCreated = (createdBooking: Booking) => {
-        startTransition(() => {
-            setWeekBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
-            setRecentBookings((currentBookings) => upsertBooking(currentBookings, createdBooking));
-        });
-    };
-
     const handleResidentBookingCancelled = (cancelledBookingId: string) => {
         startTransition(() => {
             setWeekBookings((currentBookings) => currentBookings.filter((booking) => booking.id !== cancelledBookingId));
@@ -1685,7 +1674,6 @@ export default function Dashboard() {
             <div>
                 <BannerCarousel
                     banners={banners}
-                    isLoading={bannersLoading}
                     onPrimaryBannerReady={handlePrimaryBannerReady}
                 />
             </div>
@@ -1750,6 +1738,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
+
+            {user && <DashboardEmailReminders key={user.id} student={user} language={language} />}
 
             {/* Machine Status - Live View */}
             <section>
@@ -1904,11 +1894,8 @@ export default function Dashboard() {
                             machines={machines}
                             recentBookings={recentBookings}
                             recentBookingsLoading={shouldShowRecentBookingsLoading}
-                            weekBookings={weekBookings}
                             settings={settings}
-                            isNextWeekOpen={isNextWeekOpen}
                             isRussian={isRussian}
-                            onBookingCreated={handleResidentBookingCreated}
                             onBookingCancelled={handleResidentBookingCancelled}
                         />
                     </Suspense>

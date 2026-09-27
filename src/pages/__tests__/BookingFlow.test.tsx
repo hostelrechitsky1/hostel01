@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, vi, describe, it, expect } from 'vitest';
 import BookingFlow from '../BookingFlow';
@@ -65,7 +65,7 @@ vi.mock('../../services/residentSnapshotService', () => ({
 vi.mock('../../services/residentLiveService', () => ({
     residentLiveService: {
         subscribeToMachines: vi.fn(() => () => {}),
-        subscribeToBookingsForWeekIds: vi.fn(() => () => {}),
+        subscribeToBookingsForDate: vi.fn(() => () => {}),
     }
 }));
 
@@ -191,5 +191,39 @@ describe('BookingFlow Component', () => {
         await waitFor(() => {
             expect(screen.getByTestId('location-probe')).toHaveTextContent(/^\/book$/);
         });
+    });
+
+    it('shows the newly opened week without a refresh when the countdown ends', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-03-07T12:59:58Z')); // Saturday 15:59:58 in Belarus
+
+        render(
+            <MemoryRouter initialEntries={['/book?status=1']}>
+                <Routes>
+                    <Route
+                        path="/book"
+                        element={(
+                            <>
+                                <BookingFlow />
+                                <LocationProbe />
+                            </>
+                        )}
+                    />
+                </Routes>
+            </MemoryRouter>
+        );
+
+        expect(screen.getByTestId('location-probe')).toHaveTextContent('/book?status=1');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2000);
+        });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(400);
+        });
+
+        expect(screen.getByTestId('location-probe')).toHaveTextContent(/^\/book$/);
+        expect(screen.getByRole('button', { name: /Mon\s*9/ })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Mon\s*2/ })).not.toBeInTheDocument();
     });
 });

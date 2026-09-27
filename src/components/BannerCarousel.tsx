@@ -15,7 +15,6 @@ import {
 
 interface InternalBannerCarouselProps {
     banners: Banner[];
-    isLoading?: boolean;
     onPrimaryBannerReady?: () => void;
 }
 
@@ -232,7 +231,7 @@ const SmartImage = ({
     );
 };
 
-function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: InternalBannerCarouselProps) {
+function BannerCarousel({ banners, onPrimaryBannerReady }: InternalBannerCarouselProps) {
     const activeBanners = useMemo(
         () => banners.filter(b => b.isActive).sort((a, b) => a.priority - b.priority),
         [banners]
@@ -442,33 +441,6 @@ function BannerCarousel({ banners, isLoading = false, onPrimaryBannerReady }: In
         setTouchStart(null);
         setTouchEnd(null);
     };
-
-    if (isLoading && activeBanners.length === 0) {
-        return (
-            <div
-                className="banner-carousel-container"
-                style={{
-                    width: '100%',
-                    marginBottom: '24px',
-                    borderRadius: '16px',
-                    overflow: 'hidden',
-                    position: 'relative',
-                    aspectRatio: '16/9',
-                    maxHeight: '300px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                    background: '#1f2937'
-                }}
-            >
-                <div
-                    className="banner-shimmer-surface"
-                    style={{
-                        position: 'absolute',
-                        inset: 0
-                    }}
-                />
-            </div>
-        );
-    }
 
     if (activeBanners.length === 0) return null;
 

@@ -70,13 +70,16 @@ export default function BookingFlow() {
     const location = useLocation();
     const user = bookingService.getCurrentUser();
     const userId = user?.id ?? '';
+    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+    const [statusCountdownComplete, setStatusCountdownComplete] = useState(false);
+    const [bookingClock, setBookingClock] = useState(() => new Date());
     const bookingWeekIds = useMemo(() => {
-        const currentWeekStart = getBelarusWeekStart(getBelarusDate());
+        const currentWeekStart = getBelarusWeekStart(getBelarusDate(bookingClock));
         return [
             getBelarusWeekId(currentWeekStart),
             getBelarusWeekId(addBelarusDays(currentWeekStart, 7))
         ];
-    }, []);
+    }, [bookingClock]);
     const cachedBookingSnapshot = useMemo(
         () => residentSnapshotService.getCachedBookingSnapshot(bookingWeekIds),
         [bookingWeekIds]
@@ -374,21 +377,21 @@ export default function BookingFlow() {
         };
     }, [liveSyncRequested, reloadKey, selectedDateKey, userId]);
 
-    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(new Date(), settings);
+    const isNextWeekOpen = settings.forceShowNextWeek || isAutoBookingWindowOpen(bookingClock, settings);
     const activeBookingWeekStart = useMemo(() => {
         if (settings.forceShowNextWeek) {
-            return addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
+            return addBelarusDays(getBelarusWeekStart(getBelarusDate(bookingClock)), 7);
         }
 
-        return getActiveBookingWeekStart(new Date(), settings);
-    }, [settings]);
+        return getActiveBookingWeekStart(bookingClock, settings);
+    }, [bookingClock, settings]);
     const slotDurationMinutes = useMemo(() => getSlotDurationMinutes(settings), [settings]);
     const timeSlots = useMemo(() => buildTimeSlots(slotDurationMinutes), [slotDurationMinutes]);
 
     const activeMachines = useMemo(() => machines.filter(m => m.status === 'available'), [machines]);
 
     const dateOptions = useMemo(() => {
-        const today = getBelarusDate();
+        const today = getBelarusDate(bookingClock);
         const activeWeekEnd = getBelarusWeekEnd(activeBookingWeekStart);
         const start = today.getTime() > activeBookingWeekStart.getTime() ? today : activeBookingWeekStart;
         const maxDate = activeWeekEnd;
@@ -400,7 +403,7 @@ export default function BookingFlow() {
             current = addBelarusDays(current, 1);
         }
         return dates;
-    }, [activeBookingWeekStart]);
+    }, [activeBookingWeekStart, bookingClock]);
 
     useEffect(() => {
         if (dateOptions.length > 0) {
@@ -596,17 +599,16 @@ export default function BookingFlow() {
     };
 
     // --- RENDER ---
-    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-    const [statusCountdownComplete, setStatusCountdownComplete] = useState(false);
-
     useEffect(() => {
         if (!settings) return;
         if (settings.forceCloseBookings) {
             setStatusCountdownComplete(false);
             return;
         }
+        if (statusCountdownComplete) return;
 
         const targetTime = getNextAutoOpenDate(new Date(), settings).getTime();
+        let openingHandled = false;
         setStatusCountdownComplete(false);
 
         const calculateTimeLeft = () => {
@@ -622,14 +624,20 @@ export default function BookingFlow() {
                 });
             } else {
                 setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-                setStatusCountdownComplete(true);
+                if (!openingHandled) {
+                    openingHandled = true;
+                    liveSyncReasonRef.current = 'interaction';
+                    setLiveSyncRequested(true);
+                    setBookingClock(new Date(now));
+                    setStatusCountdownComplete(true);
+                }
             }
         };
 
         calculateTimeLeft();
         const timer = setInterval(calculateTimeLeft, 1000);
         return () => clearInterval(timer);
-    }, [settings]);
+    }, [settings, statusCountdownComplete]);
 
     const windowDisplay = getAutoOpenWindowDisplay(settings);
     const isOpenStatusView = showStatusView && !settings.forceCloseBookings && isNextWeekOpen;
@@ -807,7 +815,10 @@ export default function BookingFlow() {
 
                     {isOpenStatusView && (
                         <button
-                            onClick={() => navigate('/book')}
+                            onClick={() => {
+                                setBookingClock(new Date());
+                                navigate('/book');
+                            }}
                             className="primary-button"
                             style={{
                                 padding: '16px 32px',

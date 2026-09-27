@@ -85,6 +85,7 @@ export interface Feedback {
   timestamp: number;
   read: boolean;
   adminReply?: FeedbackReply;
+  residentDismissedReplyAt?: number;
 }
 
 export interface TopAlert {

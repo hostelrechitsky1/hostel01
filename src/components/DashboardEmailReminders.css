@@ -1,0 +1,87 @@
+.reminder-card {
+  margin: -12px 0 32px;
+  padding: 22px 24px 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--glass-bg);
+  box-shadow: 0 14px 34px rgba(4, 8, 29, .1);
+}
+
+.reminder-card-heading { display: flex; align-items: flex-start; gap: 16px; }
+.reminder-card-icon {
+  display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px;
+  border: 1px solid rgba(119, 115, 255, .25); border-radius: 13px;
+  color: #aaa8ff; background: rgba(100, 102, 241, .14);
+}
+.reminder-card-title-group { min-width: 0; flex: 1; padding-top: 1px; }
+.reminder-card-title-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.reminder-card h3 { margin: 0; color: var(--text-main); font-size: 18px; font-weight: 650; line-height: 1.35; }
+.reminder-card-optional {
+  padding: 3px 8px; border: 1px solid var(--glass-border); border-radius: 999px;
+  color: var(--text-muted); background: rgba(255, 255, 255, .04); font-size: 11px; font-weight: 600;
+}
+.reminder-card-title-group p { margin: 5px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.reminder-card-form { margin-top: 20px; }
+.reminder-card-form label { display: block; margin-bottom: 7px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.reminder-card-controls { display: flex; gap: 10px; }
+.reminder-card-input-wrap {
+  display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; height: 46px;
+  box-sizing: border-box; padding: 0 14px; border: 1px solid rgba(199, 205, 239, .2);
+  border-radius: 11px; color: #a8afd0; background: rgba(9, 15, 39, .3);
+  transition: border-color .2s, box-shadow .2s;
+}
+.reminder-card-input-wrap:focus-within { border-color: #8c8af6; box-shadow: 0 0 0 3px rgba(99, 102, 241, .15); }
+.reminder-card-input-wrap input {
+  width: 100%; min-width: 0; height: 100%; padding: 0; border: 0; outline: none;
+  color: var(--text-main); background: transparent; font-family: inherit; font-size: 16px;
+}
+.reminder-card-input-wrap input::placeholder { color: #8f9bb6; }
+.reminder-card-controls > button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 46px; padding: 0 17px; border: 0; border-radius: 11px;
+  color: #fff; background: var(--primary); font-family: inherit; font-weight: 700;
+  white-space: nowrap; cursor: pointer; transition: background .2s, transform .2s;
+}
+.reminder-card-controls > button:hover:not(:disabled) { background: #7779ff; transform: translateY(-1px); }
+.reminder-card button:disabled { opacity: .55; cursor: not-allowed; }
+.reminder-card-loading {
+  display: flex; align-items: center; gap: 11px; min-height: 46px; margin-top: 20px;
+  padding: 0 14px; border: 1px solid var(--glass-border); border-radius: 12px;
+  color: var(--text-muted); background: rgba(9, 15, 39, .18); font-size: 12px;
+}
+.reminder-card-loading::before {
+  width: 15px; height: 15px; border: 2px solid rgba(170, 168, 255, .22);
+  border-top-color: #aaa8ff; border-radius: 50%; content: ''; animation: reminder-card-spin .8s linear infinite;
+}
+@keyframes reminder-card-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .reminder-card-loading::before { animation: none; } }
+.reminder-card-saved {
+  display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 20px;
+  padding: 12px 14px; border: 1px solid rgba(16, 185, 129, .22);
+  border-radius: 12px; background: rgba(16, 185, 129, .075);
+}
+.reminder-card-saved-icon { display: grid; place-items: center; color: #36cf9b; }
+.reminder-card-saved > div { display: flex; flex-direction: column; min-width: 0; gap: 2px; flex: 1; }
+.reminder-card-saved strong { color: #d8fff0; font-size: 13px; }
+.reminder-card-saved span:not(.reminder-card-saved-icon) { overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; }
+.reminder-card-saved button, .reminder-card-footer button {
+  padding: 4px 0; border: 0; color: #b9b8ff; background: transparent;
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.reminder-card-saved button:hover, .reminder-card-footer button:hover { text-decoration: underline; }
+.reminder-card-footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-top: 14px; color: var(--text-muted); font-size: 11px; line-height: 1.5;
+}
+.reminder-card-error { margin: 12px 0 0; color: #ffb4bb; font-size: 12px; line-height: 1.4; }
+
+@media (max-width: 600px) {
+  .reminder-card { padding: 19px; }
+  .reminder-card-heading { gap: 12px; }
+  .reminder-card-icon { flex-basis: 40px; width: 40px; height: 40px; }
+  .reminder-card-controls { flex-direction: column; gap: 12px; }
+  .reminder-card-input-wrap { flex: none; width: 100%; height: 52px; }
+  .reminder-card-input-wrap svg { flex: none; }
+  .reminder-card-controls > button { width: 100%; }
+  .reminder-card-saved { flex-wrap: wrap; }
+}
