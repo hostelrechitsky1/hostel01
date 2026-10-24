@@ -1,6 +1,7 @@
 import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
+import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from '../utils/browserStorage';
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
@@ -302,7 +303,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        if (window.sessionStorage.getItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY) !== '1') return;
+        if (readBrowserStorage('session', RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY) !== '1') return;
 
         let cancelled = false;
         const forceScrollToTop = () => {
@@ -315,7 +316,7 @@ export default function Dashboard() {
         };
         const markUserScroll = () => {
             cancelled = true;
-            window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
+            removeBrowserStorage('session', RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
         };
 
         forceScrollToTop();
@@ -329,7 +330,7 @@ export default function Dashboard() {
         ));
         const finish = window.setTimeout(() => {
             forceScrollToTop();
-            window.sessionStorage.removeItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
+            removeBrowserStorage('session', RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY);
         }, 320);
 
         window.addEventListener('scroll', markUserScroll, { passive: true });
@@ -440,12 +441,12 @@ export default function Dashboard() {
         const storageKey = `${WEEKLY_SLOTS_TOUR_STORAGE_KEY_PREFIX}${userId}`;
         const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
         if (isTouchDevice) {
-            window.localStorage.setItem(storageKey, '1');
+            writeBrowserStorage('local', storageKey, '1');
             weeklySlotsButtonRef.current?.classList.remove('resident-shepherd-target');
             return;
         }
 
-        if (window.localStorage.getItem(storageKey) === '1') {
+        if (readBrowserStorage('local', storageKey) === '1') {
             return;
         }
 
@@ -479,7 +480,7 @@ export default function Dashboard() {
 
             void import('shepherd.js').then(({ default: Shepherd }) => {
                 if (isDisposed) return;
-                if (window.localStorage.getItem(storageKey) === '1') return;
+                if (readBrowserStorage('local', storageKey) === '1') return;
 
                 const tour = new Shepherd.Tour({
                     defaultStepOptions: {
@@ -508,12 +509,12 @@ export default function Dashboard() {
 
                 tour.on('show', () => {
                     weeklySlotsButton.classList.add('resident-shepherd-target');
-                    window.localStorage.setItem(storageKey, '1');
+                    writeBrowserStorage('local', storageKey, '1');
                     autoDismissTimer = window.setTimeout(() => tour.complete(), 6500);
                 });
                 tour.on('complete', () => {
                     weeklySlotsButton.classList.remove('resident-shepherd-target');
-                    window.localStorage.setItem(storageKey, '1');
+                    writeBrowserStorage('local', storageKey, '1');
                     weeklySlotsTourRef.current = null;
                     if (autoDismissTimer !== null) {
                         window.clearTimeout(autoDismissTimer);
@@ -521,7 +522,7 @@ export default function Dashboard() {
                 });
                 tour.on('cancel', () => {
                     weeklySlotsButton.classList.remove('resident-shepherd-target');
-                    window.localStorage.setItem(storageKey, '1');
+                    writeBrowserStorage('local', storageKey, '1');
                     weeklySlotsTourRef.current = null;
                     if (autoDismissTimer !== null) {
                         window.clearTimeout(autoDismissTimer);

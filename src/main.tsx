@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import 'shepherd.js/dist/css/shepherd.css';
 import './index.css';
 import App from './App.tsx';
+import { registerServiceWorker } from './utils/serviceWorker';
+import { readBrowserStorage, writeBrowserStorage } from './utils/browserStorage';
 import { observeResidentWebPaintMetrics } from './utils/performance';
 
 const CONNECTION_HINTS = [
@@ -35,27 +37,6 @@ const ensureConnectionHints = () => {
       document.head.appendChild(preconnect);
     }
   });
-};
-
-const isDeployPreviewHost = () => {
-  if (typeof window === 'undefined') return false;
-
-  const { hostname } = window.location;
-  return hostname.startsWith('deploy-preview-') || hostname.includes('--');
-};
-
-const cleanupPreviewServiceWorker = () => {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
-
-  void navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((registration) => {
-      void registration.unregister();
-    });
-  });
-
-  if ('caches' in window) {
-    void caches.keys().then((cacheNames) => Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName))));
-  }
 };
 
 const clearBrowserRuntimeCaches = async () => {
@@ -113,11 +94,15 @@ const isAssetLoadTarget = (target: EventTarget | null) => {
 };
 
 const recoverFromStaleAsset = () => {
-  const lastAttempt = Number(window.sessionStorage.getItem(ASSET_RECOVERY_STORAGE_KEY) ?? '0');
+  if (navigator.onLine === false) return;
+  const lastAttempt = Math.max(
+    Number(readBrowserStorage('session', ASSET_RECOVERY_STORAGE_KEY) ?? '0'),
+    Number(new URLSearchParams(window.location.search).get('app_refresh') ?? '0'),
+  );
   const now = Date.now();
   if (now - lastAttempt < ASSET_RECOVERY_COOLDOWN_MS) return;
 
-  window.sessionStorage.setItem(ASSET_RECOVERY_STORAGE_KEY, String(now));
+  writeBrowserStorage('session', ASSET_RECOVERY_STORAGE_KEY, String(now));
 
   void clearBrowserRuntimeCaches().finally(() => {
     const nextUrl = new URL(window.location.href);
@@ -145,50 +130,6 @@ const installAssetRecoveryHandlers = () => {
       recoverFromStaleAsset();
     }
   });
-};
-
-const registerServiceWorker = () => {
-  if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
-
-  if (isDeployPreviewHost()) {
-    cleanupPreviewServiceWorker();
-    return;
-  }
-
-  const startRegistration = () => {
-    let didRefreshForController = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (didRefreshForController) return;
-      didRefreshForController = true;
-      window.location.reload();
-    });
-
-    void navigator.serviceWorker.register('/sw.js').then((registration) => {
-      const activateWaitingWorker = () => {
-        registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
-      };
-
-      activateWaitingWorker();
-
-      registration.addEventListener('updatefound', () => {
-        const installingWorker = registration.installing;
-        installingWorker?.addEventListener('statechange', () => {
-          if (installingWorker.state === 'installed') {
-            activateWaitingWorker();
-          }
-        });
-      });
-
-      void registration.update().catch(() => { /* update failed silently */ });
-    }).catch(() => { /* registration failed silently */ });
-  };
-
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(startRegistration, { timeout: 2000 });
-    return;
-  }
-
-  setTimeout(startRegistration, 1200);
 };
 
 installAssetRecoveryHandlers();

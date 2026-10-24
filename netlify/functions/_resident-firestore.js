@@ -155,8 +155,15 @@ export const listFirestoreCollectionDocuments = async (collectionId, pageSize = 
     pageSize: String(pageSize),
   })
   appendFieldMaskParams(params, fieldPaths)
-  const response = await fetchFirestoreJson(`/${collectionId}?${params.toString()}`)
-  return response?.documents ?? []
+  const documents = []
+  let pageToken
+  do {
+    if (pageToken) params.set('pageToken', pageToken)
+    const response = await fetchFirestoreJson(`/${collectionId}?${params.toString()}`)
+    documents.push(...(response?.documents ?? []))
+    pageToken = response?.nextPageToken
+  } while (pageToken)
+  return documents
 }
 
 export const getFirestoreDocument = async (collectionId, documentId, fieldPaths = []) => {

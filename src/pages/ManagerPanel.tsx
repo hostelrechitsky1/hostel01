@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
     Trash2,
     ShieldCheck,
@@ -26,7 +26,9 @@ import { format } from 'date-fns';
 import { useAdminDialog } from '../components/useAdminDialog';
 import ManagerReminderSubscribers from '../components/ManagerReminderSubscribers';
 import { toast } from 'sonner';
-import { addBelarusDays, addMinutesToTimeString, formatBelarusDate, getAutoOpenWindowDisplay, getBelarusDate, getBelarusWeekId, getBelarusWeekStart } from '../utils/time';
+import { addMinutesToTimeString, getAutoOpenWindowDisplay, getBelarusNow } from '../utils/time';
+import { getVipRuleDate, getVipRuleProblem, getVipSlotId, getVipWeeks } from '../../shared/vip-recurring.js';
+import { syncVipRecurringBookings } from '../services/vipRecurringService';
 import { normalizeBannerSource } from '../utils/bannerImages';
 import {
     buildTimeSlots,
@@ -94,6 +96,8 @@ export default function ManagerPanel() {
     const [feedbacks, setFeedbacks] = useState<Feedback[]>(() => cachedFeedbacks ?? []);
     const [banners, setBanners] = useState<Banner[]>(() => cachedBanners ?? []);
     const [vipRules, setVipRules] = useState<VipRecurringRule[]>([]);
+    const [vipBookings, setVipBookings] = useState<Booking[]>([]);
+    const [vipSyncError, setVipSyncError] = useState('');
     const [showBannerForm, setShowBannerForm] = useState(false);
     const [newBanner, setNewBanner] = useState({ title: '', imageUrl: '', linkUrl: '', priority: 1 });
     const [vipForm, setVipForm] = useState(DEFAULT_VIP_FORM);
@@ -156,18 +160,20 @@ export default function ManagerPanel() {
     const refreshCoreData = async () => {
         setLoading(true);
         try {
-            const [fetchedMachines, fetchedStudents, fetchedSettings, fetchedBanners, fetchedVipRules] = await Promise.all([
+            const [fetchedMachines, fetchedStudents, fetchedSettings, fetchedBanners, fetchedVipRules, fetchedVipBookings] = await Promise.all([
                 firestoreService.getMachines(),
                 firestoreService.getAllStudents(),
                 firestoreService.getSettings(),
                 firestoreService.getBanners(),
-                firestoreService.getVipRecurringRules()
+                firestoreService.getVipRecurringRules(),
+                firestoreService.getBookingsForWeekIds(getVipWeeks().map((week) => week.weekId), { fresh: true })
             ]);
             setMachines(fetchedMachines);
             setStudents(fetchedStudents);
             setSettings(fetchedSettings);
             setBanners(fetchedBanners);
             setVipRules(fetchedVipRules);
+            setVipBookings(fetchedVipBookings);
         } catch (error) {
             console.error("Failed to load admin data", error);
             await alertDialog('Load Failed', 'Failed to load data from database.');
@@ -397,16 +403,12 @@ export default function ManagerPanel() {
                 return;
             }
 
-            const existingRule = vipRules.find((rule) =>
-                rule.id !== editingVipRuleId
-                && rule.studentId === vipForm.studentId
-                && rule.machineId === vipForm.machineId
-                && rule.weekday === vipForm.weekday
-                && rule.startTime === vipForm.startTime
-            );
-
-            if (existingRule) {
-                await alertDialog('Rule Exists', 'This VIP recurring rule already exists.');
+            const candidate: VipRecurringRule = {
+                ...vipForm, id: editingVipRuleId ?? 'new-rule', isActive: true, createdAt: Date.now()
+            };
+            const problem = getVipRuleProblem(candidate, [...vipRules.filter((rule) => rule.id !== editingVipRuleId), candidate], settings);
+            if (problem) {
+                await alertDialog('VIP Rule Needs Attention', problem);
                 return;
             }
 
@@ -427,20 +429,10 @@ export default function ManagerPanel() {
                 };
 
                 await firestoreService.updateVipRecurringRule(updatedRule);
-                const nextVipRules = vipRules.map((rule) => rule.id === updatedRule.id ? updatedRule : rule);
-                setVipRules(nextVipRules);
+                setVipRules((current) => current.map((rule) => rule.id === updatedRule.id ? updatedRule : rule));
                 resetVipForm();
-                toast.success('VIP rule updated. Booking next week slot now...');
-
-                setApplyingVipRules(true);
-                try {
-                    await applyVipForWeek('manual', [updatedRule], {
-                        markWeekApplied: false,
-                        emptyMessage: 'This VIP rule is paused. Turn it Active before booking it automatically.'
-                    });
-                } finally {
-                    setApplyingVipRules(false);
-                }
+                toast.success('VIP rule saved. Checking upcoming reservations...');
+                await applyVipForWeek('manual');
 
                 await refreshCoreData();
                 return;
@@ -457,6 +449,7 @@ export default function ManagerPanel() {
             };
 
             await firestoreService.addVipRecurringRule(nextRule);
+            await applyVipForWeek('manual');
             await refreshCoreData();
             resetVipForm();
             toast.success('VIP recurring rule added.');
@@ -470,6 +463,7 @@ export default function ManagerPanel() {
 
     const toggleVipRule = async (rule: VipRecurringRule) => {
         await firestoreService.toggleVipRecurringRule(rule.id, !rule.isActive);
+        if (!rule.isActive) await applyVipForWeek('manual');
         await refreshCoreData();
     };
 
@@ -486,130 +480,43 @@ export default function ManagerPanel() {
         await refreshCoreData();
     };
 
-    const applyVipForWeek = async (
-        mode: 'auto' | 'manual',
-        rulesToApply: VipRecurringRule[] = vipRules,
-        options: { markWeekApplied?: boolean; emptyMessage?: string } = {}
-    ) => {
-        const activeRules = rulesToApply.filter((rule) => rule.isActive);
-        if (activeRules.length === 0) {
-            if (mode === 'manual') {
-                await alertDialog('No Active Rules', options.emptyMessage ?? 'Enable or add at least one VIP rule first.');
-            }
-            return;
-        }
-
-        try {
-            const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
-            const nextWeekId = getBelarusWeekId(nextWeekStart);
-            const maintenanceDay = settings.maintenanceDay ?? 3;
-            let workingBookings = await firestoreService.getBookingsForWeekIds([nextWeekId]);
-
-            let success = 0;
-            let skipped = 0;
-            let overridden = 0;
-            let failed = 0;
-            let blocked = 0;
-
-            for (const rule of activeRules) {
-                const student = studentById.get(rule.studentId);
-                const machine = machineById.get(rule.machineId);
-
-                if (!student || !machine) {
-                    blocked += 1;
-                    continue;
-                }
-
-                if (machine.status === 'maintenance') {
-                    skipped += 1;
-                    continue;
-                }
-
-                if (rule.weekday === maintenanceDay) {
-                    skipped += 1;
-                    continue;
-                }
-
-                const dayOffset = rule.weekday === 0 ? 6 : rule.weekday - 1;
-                const targetDate = addBelarusDays(nextWeekStart, dayOffset);
-                const targetDateStr = formatBelarusDate(targetDate);
-
-                const endTime = addMinutesToTimeString(rule.startTime, slotDurationMinutes);
-                const targetSlotId = `${targetDateStr}_${rule.machineId}_${rule.startTime.replace(':', '-')}`;
-
-                const existingAtSlot = workingBookings.find((booking) => booking.id === targetSlotId);
-                if (existingAtSlot) {
-                    if (existingAtSlot.studentId === student.id) {
-                        success += 1;
-                        continue;
-                    }
-
-                    await firestoreService.cancelBooking(existingAtSlot.id);
-                    workingBookings = workingBookings.filter((booking) => booking.id !== existingAtSlot.id);
-                    overridden += 1;
-                }
-
-                const existingStudentBooking = workingBookings.find((booking) => booking.studentId === student.id && booking.weekId === nextWeekId);
-                if (existingStudentBooking) {
-                    await firestoreService.cancelBooking(existingStudentBooking.id);
-                    workingBookings = workingBookings.filter((booking) => booking.id !== existingStudentBooking.id);
-                    overridden += 1;
-                }
-
-                const bookingPayload: Booking = {
-                    id: targetSlotId,
-                    machineId: rule.machineId,
-                    studentId: student.id,
-                    studentName: student.name,
-                    roomNumber: student.roomNumber,
-                    date: targetDateStr,
-                    startTime: rule.startTime,
-                    endTime,
-                    weekId: nextWeekId,
-                    createdAt: Date.now()
-                };
-
-                const result = await firestoreService.createBooking(bookingPayload);
-                if (result.success) {
-                    success += 1;
-                    workingBookings.push({ ...bookingPayload, id: targetSlotId });
-                } else {
-                    failed += 1;
-                }
-            }
-
-            const applied = failed === 0 && blocked === 0;
-            const shouldMarkWeekApplied = options.markWeekApplied !== false;
-
-            setVipApplyStatus({ weekId: nextWeekId, success, skipped, overridden, failed, blocked, applied, mode, at: Date.now() });
-
-            if (mode === 'manual') {
-                await alertDialog(
-                    applied ? 'VIP Apply Complete' : 'VIP Apply Needs Attention',
-                    `${applied ? 'Applied' : 'Processed'} for week ${nextWeekId}.\nSuccess: ${success}\nOverridden: ${overridden}\nSkipped: ${skipped}\nBlocked: ${blocked}\nFailed: ${failed}${applied && !shouldMarkWeekApplied ? '\n\nSaved edit was booked immediately. Weekly auto-apply status was left unchanged.' : applied ? '' : '\n\nThe week was NOT marked as applied, so the system can retry automatically.'}`
-                );
-            }
-
-            if (applied && shouldMarkWeekApplied && settings.vipLastAppliedWeekId !== nextWeekId) {
-                await firestoreService.updateSettings({ vipLastAppliedWeekId: nextWeekId });
-                setSettings((current) => ({ ...current, vipLastAppliedWeekId: nextWeekId }));
-            }
-
-            await refreshActivityData();
-        } catch (error) {
-            console.error('VIP apply failed', error);
-            if (mode === 'manual') {
-                await alertDialog('VIP Apply Failed', 'Could not apply VIP recurring bookings.');
-            }
-        }
-    };
-
-    const handleApplyVipForNextWeek = async () => {
+    const runVipSync = useCallback(async (mode: 'auto' | 'manual') => {
+        if (autoVipInFlightRef.current) return null;
+        autoVipInFlightRef.current = true;
         setApplyingVipRules(true);
+        setVipSyncError('');
+        setVipApplyStatus(null);
         try {
-            await applyVipForWeek('manual');
+            const result = await syncVipRecurringBookings({ manual: mode === 'manual' });
+            if (result) {
+                setVipApplyStatus({ ...result, weekId: result.nextWeekId, mode, at: Date.now() });
+                if (result.applied) setSettings((current) => ({ ...current, vipLastAppliedWeekId: result.nextWeekId }));
+            }
+            const freshBookings = await firestoreService.getBookingsForWeekIds(getVipWeeks().map((week) => week.weekId), { fresh: true });
+            setVipBookings(freshBookings);
+            setBookings(await firestoreService.getRecentAdminBookings(INITIAL_RECENT_BOOKINGS_LIMIT));
+            return result;
+        } catch (error) {
+            setVipSyncError('Could not verify VIP reservations. Retry sync to check the actual bookings.');
+            throw error;
         } finally {
             setApplyingVipRules(false);
+            autoVipInFlightRef.current = false;
+        }
+    }, []);
+
+    const applyVipForWeek = async (mode: 'auto' | 'manual') => {
+        try {
+            const result = await runVipSync(mode);
+            if (mode === 'manual' && result) {
+                await alertDialog(
+                    result.applied ? 'VIP Sync Complete' : 'VIP Sync Needs Attention',
+                    `Checked upcoming reservations for this week and next week.\nConfirmed: ${result.success}\nReplaced: ${result.overridden}\nPast or already used: ${result.skipped}\nRules needing attention: ${result.blocked}\nFailed: ${result.failed}`
+                );
+            }
+        } catch (error) {
+            console.error('VIP sync failed', error);
+            if (mode === 'manual') await alertDialog('VIP Sync Failed', 'Could not verify VIP reservations. Existing bookings were kept if a replacement failed.');
         }
     };
 
@@ -784,24 +691,15 @@ export default function ManagerPanel() {
     const autoWindowDisplay = getAutoOpenWindowDisplay(settings);
 
     useEffect(() => {
-        if (!settings.vipAutoEnabled) return;
-        if (loading) return;
-        if (autoVipInFlightRef.current) return;
+        if (loading || settings.vipAutoEnabled === false || !vipRules.some((rule) => rule.isActive)) return;
+        const sync = () => { void runVipSync('auto').catch((error) => console.error('Automatic VIP sync failed', error)); };
+        sync();
+        const interval = window.setInterval(sync, 60_000);
+        return () => window.clearInterval(interval);
+    }, [loading, settings.vipAutoEnabled, settings.maintenanceDay, slotDurationMinutes, vipRules, machines, runVipSync]);
 
-        const activeRules = vipRules.filter((rule) => rule.isActive);
-        if (activeRules.length === 0) return;
-
-        const nextWeekStart = addBelarusDays(getBelarusWeekStart(getBelarusDate()), 7);
-        const nextWeekId = getBelarusWeekId(nextWeekStart);
-
-        if (settings.vipLastAppliedWeekId === nextWeekId) return;
-
-        autoVipInFlightRef.current = true;
-
-        void applyVipForWeek('auto').finally(() => {
-            autoVipInFlightRef.current = false;
-        });
-    }, [applyVipForWeek, loading, settings.vipAutoEnabled, settings.vipLastAppliedWeekId, vipRules, studentById, machineById]);
+    const vipWeeks = getVipWeeks();
+    const vipLocalNow = getBelarusNow().toISOString().slice(0, 16);
 
     if (loading && bookings.length === 0 && machines.length === 0 && students.length === 0) {
         return <div className="flex-center" style={{ height: '100vh' }}>Loading Admin Panel...</div>;
@@ -1164,25 +1062,27 @@ export default function ManagerPanel() {
                                 Auto-apply every week
                             </label>
                             <button
-                                onClick={handleApplyVipForNextWeek}
+                                onClick={() => applyVipForWeek('manual')}
                                 className="primary-button"
-                                disabled={applyingVipRules}
+                                disabled={applyingVipRules || addingVipRule}
                                 style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
                             >
-                                {applyingVipRules ? 'Applying...' : 'Apply VIP for Next Week'}
+                                {applyingVipRules ? 'Applying...' : 'Sync VIP Bookings'}
                             </button>
                         </div>
                     </div>
 
                     <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                        Status: {settings.vipAutoEnabled !== false ? 'Auto mode ON' : 'Auto mode OFF'} · Last applied week: {settings.vipLastAppliedWeekId || 'Not yet'}
+                        {settings.vipAutoEnabled !== false ? 'Auto mode ON' : 'Auto mode OFF'} · Checking {vipWeeks[0].start} – {vipWeeks[1].end}. Upcoming reservations are checked each week; completed slots are kept.
                     </div>
 
                     {vipApplyStatus && (
                         <div className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', marginBottom: '12px', border: '1px solid rgba(16,185,129,0.35)' }}>
-                            {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} apply {vipApplyStatus.applied ? 'complete' : 'pending retry'} for <strong>{vipApplyStatus.weekId}</strong> — Success: {vipApplyStatus.success}, Overridden: {vipApplyStatus.overridden}, Skipped: {vipApplyStatus.skipped}, Blocked: {vipApplyStatus.blocked}, Failed: {vipApplyStatus.failed}.
+                            {vipApplyStatus.mode === 'auto' ? 'Auto' : 'Manual'} sync {vipApplyStatus.applied ? 'complete' : 'needs attention'} — Confirmed: {vipApplyStatus.success}, Replaced: {vipApplyStatus.overridden}, Past or already used: {vipApplyStatus.skipped}, Rules needing attention: {vipApplyStatus.blocked}, Failed: {vipApplyStatus.failed}.
                         </div>
                     )}
+
+                    {vipSyncError && <p role="alert" style={{ color: '#fca5a5' }}>{vipSyncError}</p>}
 
                     <div style={{ marginBottom: '10px' }}>
                         <input
@@ -1244,13 +1144,13 @@ export default function ManagerPanel() {
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                        <button onClick={handleSaveVipRule} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px' }}>
+                        <button onClick={handleSaveVipRule} disabled={addingVipRule || applyingVipRules} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px' }}>
                             {addingVipRule
                                 ? editingVipRuleId ? 'Saving Edit...' : 'Adding VIP...'
-                                : editingVipRuleId ? 'Save Edit & Book Next Week' : 'Add VIP Rule'}
+                                : editingVipRuleId ? 'Save Edit & Sync Bookings' : 'Add VIP Rule'}
                         </button>
                         {editingVipRuleId && (
-                            <button onClick={resetVipForm} disabled={addingVipRule} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <button onClick={resetVipForm} disabled={addingVipRule || applyingVipRules} className="glass-button" style={{ padding: '10px 14px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                 <X size={14} /> Cancel
                             </button>
                         )}
@@ -1260,20 +1160,36 @@ export default function ManagerPanel() {
                         {vipRules.map((rule) => {
                             const student = students.find((resident) => resident.id === rule.studentId);
                             const machine = machines.find((washer) => washer.id === rule.machineId);
+                            const problem = getVipRuleProblem(rule, vipRules, settings);
 
                             return (
                                 <div key={rule.id} className="glass-panel" style={{ padding: '10px 12px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', border: editingVipRuleId === rule.id ? '1px solid rgba(99,102,241,0.75)' : undefined }}>
                                     <div style={{ fontSize: '14px' }}>
                                         <strong>{student?.name || 'Unknown student'}</strong> · {machine?.name || 'Unknown machine'} · {WEEKDAY_LABELS[rule.weekday]} {rule.startTime}
+                                        {rule.isActive && (
+                                            <div style={{ marginTop: '6px', fontSize: '12px', color: problem || !student || !machine || machine.status === 'maintenance' ? '#fca5a5' : 'var(--text-muted)' }}>
+                                                {problem || (!student ? 'Student no longer exists' : !machine ? 'Machine no longer exists' : machine.status === 'maintenance' ? 'Machine is under maintenance' : vipWeeks.map((week) => {
+                                                    const date = getVipRuleDate(rule, week);
+                                                    const booked = vipBookings.some((booking) => booking.id === getVipSlotId(rule, date)
+                                                        && booking.studentId === rule.studentId && booking.date === date
+                                                        && booking.weekId === week.weekId && booking.machineId === rule.machineId
+                                                        && booking.startTime === rule.startTime && booking.endTime === addMinutesToTimeString(rule.startTime, slotDurationMinutes));
+                                                    const alreadyUsed = vipBookings.some((booking) => booking.studentId === rule.studentId
+                                                        && booking.weekId === week.weekId && `${booking.date}T${booking.startTime}` <= vipLocalNow);
+                                                    const status = booked ? 'Booked' : alreadyUsed ? 'Weekly booking already used' : `${date}T${rule.startTime}` <= vipLocalNow ? 'Past slot' : 'Not booked';
+                                                    return `${date}: ${status}`;
+                                                }).join(' · '))}
+                                            </div>
+                                        )}
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        <button onClick={() => toggleVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px' }}>
+                                        <button disabled={applyingVipRules || addingVipRule} onClick={() => toggleVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px' }}>
                                             {rule.isActive ? 'Active' : 'Paused'}
                                         </button>
-                                        <button onClick={() => handleStartEditVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                        <button disabled={applyingVipRules || addingVipRule} onClick={() => handleStartEditVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                             <Pencil size={14} /> Edit
                                         </button>
-                                        <button onClick={() => handleDeleteVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}>
+                                        <button disabled={applyingVipRules || addingVipRule} onClick={() => handleDeleteVipRule(rule)} className="glass-button" style={{ padding: '6px 10px', borderRadius: '8px', borderColor: 'rgba(239,68,68,0.4)', color: '#fca5a5' }}>
                                             Delete
                                         </button>
                                     </div>
@@ -1283,7 +1199,7 @@ export default function ManagerPanel() {
 
                         {vipRules.length === 0 && (
                             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                No VIP rules yet. Add a rule and click "Apply VIP for Next Week".
+                                No VIP rules yet. Add a rule to reserve its upcoming weekly slots.
                             </div>
                         )}
                     </div>

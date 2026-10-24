@@ -1,13 +1,13 @@
 export const preloadDashboardRoute = () => {
-    void import('../pages/Dashboard');
+    void import('../pages/Dashboard').catch(() => undefined);
 };
 
 export const preloadBookingRoute = () => {
-    void import('../pages/BookingFlow');
+    void import('../pages/BookingFlow').catch(() => undefined);
 };
 
 export const preloadWeeklySlotsRoute = () => {
-    void import('../pages/WeeklySlots');
+    void import('../pages/WeeklySlots').catch(() => undefined);
 };
 
 export const preloadResidentRoutes = () => {
@@ -17,10 +17,10 @@ export const preloadResidentRoutes = () => {
 };
 
 export const preloadManagerRoutes = () => {
-    void import('../pages/ManagerLogin');
-    void import('../pages/ManagerPanel');
-    void import('../pages/PrintSchedule');
-    void import('../pages/PrintCredentials');
-    void import('../pages/HostelAdminLogin');
-    void import('../pages/HostelAdminDashboard');
+    void import('../pages/ManagerLogin').catch(() => undefined);
+    void import('../pages/ManagerPanel').catch(() => undefined);
+    void import('../pages/PrintSchedule').catch(() => undefined);
+    void import('../pages/PrintCredentials').catch(() => undefined);
+    void import('../pages/HostelAdminLogin').catch(() => undefined);
+    void import('../pages/HostelAdminDashboard').catch(() => undefined);
 };

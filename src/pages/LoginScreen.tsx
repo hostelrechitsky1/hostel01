@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { bookingService } from '../services/bookingService';
 import { Building, ArrowRight, Languages, User } from 'lucide-react';
@@ -10,12 +10,16 @@ import { warmResidentAppData } from '../utils/warmResidentApp';
 import { notifyError } from '../utils/notify';
 import { getResidentPortalLanguage, setResidentPortalLanguage, type ResidentPortalLanguage } from '../utils/residentPortalLanguage';
 import { getResidentNameForLanguage } from '../utils/residentNames';
+import { writeBrowserStorage } from '../utils/browserStorage';
 
 let residentLookupPromise: Promise<typeof import('../services/residentRoomLookupService')> | null = null;
 const RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY = 'resident_force_top_after_login';
 
 const loadResidentLookup = () => {
-    residentLookupPromise ??= import('../services/residentRoomLookupService');
+    residentLookupPromise ??= import('../services/residentRoomLookupService').catch((error) => {
+        residentLookupPromise = null;
+        throw error;
+    });
     return residentLookupPromise;
 };
 
@@ -38,6 +42,8 @@ export default function LoginScreen() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [selectingStudentId, setSelectingStudentId] = useState<string | null>(null);
+    const selectionInFlight = useRef(false);
+    const [selectionError, setSelectionError] = useState('');
     const isRussian = language === 'ru';
     const t = isRussian
         ? {
@@ -58,6 +64,7 @@ export default function LoginScreen() {
             roomNotFound: 'Комната не найдена. Проверьте номер, например 101 или 52-2.',
             failedToConnect: 'Не удалось подключиться к базе данных.',
             incorrectPin: 'Неверный PIN комнаты.',
+            signInFailed: 'Не удалось войти. Нажмите на своё имя ещё раз.',
         }
         : {
             portalTitle: 'Hostel Portal',
@@ -77,13 +84,14 @@ export default function LoginScreen() {
             roomNotFound: 'Room not found. Please check the number (e.g. 101, 52-2).',
             failedToConnect: 'Failed to connect to database.',
             incorrectPin: 'Incorrect Room PIN.',
+            signInFailed: 'Could not sign in. Tap your name to try again.',
         };
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
         const startWarmup = () => {
-            void loadResidentLookup();
+            void loadResidentLookup().catch(() => undefined);
         };
 
         const idleWindow = window as Window & typeof globalThis & {
@@ -146,7 +154,7 @@ export default function LoginScreen() {
     }, [roommates, step]);
 
     const handleRoomFieldFocus = () => {
-        void loadResidentLookup();
+        void loadResidentLookup().catch(() => undefined);
     };
 
     const handleRoomSubmit = async (e: React.FormEvent) => {
@@ -166,7 +174,7 @@ export default function LoginScreen() {
             if (roomStudents.length > 0) {
                 setRoommates(roomStudents);
                 preloadResidentRoutes();
-                void warmResidentAppData(undefined, { roomNumber: roomStudents[0].roomNumber });
+                void warmResidentAppData(undefined, { roomNumber: roomStudents[0].roomNumber }).catch(() => undefined);
                 // Check if Room has PIN protection
                 const roomPin = roomStudents[0].pin;
                 if (roomPin) {
@@ -205,45 +213,41 @@ export default function LoginScreen() {
         setResidentPortalLanguage(nextLanguage);
     };
 
-    const handleStudentSelect = async (student: Student) => {
-        if (selectingStudentId) {
+    const handleStudentSelect = (student: Student) => {
+        if (selectionInFlight.current) return;
+        selectionInFlight.current = true;
+        setSelectingStudentId(student.id);
+        setSelectionError('');
+
+        try {
+            const activeElement = document.activeElement;
+            if (activeElement instanceof HTMLElement) activeElement.blur();
+            bookingService.setCurrentUser(student);
+            writeBrowserStorage('session', RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY, '1');
+            startResidentPerfSpan('resident:login-to-dashboard-shell');
+            startResidentPerfSpan('resident:login-to-dashboard-data');
+            startResidentPerfSpan('resident:dashboard-banner-ready');
+            resetPageScroll();
+            navigate('/', { replace: true });
+        } catch (error) {
+            console.error('Resident sign-in failed', error);
+            selectionInFlight.current = false;
+            setSelectingStudentId(null);
+            setSelectionError(t.signInFailed);
             return;
         }
 
-        setSelectingStudentId(student.id);
-
-        const activeElement = document.activeElement;
-        if (activeElement instanceof HTMLElement) {
-            activeElement.blur();
-        }
-
-        resetPageScroll();
-
-        // Keep using bookingService for session management facade for now
-        bookingService.setCurrentUser(student);
-        window.sessionStorage.setItem(RESIDENT_FORCE_TOP_AFTER_LOGIN_KEY, '1');
-        preloadResidentRoutes();
-        const warmupPromise = warmResidentAppData(student.id, {
-            includeRecentBookings: true,
-            roomNumber: student.roomNumber,
-        });
-        startResidentPerfSpan('resident:login-to-dashboard-shell');
-        startResidentPerfSpan('resident:login-to-dashboard-data');
-        startResidentPerfSpan('resident:dashboard-banner-ready');
-
+        // Fetches and image warmups are optional. They must never hold the name
+        // picker open while a slow request or an animation frame is pending.
         try {
-            await Promise.race([
-                warmupPromise,
-                new Promise((resolve) => window.setTimeout(resolve, 180)),
-            ]);
+            preloadResidentRoutes();
+            void warmResidentAppData(student.id, {
+                includeRecentBookings: true,
+                roomNumber: student.roomNumber,
+            }).catch(() => undefined);
         } catch {
-            // Navigation should continue even if the warmup request fails.
+            // The dashboard can load its own data after navigation.
         }
-
-        requestAnimationFrame(() => {
-            resetPageScroll();
-            navigate('/', { replace: true });
-        });
     };
 
 
@@ -306,7 +310,6 @@ export default function LoginScreen() {
                                         onFocus={handleRoomFieldFocus}
                                         placeholder={t.roomPlaceholder}
                                         autoComplete="off"
-                                        autoFocus
                                         style={{
                                             width: '100%',
                                             padding: '16px',
@@ -385,6 +388,7 @@ export default function LoginScreen() {
                     ) : (
                         <div className="login-card-form">
                                 <p style={{ textAlign: 'center', marginBottom: '16px' }}>{t.whoAreYou}</p>
+                                {selectionError && <p role="alert" style={{ color: 'var(--error)' }}>{selectionError}</p>}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {roommates.map(student => (
                                         <button

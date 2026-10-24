@@ -1,4 +1,4 @@
-const VERSION = 'v12'
+const VERSION = 'v13'
 const STATIC_CACHE = `app-static-${VERSION}`
 const BANNER_CACHE = `banner-images-${VERSION}`
 const RESIDENT_API_CACHE = `resident-api-${VERSION}`
@@ -73,28 +73,12 @@ const staleWhileRevalidate = async (request, cacheName) => {
   return cached || networkFetch
 }
 
-const buildAssetRefreshModule = () => new Response(
-  [
-    "try {",
-    "  sessionStorage.setItem('hostel_asset_recovery_attempted', Date.now().toString());",
-    "  location.reload();",
-    "} catch {",
-    "  location.reload();",
-    "}",
-    "export {};",
-  ].join('\n'),
-  {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/javascript; charset=utf-8',
-      'Cache-Control': 'no-store',
-    },
-  }
-)
-
 const networkFirstStatic = async (request, cacheName) => {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
+  // Vite assets have content hashes. Reuse their exact URL without another
+  // download, so a slow connection cannot interrupt a cached login route.
+  if (cached && new URL(request.url).pathname.startsWith('/assets/')) return cached
 
   try {
     const response = await fetch(request)
@@ -102,18 +86,10 @@ const networkFirstStatic = async (request, cacheName) => {
       void cache.put(request, response.clone())
     }
 
-    if (response.status === 404 && request.destination === 'script') {
-      return buildAssetRefreshModule()
-    }
-
     return response
   } catch {
     if (cached) {
       return cached
-    }
-
-    if (request.destination === 'script') {
-      return buildAssetRefreshModule()
     }
 
     throw new Error('offline')

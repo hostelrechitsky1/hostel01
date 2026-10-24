@@ -1,3 +1,4 @@
+import { getBrowserStorage } from '../utils/browserStorage';
 import type { AppSettings, Banner, Booking, Feedback, Machine } from '../types';
 
 const CACHE_PREFIX = 'hostel-cache:v4';
@@ -32,7 +33,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     topAlert: { message: '', isActive: false, type: 'info' }
 };
 
-const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const canUseStorage = () => getBrowserStorage('local') !== null;
 const getStorageKey = (key: string) => `${CACHE_PREFIX}:${key}`;
 
 export const readResidentCache = <T>(key: string, maxAgeMs: number): T | undefined => {

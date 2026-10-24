@@ -1,5 +1,6 @@
 import type { Student } from '../types';
 import { clearResidentPortalLanguage } from '../utils/residentPortalLanguage';
+import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from '../utils/browserStorage';
 
 const STORAGE_KEYS = {
     CURRENT_USER: 'hostel_current_user',
@@ -21,18 +22,34 @@ const dedupeStudents = (students: Student[]) => {
     });
 };
 
+const isStudent = (value: unknown): value is Student => {
+    if (!value || typeof value !== 'object') return false;
+    const student = value as Partial<Student>;
+    return typeof student.id === 'string' && Boolean(student.id)
+        && typeof student.name === 'string' && typeof student.roomNumber === 'string';
+};
+
 /**
  * Legacy BookingService - Now stripped down to handle Session Management only.
  * Data persistence has moved to Firestore.
  */
 class BookingService {
+    private memoryFallback = new Map<string, unknown>();
+
     private get<T>(key: string, defaultValue: T): T {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : defaultValue;
+        if (this.memoryFallback.has(key)) return this.memoryFallback.get(key) as T;
+        try {
+            const data = readBrowserStorage('local', key);
+            return data ? JSON.parse(data) : defaultValue;
+        } catch {
+            removeBrowserStorage('local', key);
+            return defaultValue;
+        }
     }
 
     private set<T>(key: string, value: T) {
-        localStorage.setItem(key, JSON.stringify(value));
+        if (writeBrowserStorage('local', key, JSON.stringify(value))) this.memoryFallback.delete(key);
+        else this.memoryFallback.set(key, value);
     }
 
     // --- Session / Auth ---
@@ -47,15 +64,18 @@ class BookingService {
     }
 
     getCurrentUser(): Student | null {
-        return this.get(STORAGE_KEYS.CURRENT_USER, null);
+        const student = this.get<unknown>(STORAGE_KEYS.CURRENT_USER, null);
+        return isStudent(student) ? student : null;
     }
 
     getCurrentRoommates(): Student[] {
-        return this.get(STORAGE_KEYS.CURRENT_ROOMMATES, []);
+        const students = this.get<unknown>(STORAGE_KEYS.CURRENT_ROOMMATES, []);
+        return Array.isArray(students) ? students.filter(isStudent) : [];
     }
 
     getSavedAccounts(): Student[] {
-        return dedupeStudents(this.get(STORAGE_KEYS.SAVED_ACCOUNTS, []));
+        const students = this.get<unknown>(STORAGE_KEYS.SAVED_ACCOUNTS, []);
+        return dedupeStudents(Array.isArray(students) ? students.filter(isStudent) : []);
     }
 
     setSavedAccounts(students: Student[]) {
@@ -71,9 +91,8 @@ class BookingService {
     }
 
     logout() {
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-        localStorage.removeItem(STORAGE_KEYS.CURRENT_ROOMMATES);
-        localStorage.removeItem(STORAGE_KEYS.SAVED_ACCOUNTS);
+        this.memoryFallback.clear();
+        Object.values(STORAGE_KEYS).forEach((key) => removeBrowserStorage('local', key));
         clearResidentPortalLanguage();
     }
 }

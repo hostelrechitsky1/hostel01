@@ -4,7 +4,9 @@ import {
     deleteDoc,
     doc,
     getDoc,
+    getDocFromServer,
     getDocs,
+    getDocsFromServer,
     limit,
     onSnapshot,
     orderBy,
@@ -420,13 +422,14 @@ export const firestoreService = {
         });
     },
 
-    async getBookingsForWeekIds(weekIds: string[]): Promise<Booking[]> {
+    async getBookingsForWeekIds(weekIds: string[], options: { fresh?: boolean } = {}): Promise<Booking[]> {
         const normalizedWeekIds = normalizeWeekIds(weekIds);
         if (normalizedWeekIds.length === 0) return [];
+        if (options.fresh) clearCache(getBookingsByWeeksCacheKey(normalizedWeekIds));
 
         return resolveWithCache(getBookingsByWeeksCacheKey(normalizedWeekIds), CACHE_MAX_AGE_MS.bookingsByWeek, async () => {
             const bookingsQuery = query(collection(db, BOOKINGS_COL), where('weekId', 'in', normalizedWeekIds));
-            const snapshot = await getDocs(bookingsQuery);
+            const snapshot = await (options.fresh ? getDocsFromServer(bookingsQuery) : getDocs(bookingsQuery));
             return sortBookingsChronologically(snapshot.docs.map((bookingDoc) => bookingDoc.data() as Booking));
         });
     },
@@ -534,9 +537,57 @@ export const firestoreService = {
         clearCacheByPrefix('bookings:');
     },
 
-    async getSettings(): Promise<AppSettings> {
+    async reserveVipBooking(booking: Booking, previous: Booking[], rule: VipRecurringRule): Promise<{ overridden: number }> {
+        const result = await runTransaction(db, async (transaction) => {
+            const ruleSnapshot = await transaction.get(doc(db, VIP_RULES_COL, rule.id));
+            const currentRule = ruleSnapshot.data() as VipRecurringRule | undefined;
+            if (!currentRule?.isActive || ['studentId', 'machineId', 'weekday', 'startTime'].some((field) => (
+                currentRule[field as keyof VipRecurringRule] !== rule[field as keyof VipRecurringRule]
+            ))) throw new Error('VIP rule changed during sync. Retry with the saved rule.');
+            const ids = [...new Set([booking.id, ...previous.map((item) => item.id)])];
+            const snapshots = new Map(await Promise.all(ids.map(async (id) => (
+                [id, await transaction.get(doc(db, BOOKINGS_COL, id))] as const
+            ))));
+            const limitRef = doc(db, BOOKING_LIMITS_COL, `${booking.studentId}_${booking.weekId}`);
+            const limitSnapshot = await transaction.get(limitRef);
+            const currentLimit = limitSnapshot.data();
+            if (currentLimit?.bookingId && !snapshots.has(currentLimit.bookingId)) {
+                snapshots.set(currentLimit.bookingId, await transaction.get(doc(db, BOOKINGS_COL, currentLimit.bookingId)));
+            }
+            const existing = [...snapshots.values()].filter((snapshot) => snapshot.exists())
+                .map((snapshot) => ({ ...snapshot.data(), id: snapshot.id } as Booking))
+                .filter((item) => item.id === booking.id || (item.studentId === booking.studentId && item.weekId === booking.weekId));
+            const atSlot = existing.find((item) => item.id === booking.id);
+            const removed = existing.filter((item) => item.id !== booking.id);
+            const localNow = new Date(booking.createdAt + 3 * 60 * 60 * 1000).toISOString().slice(0, 16);
+            if (removed.some((item) => item.studentId === booking.studentId && `${item.date}T${item.startTime}` <= localNow)) {
+                throw new Error('The existing weekly booking has already started. Refresh before syncing.');
+            }
+            const ownerLimitIds = [...new Set(existing.filter((item) => item.studentId !== booking.studentId)
+                .map((item) => `${item.studentId}_${item.weekId}`))];
+            const ownerLimits = await Promise.all(ownerLimitIds.map((id) => transaction.get(doc(db, BOOKING_LIMITS_COL, id))));
+            if (atSlot && (['studentId', 'machineId', 'date', 'startTime', 'endTime', 'weekId'] as const).every((field) => atSlot[field] === booking[field])
+                && currentLimit?.bookingId === booking.id && removed.length === 0) {
+                return { overridden: 0 };
+            }
+            for (const item of removed) transaction.delete(doc(db, BOOKINGS_COL, item.id));
+            for (const snapshot of ownerLimits) {
+                if (snapshot.exists() && existing.some((item) => item.id === snapshot.data().bookingId)) transaction.delete(snapshot.ref);
+            }
+            transaction.set(doc(db, BOOKINGS_COL, booking.id), {
+                ...booking, createdAt: atSlot?.studentId === booking.studentId ? atSlot.createdAt : booking.createdAt,
+            });
+            transaction.set(limitRef, { studentId: booking.studentId, weekId: booking.weekId, bookingId: booking.id });
+            return { overridden: removed.length + (atSlot && atSlot.studentId !== booking.studentId ? 1 : 0) };
+        });
+        clearCacheByPrefix('bookings:');
+        return result;
+    },
+
+    async getSettings(options: { fresh?: boolean } = {}): Promise<AppSettings> {
+        if (options.fresh) clearCache(cacheKeys.settings);
         return resolveWithCache(cacheKeys.settings, CACHE_MAX_AGE_MS.settings, async () => {
-            const configDoc = await getDoc(SETTINGS_DOC);
+            const configDoc = await (options.fresh ? getDocFromServer(SETTINGS_DOC) : getDoc(SETTINGS_DOC));
             if (!configDoc.exists()) {
                 return DEFAULT_APP_SETTINGS;
             }

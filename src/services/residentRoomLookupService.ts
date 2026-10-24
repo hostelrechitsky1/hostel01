@@ -1,3 +1,4 @@
+import { getBrowserStorage } from '../utils/browserStorage';
 import type { Student } from '../types';
 import { decodeFirestoreDocument, runFirestoreQueryDocuments } from './residentFirestoreRest';
 
@@ -13,7 +14,7 @@ type CacheRecord<T> = {
 
 const runtimeCache = new Map<string, CacheRecord<unknown>>();
 
-const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const canUseStorage = () => getBrowserStorage('local') !== null;
 const getStorageKey = (key: string) => `${CACHE_PREFIX}:${key}`;
 const getStudentsRoomCacheKey = (roomNumber: string) => `students:room:${roomNumber.trim().toLowerCase()}`;
 

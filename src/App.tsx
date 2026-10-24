@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PrivateRoute } from './components/PrivateRoute';
 import { RouteFallback } from './components/RouteFallback';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import { bookingService } from './services/bookingService';
+import { readBrowserStorage } from './utils/browserStorage';
 import { lazyRoute } from './utils/lazyRoute';
 import { shouldShowResidentPerfDebug } from './utils/performance';
 import { preloadManagerRoutes, preloadResidentRoutes } from './utils/preloadRoutes';
@@ -150,13 +152,13 @@ function RouteWarmup() {
         return;
       }
 
-      if (sessionStorage.getItem('manager_auth')) {
+      if (readBrowserStorage('session', 'manager_auth')) {
         preloadManagerRoutes();
         void import('./utils/warmAdminApp').then(({ warmAdminAppData }) => warmAdminAppData('manager'));
         return;
       }
 
-      if (sessionStorage.getItem('hostel_admin_auth')) {
+      if (readBrowserStorage('session', 'hostel_admin_auth')) {
         preloadManagerRoutes();
         void import('./utils/warmAdminApp').then(({ warmAdminAppData }) => warmAdminAppData('staff'));
       }
@@ -183,6 +185,7 @@ function AnimatedRoutes() {
   const location = useLocation();
 
   return (
+    <RouteErrorBoundary key={location.pathname}>
     <Suspense fallback={<RouteFallback />}>
       <Routes location={location} key={location.pathname}>
         <Route path="/login" element={<PageWrapper><LoginScreen /></PageWrapper>} />
@@ -216,6 +219,7 @@ function AnimatedRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   );
 }
 

@@ -19,11 +19,15 @@ const MAX_METRICS = 40;
 
 let observersStarted = false;
 
-const canUseBrowserPerf = () => (
-    typeof window !== 'undefined'
-    && typeof window.sessionStorage !== 'undefined'
-    && typeof window.performance !== 'undefined'
-);
+const canUseBrowserPerf = () => {
+    try {
+        return typeof window !== 'undefined'
+            && typeof window.sessionStorage !== 'undefined'
+            && typeof window.performance !== 'undefined';
+    } catch {
+        return false;
+    }
+};
 
 const readJson = <T>(key: string, fallback: T): T => {
     if (!canUseBrowserPerf()) return fallback;
