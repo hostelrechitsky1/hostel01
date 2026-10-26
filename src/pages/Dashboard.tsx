@@ -5,7 +5,7 @@ import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from '.
 import { DEFAULT_APP_SETTINGS, residentFirestoreService } from '../services/residentFirestoreService';
 import { residentSnapshotService } from '../services/residentSnapshotService';
 import type { Machine, Booking, Banner, AppSettings, Student } from '../types';
-import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Clock, Languages, CalendarSearch, UserPlus, X, WashingMachine as Washer } from 'lucide-react';
+import { LogOut, AlertCircle, AlertTriangle, Info, Activity, ChevronDown, Check, Clock, Languages, CalendarSearch, UserPlus, Building2, X, WashingMachine as Washer } from 'lucide-react';
 import BannerCarousel from '../components/BannerCarousel';
 import { DataLoadNotice } from '../components/DataLoadNotice';
 import { warmBannerImages } from '../utils/bannerImages';
@@ -92,6 +92,11 @@ export default function Dashboard() {
     const t = isRussian
         ? {
             switchLanguage: 'English',
+            headerEyebrow: 'Портал жильца',
+            headerActions: 'Действия на панели',
+            headerAccounts: (count: number) => `${count} акк.`,
+            addAccountShort: 'Аккаунт',
+            signOut: 'Выйти',
             hello: 'Здравствуйте',
             roomLabel: (roomNumber: string) => `Комната ${roomNumber}`,
             tapAvatarToSwitch: 'Нажмите на аватар, чтобы управлять аккаунтами',
@@ -152,6 +157,11 @@ export default function Dashboard() {
         }
         : {
             switchLanguage: 'Русский',
+            headerEyebrow: 'Resident portal',
+            headerActions: 'Dashboard shortcuts',
+            headerAccounts: (count: number) => `${count} account${count === 1 ? '' : 's'}`,
+            addAccountShort: 'Add account',
+            signOut: 'Sign out',
             hello: 'Hello',
             roomLabel: (roomNumber: string) => `Room ${roomNumber}`,
             tapAvatarToSwitch: 'Tap avatar to manage saved accounts',
@@ -235,7 +245,7 @@ export default function Dashboard() {
     const [accountLookupCandidates, setAccountLookupCandidates] = useState<Student[]>([]);
     const [isAddAccountMode, setIsAddAccountMode] = useState(false);
     const [isRoommateMenuOpen, setIsRoommateMenuOpen] = useState(false);
-    const roommateMenuRef = useRef<HTMLDivElement>(null);
+    const roommateMenuRef = useRef<HTMLElement>(null);
     const weeklySlotsButtonRef = useRef<HTMLButtonElement>(null);
     const weeklySlotsTourRef = useRef<ResidentTourHandle | null>(null);
     const roommateHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1223,15 +1233,16 @@ export default function Dashboard() {
 
             {/* Header */}
             <header
+                ref={roommateMenuRef}
                 className="resident-header"
                 style={{
-                    marginBottom: '32px',
+                    marginBottom: '24px',
                     marginTop: settings.topAlert?.isActive ? '48px' : '16px',
                     transition: 'margin-top 0.3s ease'
                 }}
             >
                 <div className="resident-header-main">
-                    <div ref={roommateMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+                    <div className="resident-header-avatar-wrap">
                         <button
                             type="button"
                             onClick={handleRoommateButtonClick}
@@ -1241,63 +1252,21 @@ export default function Dashboard() {
                             onMouseDown={startRoommateHold}
                             onMouseUp={clearRoommateHold}
                             onMouseLeave={clearRoommateHold}
-                            className="glass-button"
-                            style={{
-                                width: '52px',
-                                height: '52px',
-                                borderRadius: '50%',
-                                padding: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                position: 'relative',
-                                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.12) 100%)',
-                                border: '1px solid rgba(99, 102, 241, 0.22)',
-                                boxShadow: '0 10px 24px rgba(37, 99, 235, 0.14)',
-                                cursor: canOpenRoommateMenu ? 'pointer' : 'default'
-                            }}
+                            className="resident-header-avatar"
                             aria-label={canOpenRoommateMenu ? t.switchRoommateProfile : t.currentResidentProfile}
+                            aria-expanded={isRoommateMenuOpen}
+                            aria-controls="resident-accounts-panel"
                         >
-                            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.04em' }}>
-                                {getResidentInitialsForLanguage(user.name, isRussian)}
-                            </span>
-                            {canOpenRoommateMenu && (
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        right: '-2px',
-                                        bottom: '-2px',
-                                        width: '20px',
-                                        height: '20px',
-                                        borderRadius: '999px',
-                                        background: 'var(--glass-bg)',
-                                        border: '1px solid var(--glass-border)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: 'var(--primary)'
-                                    }}
-                                >
-                                    <ChevronDown size={12} />
-                                </span>
-                            )}
+                            <span>{getResidentInitialsForLanguage(user.name, isRussian)}</span>
+                            {canOpenRoommateMenu && <span className="resident-header-avatar-chevron"><ChevronDown size={10} /></span>}
                         </button>
 
                         {isRoommateMenuOpen && (
                             <div
-                                className="glass-panel animate-fade-in"
-                                style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + 12px)',
-                                    left: 0,
-                                    width: 'min(320px, calc(100vw - 40px))',
-                                    borderRadius: '20px',
-                                    padding: '14px',
-                                    zIndex: 120,
-                                    background: 'var(--glass-bg)',
-                                    border: '1px solid var(--glass-border)',
-                                    boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)'
-                                }}
+                                id="resident-accounts-panel"
+                                className="glass-panel animate-fade-in resident-account-menu"
+                                role="dialog"
+                                aria-label={t.bookForRoommate}
                             >
                                     <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
                                         <div>
@@ -1558,82 +1527,55 @@ export default function Dashboard() {
                     </div>
 
                     <div className="resident-header-copy">
-                        <div className="resident-header-title-row">
-                            <h2 className="resident-header-title">
-                                {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)} 👋
-                            </h2>
-                            <button
-                                onClick={handleLogout}
-                                className="glass-button resident-header-logout"
-                                style={{
-                                    padding: '8px',
-                                    borderRadius: '50%',
-                                    width: '40px',
-                                    height: '40px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}
-                            >
-                                <LogOut size={20} />
-                            </button>
-                        </div>
+                        <p className="resident-header-eyebrow">{t.headerEyebrow}</p>
+                        <h2 className="resident-header-title">
+                            {t.hello}, {getResidentFirstNameForLanguage(user.name, isRussian)}
+                        </h2>
                         <div className="resident-header-meta">
-                            <p className="resident-header-room">
-                                {t.roomLabel(user.roomNumber)}
-                            </p>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                                <button
-                                    type="button"
-                                    onClick={handleOpenAddAccount}
-                                    className="glass-button"
-                                    style={{
-                                        padding: '8px 12px',
-                                        borderRadius: '999px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        color: 'var(--text-main)'
-                                    }}
-                                >
-                                    <UserPlus size={15} />
-                                    {t.addAccount}
-                                </button>
-                                {canOpenRoommateMenu && (
+                            <span className="resident-header-room"><Building2 size={13} aria-hidden="true" />{t.roomLabel(user.roomNumber)}</span>
+                            {canOpenRoommateMenu && (
+                                <>
+                                    <span className="resident-header-meta-divider" aria-hidden="true" />
                                     <button
                                         type="button"
                                         onClick={handleRoommateButtonClick}
-                                        className="resident-header-switch-hint"
-                                        style={{
-                                            border: 0,
-                                            padding: 0,
-                                            background: 'transparent',
-                                            cursor: 'pointer',
-                                            color: 'var(--text-muted)',
-                                            fontSize: '13px'
-                                        }}
+                                        className="resident-header-accounts"
+                                        aria-label={t.accountsAvailable(savedAccounts.length)}
+                                        aria-expanded={isRoommateMenuOpen}
+                                        aria-controls="resident-accounts-panel"
                                     >
-                                        {t.accountsAvailable(savedAccounts.length)}
+                                        {t.headerAccounts(savedAccounts.length)}<ChevronDown size={12} aria-hidden="true" />
                                     </button>
-                                )}
-                            </div>
+                                </>
+                            )}
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="resident-header-logout"
+                        aria-label={t.signOut}
+                        title={t.signOut}
+                    >
+                        <LogOut size={18} aria-hidden="true" />
+                    </button>
                 </div>
-                <div className="resident-header-actions">
+                <nav className="resident-header-actions" aria-label={t.headerActions}>
                     <button
                         ref={weeklySlotsButtonRef}
                         type="button"
                         onClick={handleOpenWeeklySlots}
                         onMouseEnter={preloadWeeklySlotsRoute}
                         onTouchStart={preloadWeeklySlotsRoute}
-                        className="glass-button weekly-slots-dashboard-button"
+                        className="resident-header-action resident-header-action--slots weekly-slots-dashboard-button"
                         aria-label={t.weeklySlotsAria}
-                        title={t.weeklySlots}
                     >
-                        <CalendarSearch size={18} />
+                        <CalendarSearch size={19} aria-hidden="true" />
+                        <span>{t.weeklySlots}</span>
+                    </button>
+                    <button type="button" onClick={handleOpenAddAccount} className="resident-header-action" aria-label={t.addAccount}>
+                        <UserPlus size={19} aria-hidden="true" />
+                        <span>{t.addAccountShort}</span>
                     </button>
                     <button
                         type="button"
@@ -1642,21 +1584,13 @@ export default function Dashboard() {
                             setLanguage(nextLanguage);
                             setResidentPortalLanguage(nextLanguage);
                         }}
-                        className="glass-button"
-                        style={{
-                            padding: '8px 14px',
-                            borderRadius: '999px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            whiteSpace: 'nowrap'
-                        }}
+                        className="resident-header-action"
+                        aria-label={t.switchLanguage}
                     >
-                        <Languages size={16} />
-                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{t.switchLanguage}</span>
+                        <Languages size={19} aria-hidden="true" />
+                        <span>{t.switchLanguage}</span>
                     </button>
-                </div>
+                </nav>
             </header>
 
             {loadIssue === 'saved' && (
