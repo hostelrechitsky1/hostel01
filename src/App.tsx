@@ -238,17 +238,6 @@ function PerfDebugGate() {
   );
 }
 
-function SiteFooter() {
-  const { pathname } = useLocation();
-  if (pathname !== '/') return null;
-
-  return (
-    <footer className="site-footer no-print">
-      <span>Created by <strong>Ayon Silva</strong></span>
-    </footer>
-  );
-}
-
 function App() {
   return (
     <Router>
@@ -256,7 +245,6 @@ function App() {
       <ScrollToTopOnRouteChange />
       <RouteWarmup />
       <AnimatedRoutes />
-      <SiteFooter />
       <PerfDebugGate />
       <Suspense fallback={null}>
         <LazyToaster
