@@ -33,12 +33,16 @@ const booking = {
   id: '2026-09-28_2_16-30', studentId: 'resident-1', studentName: 'Ayon Silva',
   roomNumber: '52-2', machineId: '2', date: '2026-09-28', startTime: '16:30', endTime: '18:00', createdAt: 1790590000000,
 }
+type ReminderFilter = { fieldPath: string; op: string; value: { stringValue: string } }
+const matchingBookings = (bookings: typeof booking[], filters: ReminderFilter[]) => bookings.filter((candidate) => (
+  filters.every((filter) => candidate[filter.fieldPath as keyof typeof booking] === filter.value.stringValue)
+))
 
 describe('booking reminder scheduling', () => {
   beforeEach(() => {
     deliveries.items.clear()
     vi.clearAllMocks()
-    firestore.runFirestoreQueryDocuments.mockResolvedValue([booking])
+    firestore.runFirestoreQueryDocuments.mockImplementation(async ({ filters }) => matchingBookings([booking], filters))
     firestore.getFirestoreDocument.mockImplementation(async (collection: string) => collection === 'bookings' ? booking : null)
     preferences.getReminderPreference.mockResolvedValue({ enabled: true, email: 'resident@example.com' })
     emails.buildReminderEmail.mockReturnValue({ subject: 'Reminder', htmlContent: '<p>Reminder</p>', textContent: 'Reminder' })
@@ -56,7 +60,10 @@ describe('booking reminder scheduling', () => {
     const summary = await dispatchBookingReminders({ now: new Date('2026-09-28T13:15:00Z') })
     expect(summary.sent).toBe(1)
     expect(firestore.runFirestoreQueryDocuments).toHaveBeenCalledWith(expect.objectContaining({
-      filters: [{ fieldPath: 'date', op: 'EQUAL', value: { stringValue: '2026-09-28' } }],
+      filters: [
+        { fieldPath: 'date', op: 'EQUAL', value: { stringValue: '2026-09-28' } },
+        { fieldPath: 'startTime', op: 'EQUAL', value: { stringValue: '16:30' } },
+      ],
     }))
     expect(deliveries.store.setJSON).toHaveBeenCalledWith(expect.any(String), expect.any(Object), { onlyIfNew: true })
     expect(emails.sendBrevoEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'resident@example.com' }))
@@ -81,7 +88,7 @@ describe('booking reminder scheduling', () => {
 
   it('sends for a replacement booking after the original slot was cancelled', async () => {
     let current = booking
-    firestore.runFirestoreQueryDocuments.mockImplementation(async () => [current])
+    firestore.runFirestoreQueryDocuments.mockImplementation(async ({ filters }) => matchingBookings([current], filters))
     firestore.getFirestoreDocument.mockImplementation(async (collection: string) => collection === 'bookings' ? current : null)
     const first = await dispatchBookingReminders({ now: new Date('2026-09-28T13:15:00Z') })
     current = { ...booking, studentId: 'resident-2', createdAt: booking.createdAt + 1 }
@@ -132,5 +139,53 @@ describe('booking reminder scheduling', () => {
     expect(summary.skipped).toBe(1)
     expect(deliveries.store.setJSON).not.toHaveBeenCalled()
     expect(emails.sendBrevoEmail).not.toHaveBeenCalled()
+  })
+
+  it('reads only due events instead of every booking for the day', async () => {
+    const dueCollection = { ...booking, id: 'collect-due', startTime: '15:00', endTime: '16:30' }
+    const dailyBookings = [booking, dueCollection, ...Array.from({ length: 300 }, (_, index) => ({
+      ...booking, id: `later-${index}`, startTime: '19:30', endTime: '21:00',
+    }))]
+    let documentsRead = 0
+    firestore.runFirestoreQueryDocuments.mockImplementation(async ({ filters }) => {
+      const matched = matchingBookings(dailyBookings, filters)
+      documentsRead += matched.length
+      return matched
+    })
+    firestore.getFirestoreDocument.mockImplementation(async (_collection: string, id: string) => dailyBookings.find((candidate) => candidate.id === id))
+
+    expect(await dispatchBookingReminders({ now: new Date('2026-09-28T13:15:00Z') })).toMatchObject({ examined: 2, sent: 2 })
+    expect(documentsRead).toBe(2)
+    expect(firestore.runFirestoreQueryDocuments).toHaveBeenCalledTimes(6)
+    expect(firestore.runFirestoreQueryDocuments.mock.calls.every(([query]) => query.filters.length === 2
+      && query.filters.every((filter: ReminderFilter) => filter.op === 'EQUAL'))).toBe(true)
+  })
+
+  it('preserves the delivery tolerance when a scheduled run includes seconds', async () => {
+    const candidates = ['16:28', '16:29', '16:30', '16:31', '16:32'].map((startTime) => ({ ...booking, id: startTime, startTime }))
+    firestore.runFirestoreQueryDocuments.mockImplementation(async ({ filters }) => matchingBookings(candidates, filters))
+    firestore.getFirestoreDocument.mockImplementation(async (_collection: string, id: string) => candidates.find((candidate) => candidate.id === id))
+    expect(await dispatchBookingReminders({ now: new Date('2026-09-28T13:15:30Z') })).toMatchObject({ examined: 3, sent: 3 })
+    const queriedTimes = firestore.runFirestoreQueryDocuments.mock.calls.map(([query]) => query.filters[1].value.stringValue)
+    expect([...new Set(queriedTimes)]).toEqual(['16:29', '16:30', '16:31'])
+  })
+
+  it('finds events on both sides of Minsk midnight', async () => {
+    const candidates = [
+      { ...booking, id: 'before-midnight', startTime: '22:29', endTime: '23:59' },
+      { ...booking, id: 'after-midnight', date: '2026-09-29', startTime: '00:00', endTime: '01:30' },
+    ]
+    firestore.runFirestoreQueryDocuments.mockImplementation(async ({ filters }) => matchingBookings(candidates, filters))
+    firestore.getFirestoreDocument.mockImplementation(async (_collection: string, id: string) => candidates.find((candidate) => candidate.id === id))
+    expect(await dispatchBookingReminders({ now: new Date('2026-09-28T20:45:00Z') })).toMatchObject({ examined: 2, sent: 2 })
+    const queriedDates = firestore.runFirestoreQueryDocuments.mock.calls.map(([query]) => query.filters[0].value.stringValue)
+    expect([...new Set(queriedDates)]).toEqual(['2026-09-28', '2026-09-29'])
+  })
+
+  it('processes a booking once if more than one candidate query returns it', async () => {
+    firestore.runFirestoreQueryDocuments.mockResolvedValue([booking])
+    expect(await dispatchBookingReminders({ now: new Date('2026-09-28T13:15:00Z') })).toMatchObject({ examined: 1, sent: 1 })
+    expect(firestore.getFirestoreDocument).toHaveBeenCalledTimes(1)
+    expect(emails.sendBrevoEmail).toHaveBeenCalledTimes(1)
   })
 })

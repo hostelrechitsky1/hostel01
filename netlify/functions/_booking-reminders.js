@@ -10,6 +10,10 @@ const REMINDER_ADVANCE_MS = 15 * 60 * 1000
 const EARLY_TOLERANCE_MS = 60 * 1000
 const LATE_TOLERANCE_MS = 90 * 1000
 const BOOKING_FIELDS = ['id', 'studentId', 'studentName', 'roomNumber', 'machineId', 'date', 'startTime', 'endTime', 'createdAt']
+const MINUTE_MS = 60 * 1000
+const reminderTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Minsk', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+})
 
 export const parseBookingTime = (date, time) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? '') || !/^\d{2}:\d{2}$/.test(time ?? '')) return NaN
@@ -20,6 +24,36 @@ export const parseBookingTime = (date, time) => {
 const belarusDate = (timestamp) => new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Europe/Minsk', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(timestamp)
+
+const getReminderBookingDocuments = async (nowMs) => {
+  // Booking times have minute precision. Query only event minutes inside the
+  // existing delivery tolerance instead of rereading the entire day each minute.
+  // Equality filters can use Firestore's existing single-field indexes.
+  const firstEventMinute = Math.ceil((nowMs + REMINDER_ADVANCE_MS - LATE_TOLERANCE_MS) / MINUTE_MS) * MINUTE_MS
+  const lastEventTime = nowMs + REMINDER_ADVANCE_MS + EARLY_TOLERANCE_MS
+  const queries = []
+  for (let timestamp = firstEventMinute; timestamp <= lastEventTime; timestamp += MINUTE_MS) {
+    const date = belarusDate(timestamp)
+    const time = reminderTimeFormatter.format(timestamp)
+    for (const fieldPath of ['startTime', 'endTime']) {
+      queries.push(runFirestoreQueryDocuments({
+        collectionId: BOOKINGS_COL,
+        filters: [
+          { fieldPath: 'date', op: 'EQUAL', value: { stringValue: date } },
+          { fieldPath, op: 'EQUAL', value: { stringValue: time } },
+        ],
+        fieldPaths: BOOKING_FIELDS,
+        limit: 400,
+      }))
+    }
+  }
+  const results = await Promise.all(queries)
+  // A booking can match both queries. Keep one candidate so retries and delivery
+  // claims retain their existing behavior.
+  return [...new Map(results.flat().map((document) => [
+    document.name ?? decodeFirestoreDocument(document).id, document,
+  ])).values()]
+}
 
 export const getDueReminderKinds = (booking, nowMs) => {
   return /** @type {Array<'start' | 'collect'>} */ (['start', 'collect']).filter((kind) => {
@@ -50,13 +84,7 @@ const releaseDelivery = async (deliveryId) => {
 
 export const dispatchBookingReminders = async ({ now = new Date() } = {}) => {
   const nowMs = now.getTime()
-  const dueDate = belarusDate(new Date(nowMs + REMINDER_ADVANCE_MS))
-  const bookingDocs = await runFirestoreQueryDocuments({
-    collectionId: BOOKINGS_COL,
-    filters: [{ fieldPath: 'date', op: 'EQUAL', value: { stringValue: dueDate } }],
-    fieldPaths: BOOKING_FIELDS,
-    limit: 400,
-  })
+  const bookingDocs = await getReminderBookingDocuments(nowMs)
   const summary = { examined: bookingDocs.length, sent: 0, skipped: 0, failed: 0 }
 
   for (const document of bookingDocs) {

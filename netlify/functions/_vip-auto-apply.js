@@ -153,21 +153,24 @@ export const applyVipRecurringForNextWeek = async ({ now = new Date(), source = 
   const emptyResult = { applied: false, source, nextWeekId: weeks[1].weekId, success: 0, skipped: 0, overridden: 0, failed: 0, blocked: 0 }
   if (settings.vipAutoEnabled === false) return { ...emptyResult, reason: 'disabled' }
 
-  const [ruleDocs, studentDocs, machineDocs, bookingDocs] = await Promise.all([
-    listFirestoreCollectionDocuments(VIP_RULES_COL, 200, VIP_RULE_FIELDS),
-    listFirestoreCollectionDocuments(STUDENTS_COL, 400, STUDENT_FIELDS),
+  const ruleDocs = await listFirestoreCollectionDocuments(VIP_RULES_COL, 200, VIP_RULE_FIELDS)
+  const rules = ruleDocs.map((document) => decodeFirestoreDocument(document))
+  const activeRules = rules.filter((rule) => rule.isActive)
+  if (activeRules.length === 0) return { ...emptyResult, reason: 'no_active_rules' }
+
+  const studentIds = [...new Set(activeRules.map((rule) => rule.studentId)
+    .filter((id) => typeof id === 'string' && id.length > 0))]
+  const [studentDocs, machineDocs, bookingDocs] = await Promise.all([
+    Promise.all(studentIds.map((id) => getFirestoreDocument(STUDENTS_COL, id, STUDENT_FIELDS))),
     listFirestoreCollectionDocuments(MACHINES_COL, 100, MACHINE_FIELDS),
     runFirestoreQueryDocuments({
       collectionId: BOOKINGS_COL, fieldPaths: BOOKING_FIELDS,
       filters: [{ fieldPath: 'weekId', op: 'IN', value: { arrayValue: { values: weeks.map((week) => ({ stringValue: week.weekId })) } } }],
     }),
   ])
-  const rules = ruleDocs.map((document) => decodeFirestoreDocument(document))
-  if (!rules.some((rule) => rule.isActive)) return { ...emptyResult, reason: 'no_active_rules' }
-
   const result = await reconcileVipBookings({
     now, settings, rules,
-    students: studentDocs.map((document) => decodeFirestoreDocument(document)),
+    students: studentDocs.filter(Boolean).map((document) => decodeFirestoreDocument(document)),
     machines: machineDocs.map((document) => decodeFirestoreDocument(document)),
     bookings: bookingDocs.map((document) => decodeFirestoreDocument(document)),
     reserve: reserveVipBooking,
