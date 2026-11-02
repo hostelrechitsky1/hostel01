@@ -158,6 +158,36 @@ describe('VIP reservation reconciliation', () => {
     expect(firestoreMocks.commitFirestoreWrites).not.toHaveBeenCalled()
   })
 
+  it('does not read students, machines, or bookings when no VIP rules are active', async () => {
+    put('vipRecurringRules/rule-1', { ...rule, isActive: false })
+    expect(await applyVipRecurringForNextWeek({ now })).toMatchObject({ applied: false, reason: 'no_active_rules' })
+    expect(firestoreMocks.listFirestoreCollectionDocuments.mock.calls.map(([collection]) => collection)).toEqual(['vipRecurringRules'])
+    expect(firestoreMocks.getFirestoreDocument).toHaveBeenCalledTimes(1)
+    expect(firestoreMocks.runFirestoreQueryDocuments).not.toHaveBeenCalled()
+  })
+
+  it('reads only students referenced by active VIP rules, once per student', async () => {
+    put('students/unrelated', { id: 'unrelated', name: 'Other Resident' })
+    put('vipRecurringRules/inactive', { ...rule, id: 'inactive', studentId: 'unrelated', isActive: false })
+    await applyVipRecurringForNextWeek({ now })
+    expect(firestoreMocks.listFirestoreCollectionDocuments.mock.calls.some(([collection]) => collection === 'students')).toBe(false)
+    const studentReads = firestoreMocks.getFirestoreDocument.mock.calls.filter(([collection]) => collection === 'students')
+    expect(studentReads).toEqual([['students', 'student-1', ['id', 'name', 'roomNumber']]])
+  })
+
+  it('reports a missing VIP student as blocked without creating a booking', async () => {
+    database.delete('students/student-1')
+    expect(await applyVipRecurringForNextWeek({ now })).toMatchObject({ applied: false, blocked: 1, failed: 0 })
+    expect(firestoreMocks.commitFirestoreWrites).not.toHaveBeenCalled()
+  })
+
+  it('does not fetch an empty student id from a malformed rule', async () => {
+    put('vipRecurringRules/malformed', { ...rule, id: 'malformed', studentId: '', startTime: '18:00' })
+    expect(await applyVipRecurringForNextWeek({ now })).toMatchObject({ blocked: 1, success: 2 })
+    const studentIds = firestoreMocks.getFirestoreDocument.mock.calls.filter(([collection]) => collection === 'students').map(([, id]) => id)
+    expect(studentIds).toEqual(['student-1'])
+  })
+
   it('rejects an older scheduled run if the manager edits the rule before its commit', async () => {
     const oldId = seedBooking('2026-10-24')
     const commit = firestoreMocks.commitFirestoreWrites.getMockImplementation()!
